@@ -45,7 +45,11 @@ import {
   User,
   MapPin,
   ExternalLink,
-  Info
+  Info,
+  Clock,
+  Calendar as CalendarIcon,
+  Upload,
+  AlertTriangle
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -59,6 +63,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 const STEPS = [
   { id: 'welcome', title: '1. Welcome & Expectations', icon: Zap },
@@ -136,12 +141,20 @@ export default function OnboardingStepPage() {
       if (submission.sections?.[sid]) {
         setFormData(submission.sections[sid]);
       } else {
-        // Initialize default for snapshot if empty
+        // Initialize defaults based on step
         if (sid === 'snapshot') {
           setFormData({
             businessDetails: {},
             contactSetup: { numberOfContacts: 2, contacts: [] },
             additionalContactNotes: ''
+          });
+        } else if (sid === 'triage') {
+          setFormData({
+            hasLiveOpportunity: null,
+            unsureExplanation: '',
+            opportunityDetails: {
+              supportRequired: []
+            }
           });
         } else {
           setFormData({});
@@ -181,17 +194,11 @@ export default function OnboardingStepPage() {
     router.push(`/onboarding/${targetStepId}`);
   };
 
-  const handleSave = (next: boolean = false) => {
-    if (!submissionId || !db) return;
-    
-    const isLastStep = currentStepIndex === STEPS.length - 1;
-    const nextStepId = next && !isLastStep ? STEPS[currentStepIndex + 1].id : stepId;
-    
-    // Validation for next
-    if (next && stepId === 'snapshot') {
-      const biz = formData.businessDetails || {};
-      const contacts = formData.contactSetup?.contacts || [];
-      const numContacts = formData.contactSetup?.numberOfContacts || 0;
+  const validateStep = (sid: string, data: any) => {
+    if (sid === 'snapshot') {
+      const biz = data.businessDetails || {};
+      const contacts = data.contactSetup?.contacts || [];
+      const numContacts = data.contactSetup?.numberOfContacts || 0;
       
       const missingBiz = !biz.registeredBusinessName || !biz.abn || !biz.businessStructure || !biz.businessEmail || !biz.businessPhone || !biz.registeredAddress;
       
@@ -206,10 +213,39 @@ export default function OnboardingStepPage() {
       const hasUrgent = visibleContacts.some((c: any) => c.responsibilities?.includes('Urgent approvals'));
 
       if (missingBiz || missingContact1 || missingContact2 || !hasDecisionMaker || !hasPricing || !hasUrgent) {
+        return "Please fill in all required fields and nominate required roles before proceeding.";
+      }
+    }
+
+    if (sid === 'triage') {
+      if (!data.hasLiveOpportunity) return "Please answer whether you have a live opportunity.";
+      if (data.hasLiveOpportunity === 'Unsure' && !data.unsureExplanation) return "Please explain what you are unsure about.";
+      if (data.hasLiveOpportunity === 'Yes') {
+        const details = data.opportunityDetails || {};
+        if (!details.opportunityType) return "Opportunity type is required.";
+        if (!details.opportunityTitle) return "Opportunity name/project title is required.";
+        if (!details.deadlineDate && details.urgencyLevel !== 'No confirmed deadline') return "Deadline is required.";
+        if (!details.supportRequired || details.supportRequired.length === 0) return "Please select at least one type of support required.";
+      }
+    }
+
+    return null;
+  };
+
+  const handleSave = (next: boolean = false) => {
+    if (!submissionId || !db) return;
+    
+    const isLastStep = currentStepIndex === STEPS.length - 1;
+    const nextStepId = next && !isLastStep ? STEPS[currentStepIndex + 1].id : stepId;
+    
+    // Validation for next
+    if (next) {
+      const error = validateStep(stepId as string, formData);
+      if (error) {
         toast({
           variant: "destructive",
           title: "Incomplete Section",
-          description: "Please fill in all required fields and nominate required roles before proceeding."
+          description: error
         });
         return;
       }
@@ -860,80 +896,299 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
       );
 
     case 'triage':
+      const hasOpp = data.hasLiveOpportunity;
+      const details = data.opportunityDetails || { supportRequired: [] };
+      
+      const handleDetailsChange = (field: string, val: any) => {
+        onChange('opportunityDetails', { ...details, [field]: val });
+      };
+
+      const handleSupportToggle = (opt: string) => {
+        const current = details.supportRequired || [];
+        const next = current.includes(opt) 
+          ? current.filter((i: string) => i !== opt) 
+          : [...current, opt];
+        handleDetailsChange('supportRequired', next);
+      };
+
       return (
-        <div className="space-y-10">
-          <div className="space-y-3">
-            <h2 className="text-3xl font-headline font-bold text-slate-900">Immediate Need & Live Triage</h2>
-            <p className="text-slate-500">Are there any pressing opportunities we should focus on immediately?</p>
+        <div className="space-y-12">
+          <div className="space-y-4">
+            <h2 className="text-4xl font-headline font-bold text-slate-900">Immediate Need and Live Opportunity Triage</h2>
+            <p className="text-slate-500 text-lg leading-relaxed">
+              Tell us whether you currently have a tender, grant, supplier registration, marketplace lead, quote request, direct proposal, or other opportunity that needs urgent review. If you do not have a live opportunity, this section will be marked complete and you can continue.
+            </p>
           </div>
 
-          <div className="space-y-8">
-            <div className="space-y-4">
-              <Label className="text-lg font-bold text-slate-800">Do you have a live bid opportunity that requires immediate attention?</Label>
-              <div className="flex gap-4">
-                {['Yes', 'No'].map((opt) => (
-                  <Button
-                    key={opt}
-                    variant={data.hasLiveOpportunity === opt ? 'default' : 'outline'}
-                    onClick={() => onChange('hasLiveOpportunity', opt)}
-                    className="flex-1 h-14 rounded-2xl text-lg font-bold transition-all"
-                  >
-                    {opt}
-                  </Button>
-                ))}
+          {/* Initial Question Card */}
+          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+            <CardContent className="p-8 space-y-8">
+              <div className="space-y-4">
+                <Label className="text-lg font-bold text-slate-800">Do you currently have a live opportunity you want Bid Manager to review, prepare, or action? *</Label>
+                <RadioGroup 
+                  value={hasOpp} 
+                  onValueChange={(val) => onChange('hasLiveOpportunity', val)}
+                  className="grid grid-cols-1 md:grid-cols-3 gap-4"
+                >
+                  {['Yes', 'No', 'Unsure'].map((opt) => (
+                    <div key={opt} className="relative">
+                      <RadioGroupItem value={opt} id={`status-${opt}`} className="peer sr-only" />
+                      <Label
+                        htmlFor={`status-${opt}`}
+                        className="flex items-center justify-center h-14 border-2 rounded-2xl cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-slate-50 transition-all font-bold text-slate-700"
+                      >
+                        {opt}
+                      </Label>
+                    </div>
+                  ))}
+                </RadioGroup>
               </div>
-            </div>
 
-            {data.hasLiveOpportunity === 'Yes' && (
-              <div className="space-y-6 p-8 bg-amber-50/30 rounded-[2rem] border border-amber-100/50 animate-in fade-in slide-in-from-top-4">
-                <h3 className="font-bold text-amber-900 flex items-center gap-2">
-                  <AlertCircle className="w-5 h-5" /> Opportunity Details
-                </h3>
-                <div className="grid gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="oppTitle" className="font-bold text-amber-800/80">Opportunity Title / Tender Reference</Label>
-                    <Input 
-                      id="oppTitle" 
-                      value={data.opportunityTitle || ''} 
-                      onChange={(e) => onChange('opportunityTitle', e.target.value)}
-                      placeholder="e.g. RFT-2023-001 Facility Management" 
-                      className="h-12 rounded-xl border-amber-200 bg-white" 
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="oppDeadline" className="font-bold text-amber-800/80">Submission Deadline</Label>
-                    <Input 
-                      id="oppDeadline" 
-                      type="date"
-                      value={data.opportunityDeadline || ''} 
-                      onChange={(e) => onChange('opportunityDeadline', e.target.value)}
-                      className="h-12 rounded-xl border-amber-200 bg-white" 
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="oppSummary" className="font-bold text-amber-800/80">Quick Summary of Requirements</Label>
-                    <Textarea 
-                      id="oppSummary" 
-                      value={data.opportunitySummary || ''} 
-                      onChange={(e) => onChange('opportunitySummary', e.target.value)}
-                      placeholder="Briefly describe what is needed..." 
-                      className="min-h-[120px] rounded-2xl border-amber-200 bg-white" 
-                    />
+              {hasOpp === 'No' && (
+                <div className="p-6 bg-green-50 rounded-2xl border border-green-100 animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-center gap-3 text-green-700 font-bold">
+                    <CheckCircle2 className="w-5 h-5" />
+                    No live opportunity recorded. You can continue to the next section.
                   </div>
                 </div>
+              )}
+
+              {hasOpp === 'Unsure' && (
+                <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                  <Label className="font-bold text-slate-700">Briefly explain what you are unsure about *</Label>
+                  <Textarea 
+                    value={data.unsureExplanation || ''} 
+                    onChange={(e) => onChange('unsureExplanation', e.target.value)}
+                    placeholder="Describe your situation..."
+                    className="min-h-[100px] rounded-2xl bg-slate-50/50"
+                  />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Detailed Opportunity Card */}
+          {hasOpp === 'Yes' && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-50 rounded-xl">
+                  <AlertCircle className="w-5 h-5 text-amber-600" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900">Live Opportunity Details</h3>
               </div>
-            )}
-            
-            <div className="space-y-4">
-              <Label className="text-lg font-bold text-slate-800">What is your primary goal for the next 90 days?</Label>
-              <Textarea 
-                value={data.primary90DayGoal || ''} 
-                onChange={(e) => onChange('primary90DayGoal', e.target.value)}
-                placeholder="e.g. Secure 3 new government contracts, Refresh bid library..." 
-                className="min-h-[100px] rounded-2xl bg-slate-50" 
-              />
+
+              <Card className="border border-amber-200 bg-amber-50/5 rounded-3xl overflow-hidden shadow-sm">
+                <CardContent className="p-8 space-y-10">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-3">
+                      <Label className="font-bold text-slate-700">Opportunity Type *</Label>
+                      <Select 
+                        value={details.opportunityType || ''} 
+                        onValueChange={(val) => handleDetailsChange('opportunityType', val)}
+                      >
+                        <SelectTrigger className="h-12 rounded-xl bg-white">
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[
+                            "Government tender", "Private tender", "Grant", 
+                            "Panel or supplier registration", "Marketplace lead", 
+                            "Direct proposal", "Quote request", 
+                            "Corporate supplier portal", "Local council opportunity", "Other"
+                          ].map(opt => (
+                            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {details.opportunityType === 'Other' && (
+                        <Input 
+                          placeholder="Please describe the opportunity type"
+                          value={details.otherOpportunityType || ''}
+                          onChange={(e) => handleDetailsChange('otherOpportunityType', e.target.value)}
+                          className="h-12 rounded-xl bg-white mt-2"
+                        />
+                      )}
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label className="font-bold text-slate-700">Opportunity Name or Project Title *</Label>
+                      <Input 
+                        value={details.opportunityTitle || ''} 
+                        onChange={(e) => handleDetailsChange('opportunityTitle', e.target.value)}
+                        placeholder="e.g. 2024 Road Maintenance Tender" 
+                        className="h-12 rounded-xl bg-white"
+                      />
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label className="font-bold text-slate-700">Buyer, Funder, Platform, or Organisation Name</Label>
+                      <Input 
+                        value={details.buyerFunderPlatform || ''} 
+                        onChange={(e) => handleDetailsChange('buyerFunderPlatform', e.target.value)}
+                        placeholder="e.g. Dept of Infrastructure" 
+                        className="h-12 rounded-xl bg-white"
+                      />
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label className="font-bold text-slate-700">Opportunity Link or Portal URL</Label>
+                      <div className="relative">
+                        <ExternalLink className="absolute left-3 top-3.5 w-4 h-4 text-muted-foreground" />
+                        <Input 
+                          value={details.opportunityLink || ''} 
+                          onChange={(e) => handleDetailsChange('opportunityLink', e.target.value)}
+                          placeholder="https://..." 
+                          className="pl-10 h-12 rounded-xl bg-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label className="font-bold text-slate-700">Urgency Level *</Label>
+                      <Select 
+                        value={details.urgencyLevel || ''} 
+                        onValueChange={(val) => handleDetailsChange('urgencyLevel', val)}
+                      >
+                        <SelectTrigger className="h-12 rounded-xl bg-white">
+                          <SelectValue placeholder="Select urgency" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[
+                            "Due within 24 hours", "Due within 2-3 days", 
+                            "Due within 1 week", "Due within 2 weeks", 
+                            "Due in more than 2 weeks", "No confirmed deadline"
+                          ].map(opt => (
+                            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label className="font-bold text-slate-700">Opportunity Deadline *</Label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="relative">
+                          <CalendarIcon className="absolute left-3 top-3.5 w-4 h-4 text-muted-foreground" />
+                          <Input 
+                            type="date"
+                            value={details.deadlineDate || ''} 
+                            onChange={(e) => handleDetailsChange('deadlineDate', e.target.value)}
+                            className="pl-10 h-12 rounded-xl bg-white"
+                          />
+                        </div>
+                        <div className="relative">
+                          <Clock className="absolute left-3 top-3.5 w-4 h-4 text-muted-foreground" />
+                          <Input 
+                            type="time"
+                            value={details.deadlineTime || ''} 
+                            onChange={(e) => handleDetailsChange('deadlineTime', e.target.value)}
+                            className="pl-10 h-12 rounded-xl bg-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {details.urgencyLevel && details.urgencyLevel.includes('day') && (
+                    <Alert className="border-amber-200 bg-amber-50 text-amber-900 rounded-2xl">
+                      <AlertTriangle className="h-4 w-4 text-amber-600" />
+                      <AlertTitle className="text-xs font-bold uppercase tracking-wider">Urgent Action Required</AlertTitle>
+                      <AlertDescription className="text-sm">
+                        This deadline is very close. We will prioritize this triage as soon as you submit your onboarding.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="space-y-3">
+                    <Label className="font-bold text-slate-700">Short Summary of the Opportunity</Label>
+                    <Textarea 
+                      value={details.summary || ''} 
+                      onChange={(e) => handleDetailsChange('summary', e.target.value)}
+                      placeholder="Briefly describe what is required..."
+                      className="min-h-[100px] rounded-2xl bg-white"
+                    />
+                  </div>
+
+                  <div className="space-y-6">
+                    <Label className="font-bold text-slate-800 text-lg">What support do you need? *</Label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {[
+                        "Review only", "Bid/no-bid recommendation", "Draft response", 
+                        "Prepare supporting documents", "Prepare pricing or quote", 
+                        "Submit on our behalf, subject to approval", "Clarify requirements", 
+                        "Upload documents", "Unsure, please advise"
+                      ].map((opt) => (
+                        <div 
+                          key={opt} 
+                          className={`flex items-center space-x-2 p-4 rounded-xl border transition-all cursor-pointer ${details.supportRequired?.includes(opt) ? 'border-primary/30 bg-primary/5 shadow-sm' : 'border-slate-100 bg-white hover:bg-slate-50'}`}
+                          onClick={() => handleSupportToggle(opt)}
+                        >
+                          <Checkbox 
+                            id={`support-${opt}`} 
+                            checked={details.supportRequired?.includes(opt)} 
+                            onCheckedChange={() => {}} 
+                          />
+                          <Label htmlFor={`support-${opt}`} className="text-xs font-medium cursor-pointer leading-tight">
+                            {opt}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
+                    <div className="space-y-4">
+                      <Label className="font-bold text-slate-700">Has any work already been started?</Label>
+                      <RadioGroup 
+                        value={details.workAlreadyStarted || ''} 
+                        onValueChange={(val) => handleDetailsChange('workAlreadyStarted', val)}
+                        className="flex gap-4"
+                      >
+                        {['Yes', 'No', 'Unsure'].map((opt) => (
+                          <div key={opt} className="flex items-center space-x-2">
+                            <RadioGroupItem value={opt} id={`work-${opt}`} />
+                            <Label htmlFor={`work-${opt}`}>{opt}</Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                      {details.workAlreadyStarted === 'Yes' && (
+                        <Textarea 
+                          placeholder="Briefly describe what has already been prepared..."
+                          value={details.workStartedDescription || ''}
+                          onChange={(e) => handleDetailsChange('workStartedDescription', e.target.value)}
+                          className="min-h-[80px] rounded-xl bg-white mt-2"
+                        />
+                      )}
+                    </div>
+
+                    <div className="space-y-4">
+                      <Label className="font-bold text-slate-700">Are there any known risks, issues, or concerns?</Label>
+                      <Textarea 
+                        value={details.knownRisks || ''} 
+                        onChange={(e) => handleDetailsChange('knownRisks', e.target.value)}
+                        placeholder="e.g. tight deadline, missing certifications..."
+                        className="min-h-[120px] rounded-xl bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Document Upload Simulation */}
+                  <div className="space-y-4 pt-4">
+                    <Label className="font-bold text-slate-700">Upload Opportunity Documents</Label>
+                    <div className="p-10 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center gap-4 bg-white hover:border-primary/30 transition-colors cursor-pointer group">
+                      <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-primary/5 group-hover:text-primary transition-colors">
+                        <Upload className="w-6 h-6" />
+                      </div>
+                      <div className="text-center">
+                        <p className="font-bold text-slate-700">Click or drag files to upload</p>
+                        <p className="text-xs text-muted-foreground mt-1">PDF, DOCX, ZIP (Max 50MB)</p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-          </div>
+          )}
         </div>
       );
 
