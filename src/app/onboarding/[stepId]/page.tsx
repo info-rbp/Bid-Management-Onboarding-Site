@@ -49,7 +49,8 @@ import {
   Clock,
   Calendar as CalendarIcon,
   Upload,
-  AlertTriangle
+  AlertTriangle,
+  Target as TargetIcon
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -64,6 +65,7 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Badge } from "@/components/ui/badge";
 
 const STEPS = [
   { id: 'welcome', title: '1. Welcome & Expectations', icon: Zap },
@@ -78,11 +80,11 @@ const STEPS = [
   { id: 'commercial', title: '10. Pricing & Commercial', icon: DollarSign },
   { id: 'platform', title: '11. Platform Setup', icon: Globe },
   { id: 'compliance', title: '12. Compliance & Insurance', icon: ShieldCheck },
-  { id: 'readiness', title: '13. Tender Readiness', icon: FileBadge },
-  { id: 'grants', title: '14. Grants', icon: Gift },
-  { id: 'marketplace', title: '15. Marketplace Strategy', icon: BarChart3 },
-  { id: 'outreach', title: '16. Outreach Strategy', icon: Send },
-  { id: 'quote', title: '17. Quote Support', icon: MessageSquare },
+  { id: 'readiness', title: '13. Tender Readiness', icon: FileBadge, conditional: 'tenderSupplier' },
+  { id: 'grants', title: '14. Grants', icon: Gift, conditional: 'grants' },
+  { id: 'marketplace', title: '15. Marketplace Strategy', icon: BarChart3, conditional: 'marketplace' },
+  { id: 'outreach', title: '16. Outreach Strategy', icon: Send, conditional: 'directProposal' },
+  { id: 'quote', title: '17. Quote Support', icon: MessageSquare, conditional: 'quoteRequests' },
   { id: 'workflow', title: '18. Workflow Rules', icon: MessageSquare },
   { id: 'library', title: '19. Document Library', icon: Library },
   { id: 'authority', title: '20. Authority Matrix', icon: Scale },
@@ -125,6 +127,7 @@ export default function OnboardingStepPage() {
           currentStep: stepId,
           completedSteps: [],
           sections: {},
+          enabledModules: {},
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           completionPercentage: 0,
@@ -156,6 +159,12 @@ export default function OnboardingStepPage() {
               supportRequired: []
             }
           });
+        } else if (sid === 'selection') {
+          setFormData({
+            selectedServices: [],
+            desiredOutcomes: [],
+            enabledModules: {}
+          });
         } else {
           setFormData({});
         }
@@ -178,6 +187,11 @@ export default function OnboardingStepPage() {
         lastSavedAt: serverTimestamp(),
       };
       updateData[`sections.${stepId}`] = formData;
+      
+      // If we are on selection step, sync enabledModules to root
+      if (stepId === 'selection') {
+        updateData.enabledModules = formData.enabledModules || {};
+      }
 
       updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData)
         .catch((error: any) => {
@@ -195,6 +209,11 @@ export default function OnboardingStepPage() {
   };
 
   const validateStep = (sid: string, data: any) => {
+    if (sid === 'welcome') {
+      const acks = ['ack1', 'ack2', 'ack3', 'ack4', 'ack5', 'ack6', 'ack7'];
+      if (!acks.every(ack => data[ack])) return "Please confirm all acknowledgements before proceeding.";
+    }
+
     if (sid === 'snapshot') {
       const biz = data.businessDetails || {};
       const contacts = data.contactSetup?.contacts || [];
@@ -229,6 +248,16 @@ export default function OnboardingStepPage() {
       }
     }
 
+    if (sid === 'selection') {
+      if (!data.selectedServices || data.selectedServices.length === 0) return "At least one service must be selected.";
+      if (!data.highestPriorityService) return "Highest priority service is required.";
+      if (!data.reasonForSupport) return "Reason for support is required.";
+      if (!data.supportLevel) return "Level of support is required.";
+      if (data.selectedServices.length === 1 && data.selectedServices[0].includes('Unsure') && !data.reasonForSupport) {
+         return "Please explain what you want help deciding.";
+      }
+    }
+
     return null;
   };
 
@@ -257,6 +286,11 @@ export default function OnboardingStepPage() {
     };
 
     updateData[`sections.${stepId}`] = formData;
+    
+    // Sync module visibility
+    if (stepId === 'selection') {
+      updateData.enabledModules = formData.enabledModules || {};
+    }
 
     if (next) {
       updateData.currentStep = nextStepId;
@@ -311,6 +345,15 @@ export default function OnboardingStepPage() {
     );
   }
 
+  // Filter sidebar steps based on enabled modules
+  const visibleSteps = STEPS.filter(s => {
+    if (!s.conditional) return true;
+    const enabled = submission?.enabledModules?.[s.conditional];
+    // If Unsure is selected, we keep them visible as per requirements
+    const unsureSelected = submission?.sections?.selection?.selectedServices?.includes('Unsure, please recommend');
+    return enabled || unsureSelected;
+  });
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-body">
       {/* Wizard Sidebar */}
@@ -326,7 +369,7 @@ export default function OnboardingStepPage() {
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-1">
-          {STEPS.map((step) => {
+          {visibleSteps.map((step) => {
             const isCompleted = submission?.completedSteps?.includes(step.id);
             const isCurrent = step.id === stepId;
             return (
@@ -485,7 +528,7 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
                     <Checkbox 
                       id={ack.id} 
                       checked={data[ack.id] || false} 
-                      onCheckedChange={() => {}} // Controlled via parent div click
+                      onCheckedChange={() => {}} 
                       className="mt-0.5"
                     />
                     <Label htmlFor={ack.id} className="text-sm leading-snug cursor-pointer font-medium text-slate-700">
@@ -799,7 +842,6 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
                               "Urgent approvals", "Technical questions", 
                               "General backup contact", "Other"
                             ].map((resp) => {
-                              // Ensure primary contact has primary role
                               const isRestricted = idx === 0 && resp === "Primary contact";
                               const checked = contact.responsibilities?.includes(resp) || (idx === 0 && resp === "Primary contact");
                               
@@ -813,7 +855,7 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
                                     id={`resp-${idx}-${resp}`} 
                                     checked={checked} 
                                     disabled={isRestricted}
-                                    onCheckedChange={() => {}} // Handled by div click
+                                    onCheckedChange={() => {}} 
                                   />
                                   <Label 
                                     htmlFor={`resp-${idx}-${resp}`} 
@@ -920,7 +962,6 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
             </p>
           </div>
 
-          {/* Initial Question Card */}
           <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
             <CardContent className="p-8 space-y-8">
               <div className="space-y-4">
@@ -967,7 +1008,6 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
             </CardContent>
           </Card>
 
-          {/* Detailed Opportunity Card */}
           {hasOpp === 'Yes' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
               <div className="flex items-center gap-3">
@@ -1172,7 +1212,6 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
                     </div>
                   </div>
 
-                  {/* Document Upload Simulation */}
                   <div className="space-y-4 pt-4">
                     <Label className="font-bold text-slate-700">Upload Opportunity Documents</Label>
                     <div className="p-10 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center gap-4 bg-white hover:border-primary/30 transition-colors cursor-pointer group">
@@ -1193,55 +1232,242 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
       );
 
     case 'selection':
+      const selectedServices = data.selectedServices || [];
+      const desiredOutcomes = data.desiredOutcomes || [];
+
+      const handleServiceToggle = (service: string) => {
+        const next = selectedServices.includes(service)
+          ? selectedServices.filter((s: string) => s !== service)
+          : [...selectedServices, service];
+        
+        // Dynamic logic for enabling modules
+        const modules = {
+          tenderSupplier: next.includes('Government Tenders') || next.includes('Private Tenders') || next.includes('Panel or Supplier Registrations'),
+          grants: next.includes('Grants'),
+          marketplace: next.includes('Marketplace Leads'),
+          directProposal: next.includes('Direct Proposals'),
+          quoteRequests: next.includes('Quote Requests'),
+        };
+
+        // If Unsure, keep all visible
+        if (next.includes('Unsure, please recommend')) {
+          modules.tenderSupplier = true;
+          modules.grants = true;
+          modules.marketplace = true;
+          modules.directProposal = true;
+          modules.quoteRequests = true;
+        }
+
+        onChange('selectedServices', next);
+        onChange('enabledModules', modules);
+      };
+
+      const handleOutcomeToggle = (outcome: string) => {
+        const next = desiredOutcomes.includes(outcome)
+          ? desiredOutcomes.filter((o: string) => o !== outcome)
+          : [...desiredOutcomes, outcome];
+        onChange('desiredOutcomes', next);
+      };
+
       return (
-        <div className="space-y-10">
-          <div className="space-y-3">
-            <h2 className="text-3xl font-headline font-bold text-slate-900">Service Selection & Scope</h2>
-            <p className="text-slate-500">Select the areas where you need Bid Manager's strategic support.</p>
+        <div className="space-y-12">
+          <div className="space-y-4">
+            <h2 className="text-4xl font-headline font-bold text-slate-900">Service Selection & Engagement Scope</h2>
+            <p className="text-slate-500 text-lg leading-relaxed">
+              Select the Bid Manager services you want support with and tell us how involved you want us to be. Your selections will determine which additional onboarding modules appear later.
+            </p>
           </div>
 
-          <div className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                { id: 'service_bid', label: 'End-to-End Bid Management' },
-                { id: 'service_writing', label: 'Technical Writing & Drafting' },
-                { id: 'service_grant', label: 'Grant Research & Application' },
-                { id: 'service_strategy', label: 'Bid Strategy & Positioning' },
-                { id: 'service_review', label: 'Final Review & Proofing' },
-                { id: 'service_library', label: 'Bid Library Management' },
-                { id: 'service_marketplace', label: 'Marketplace Lead Tracking' },
-                { id: 'service_compliance', label: 'Compliance Audit & Monitoring' },
-              ].map((service) => (
-                <div key={service.id} className="flex items-center space-x-3 p-4 rounded-xl border border-slate-100 hover:bg-slate-50 transition-colors">
-                  <Checkbox 
-                    id={service.id} 
-                    checked={data[service.id] || false} 
-                    onCheckedChange={(checked) => onChange(service.id, checked)} 
-                  />
-                  <Label htmlFor={service.id} className="text-sm font-medium cursor-pointer">{service.label}</Label>
-                </div>
-              ))}
-            </div>
+          {/* Module Summary Panel (Small) */}
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(data.enabledModules || {}).map(([key, enabled]) => (
+              <Badge key={key} variant={enabled ? "default" : "secondary"} className="rounded-full px-3 py-1 text-[10px] uppercase font-bold tracking-widest">
+                {key.replace(/([A-Z])/g, ' $1')}: {enabled ? 'Enabled' : 'Skipped'}
+              </Badge>
+            ))}
+          </div>
 
-            <div className="space-y-4">
-              <Label className="font-bold text-slate-700">Preferred Engagement Model</Label>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Service Selection Card */}
+          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+            <CardContent className="p-8 space-y-6">
+              <Label className="text-lg font-bold text-slate-800">Which Bid Manager services would you like support with? *</Label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[
-                  { id: 'project', label: 'Project Based', desc: 'Pay per individual bid' },
-                  { id: 'retainer', label: 'Monthly Retainer', desc: 'Guaranteed capacity' },
-                  { id: 'adhoc', label: 'Ad-hoc Support', desc: 'On-demand as needed' },
-                ].map((model) => (
+                  "Government Tenders", "Private Tenders", "Panel or Supplier Registrations",
+                  "Grants", "Marketplace Leads", "Direct Proposals", "Quote Requests",
+                  "Unsure, please recommend"
+                ].map((service) => (
                   <div 
-                    key={model.id}
-                    onClick={() => onChange('engagementModel', model.id)}
-                    className={`p-5 rounded-2xl border-2 cursor-pointer transition-all ${data.engagementModel === model.id ? 'border-primary bg-primary/5' : 'border-slate-100 hover:border-slate-200'}`}
+                    key={service} 
+                    className={`flex items-center space-x-3 p-4 rounded-2xl border transition-all cursor-pointer ${selectedServices.includes(service) ? 'border-primary/30 bg-primary/5 shadow-sm' : 'border-slate-100 hover:bg-slate-50'}`}
+                    onClick={() => handleServiceToggle(service)}
                   >
-                    <p className="font-bold text-sm">{model.label}</p>
-                    <p className="text-[10px] text-muted-foreground mt-1">{model.desc}</p>
+                    <Checkbox 
+                      id={`service-${service}`} 
+                      checked={selectedServices.includes(service)} 
+                      onCheckedChange={() => {}} 
+                    />
+                    <Label htmlFor={`service-${service}`} className="text-sm font-medium cursor-pointer leading-tight">
+                      {service}
+                    </Label>
                   </div>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Priority and Scope Card */}
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl">
+                <TargetIcon className="w-5 h-5 text-primary" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900">Priority and Scope</h3>
             </div>
+
+            <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+              <CardContent className="p-8 space-y-8">
+                <div className="space-y-3">
+                  <Label className="font-bold text-slate-700">Which service is your highest priority right now? *</Label>
+                  <Select 
+                    value={data.highestPriorityService || ''} 
+                    onValueChange={(val) => onChange('highestPriorityService', val)}
+                  >
+                    <SelectTrigger className="h-12 rounded-xl">
+                      <SelectValue placeholder="Select priority service" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[
+                        "Government Tenders", "Private Tenders", "Panel or Supplier Registrations",
+                        "Grants", "Marketplace Leads", "Direct Proposals", "Quote Requests",
+                        "Unsure"
+                      ].map(opt => (
+                        <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="font-bold text-slate-700">Why are these services important to your business right now? *</Label>
+                  <Textarea 
+                    value={data.reasonForSupport || ''} 
+                    onChange={(e) => onChange('reasonForSupport', e.target.value)}
+                    placeholder="Briefly describe your goals and business context..."
+                    className="min-h-[120px] rounded-2xl"
+                  />
+                </div>
+
+                <div className="space-y-6">
+                  <Label className="font-bold text-slate-800">What outcome are you hoping to achieve?</Label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {[
+                      "Win new contracts", "Secure grant funding", "Generate leads quickly",
+                      "Build a client pipeline", "Enter a new market", "Improve proposal quality",
+                      "Build credibility", "Create reusable proposal content",
+                      "Improve tender readiness", "Set up marketplace profiles", "Other"
+                    ].map((outcome) => (
+                      <div 
+                        key={outcome} 
+                        className={`flex items-center space-x-3 p-3 rounded-xl border transition-all cursor-pointer ${desiredOutcomes.includes(outcome) ? 'border-primary/30 bg-primary/5 shadow-sm' : 'border-slate-100 hover:bg-slate-50'}`}
+                        onClick={() => handleOutcomeToggle(outcome)}
+                      >
+                        <Checkbox 
+                          id={`outcome-${outcome}`} 
+                          checked={desiredOutcomes.includes(outcome)} 
+                          onCheckedChange={() => {}} 
+                        />
+                        <Label htmlFor={`outcome-${outcome}`} className="text-xs font-medium cursor-pointer leading-tight">
+                          {outcome}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                  {desiredOutcomes.includes('Other') && (
+                    <Input 
+                      placeholder="Please describe the outcome you want"
+                      value={data.otherDesiredOutcome || ''}
+                      onChange={(e) => onChange('otherDesiredOutcome', e.target.value)}
+                      className="h-12 rounded-xl mt-2"
+                    />
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Level of Support Card */}
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl">
+                <Users className="w-5 h-5 text-primary" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900">Level of Support</h3>
+            </div>
+
+            <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+              <CardContent className="p-8 space-y-6">
+                <Label className="text-lg font-bold text-slate-800">How involved do you want Bid Manager to be? *</Label>
+                <RadioGroup 
+                  value={data.supportLevel || ''} 
+                  onValueChange={(val) => onChange('supportLevel', val)}
+                  className="space-y-3"
+                >
+                  {[
+                    "Full end-to-end management",
+                    "Opportunity review and recommendations only",
+                    "Drafting and document preparation only",
+                    "Submission support only",
+                    "Marketplace and lead response support only",
+                    "Setup and readiness support first",
+                    "Unsure, please recommend"
+                  ].map((lvl) => (
+                    <div key={lvl} className="relative">
+                      <RadioGroupItem value={lvl} id={`lvl-${lvl}`} className="peer sr-only" />
+                      <Label
+                        htmlFor={`lvl-${lvl}`}
+                        className="flex items-center p-4 border-2 rounded-2xl cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-slate-50 transition-all font-medium text-slate-700 text-sm"
+                      >
+                        {lvl}
+                      </Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Exclusions Card */}
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl">
+                <ShieldCheck className="w-5 h-5 text-primary" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900">Exclusions</h3>
+            </div>
+
+            <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+              <CardContent className="p-8 space-y-6">
+                <div className="space-y-3">
+                  <Label className="font-bold text-slate-700">Are there any services, platforms, opportunity types, or activities you do not want Bid Manager to support?</Label>
+                  <Textarea 
+                    value={data.excludedServicesOrActivities || ''} 
+                    onChange={(e) => onChange('excludedServicesOrActivities', e.target.value)}
+                    placeholder="Describe any areas of exclusion..."
+                    className="min-h-[100px] rounded-2xl"
+                  />
+                </div>
+                <div className="space-y-3">
+                  <Label className="font-bold text-slate-700">Are there any areas where you want approval before we do any work?</Label>
+                  <Textarea 
+                    value={data.approvalBeforeWorkAreas || ''} 
+                    onChange={(e) => onChange('approvalBeforeWorkAreas', e.target.value)}
+                    placeholder="Describe areas requiring explicit approval..."
+                    className="min-h-[100px] rounded-2xl"
+                  />
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       );
