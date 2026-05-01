@@ -26,7 +26,7 @@ export default function Home() {
               <span className="text-sm font-semibold uppercase tracking-wider">Streamlined Partnership</span>
             </div>
             <h1 className="text-5xl lg:text-6xl font-headline font-bold text-foreground leading-tight tracking-tight">
-              A Frictionless Path to <span className="text-primary">Bid Excellence</span>
+              Let's Get Moving On Your <span className="text-primary">Bid Management</span>
             </h1>
             <p className="text-xl text-muted-foreground leading-relaxed max-w-lg">
               We've automated the onboarding process so you can focus on winning. From secure payment to workspace provisioning, your journey starts here.
