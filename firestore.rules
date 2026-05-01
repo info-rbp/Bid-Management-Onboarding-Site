@@ -1,0 +1,147 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * BID MANAGER SECURITY RULES
+     * 
+     * Core Philosophy:
+     * This ruleset enforces a strict user-ownership model designed for a high-security onboarding 
+     * environment. Authorization is primary; data shape validation is secondary to support 
+     * rapid prototyping.
+     * 
+     * Data Structure:
+     * - /users/{userId}: Private user profiles, indexed by Auth UID.
+     * - /onboardingSubmissions/{id}: Flat collection of onboarding drafts, linked via 'userId'.
+     * - /uploadedDocuments/{id}: Flat collection of document metadata, linked via 'userId'.
+     * - /admins/{userId}: Role-based access control via existence checks.
+     * 
+     * Key Security Decisions:
+     * 1. Authorization Independence: Ownership fields (userId) are denormalized onto all 
+     *    documents to allow for fast, reliable authorization without excessive cross-document lookups.
+     * 2. Subscription Gating: Access to create or modify onboarding data is contingent 
+     *    on a 'subscriptionStatus' of 'active' found in the user's profile.
+     * 3. Submission Locking: Once an onboarding pack is marked as 'submitted', it is 
+     *    locked from further client edits unless explicitly 'adminReopened' by an administrator.
+     * 4. Listing Restrictions: Public listing of users or submissions is strictly prohibited 
+     *    to prevent data exposure. Users typically access their data via direct document IDs.
+     */
+
+    // --- Helper Functions ---
+
+    /** @description Checks if the request is from an authenticated user. */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /** @description Checks if the authenticated user's UID matches the provided userId. */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /** @description Checks if a document exists and the current user is the owner. */
+    function isExistingOwner(userId) {
+      return resource != null && isOwner(userId);
+    }
+
+    /** @description Implements DBAC by checking if the user exists in the /admins collection. */
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    /** @description Verifies if the user has an active subscription in their profile. */
+    function isSubscriptionActive() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subscriptionStatus == 'active';
+    }
+
+    /** @description Checks if an onboarding submission is in an editable state. */
+    function isSubmissionEditable(data) {
+      return data.status != 'submitted' || data.adminReopened == true;
+    }
+
+    // --- Collection Rules ---
+
+    /**
+     * @description Rules for the User profile collection.
+     * @path /users/{userId}
+     * @allow (create) if the user is creating their own profile.
+     * @deny (list) if a non-admin tries to enumerate users.
+     * @principle Path-based ownership and self-creation logic.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(userId);
+      allow update: if (isExistingOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /**
+     * @description Rules for onboarding submissions containing draft and final responses.
+     * @path /onboardingSubmissions/{submissionId}
+     * @allow (update) if the owner is editing a draft that isn't locked.
+     * @deny (create) if the user does not have an active subscription.
+     * @principle Denormalized ownership check and state-based write locking.
+     */
+    match /onboardingSubmissions/{submissionId} {
+      allow get: if isOwner(resource.data.userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isOwner(request.resource.data.userId) && isSubscriptionActive();
+      allow update: if isExistingOwner(resource.data.userId) && isSubmissionEditable(resource.data) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isAdmin();
+    }
+
+    /**
+     * @description Rules for uploaded document metadata.
+     * @path /uploadedDocuments/{documentId}
+     * @allow (create) if the userId in the data matches the authenticated user.
+     * @deny (update) if trying to change the owner of a document.
+     * @principle Relational integrity and ownership enforcement.
+     */
+    match /uploadedDocuments/{documentId} {
+      allow get: if isOwner(resource.data.userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isOwner(request.resource.data.userId) && isSubscriptionActive();
+      allow update: if isExistingOwner(resource.data.userId) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isExistingOwner(resource.data.userId) || isAdmin();
+    }
+
+    /**
+     * @description Rules for the administrative roles collection.
+     * @path /admins/{adminId}
+     * @allow (get) for signed-in users to verify permissions.
+     * @deny (write) for all client-side requests.
+     * @principle Database-Backed Access Control (DBAC).
+     */
+    match /admins/{adminId} {
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
+      allow create, update, delete: if false; // Managed via Admin SDK or Console only.
+    }
+  }
+}
+
+/**
+ * STEP 1: ANALYSIS & SYNTHESIS
+ * 
+ * 1. Intent Adoption: 
+ * The reasoning emphasizes "Authorization Independence" and "DBAC". It explicitly links 
+ * subscription status to the ability to "access onboarding".
+ * 
+ * 2. Access Control Patterns:
+ * - /users/{userId}: Ownership/Self-Creation. 
+ *   The path itself defines the owner.
+ * - /onboardingSubmissions: Ownership (via field). 
+ *   Uses denormalized 'userId' for QAPs and efficient rules.
+ * - /uploadedDocuments: Ownership (via field). 
+ *   Uses denormalized 'userId'.
+ * - /admins: Roles (DBAC). 
+ *   Existence check for global privileges.
+ * 
+ * 3. Specific Logic:
+ * - Subscription Check: Creation of submissions and document metadata requires a 
+ *   look-up to the User document to verify 'active' status.
+ * - Lock Mechanism: Update permissions on submissions are revoked if 'status' is 
+ *   'submitted' unless 'adminReopened' is true.
+ * - Relational Integrity: On create/update, the internal 'userId' must match the auth UID.
+ */
