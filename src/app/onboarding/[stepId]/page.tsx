@@ -54,7 +54,10 @@ import {
   Heart,
   Plus,
   Trash2,
-  Briefcase
+  Briefcase,
+  FileStack,
+  MessageSquareQuote,
+  Image as ImageIcon
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -189,6 +192,12 @@ export default function OnboardingStepPage() {
             capacityScaling: { scalingRequirements: [] },
             equipmentSystems: { systemsUsed: [] }
           });
+        } else if (sid === 'proof') {
+          setFormData({
+            caseStudySetup: { numberOfCaseStudies: '1', caseStudies: [] },
+            reviewsTestimonials: { hasReviews: '', locations: [], links: '' },
+            evidenceGaps: {}
+          });
         } else {
           setFormData({});
         }
@@ -204,7 +213,6 @@ export default function OnboardingStepPage() {
   const handleNavigate = (targetStepId: string) => {
     if (targetStepId === stepId) return;
 
-    // Save current step data before navigating
     if (submissionId && db) {
       const updateData: any = {
         updatedAt: serverTimestamp(),
@@ -212,7 +220,6 @@ export default function OnboardingStepPage() {
       };
       updateData[`sections.${stepId}`] = formData;
       
-      // If we are on selection step, sync enabledModules to root
       if (stepId === 'selection') {
         updateData.enabledModules = formData.enabledModules || {};
       }
@@ -242,19 +249,14 @@ export default function OnboardingStepPage() {
       const biz = data.businessDetails || {};
       const contacts = data.contactSetup?.contacts || [];
       const numContacts = data.contactSetup?.numberOfContacts || 0;
-      
       const missingBiz = !biz.registeredBusinessName || !biz.abn || !biz.businessStructure || !biz.businessEmail || !biz.businessPhone || !biz.registeredAddress;
-      
       const visibleContacts = contacts.slice(0, numContacts);
       const contact1 = visibleContacts[0];
       const missingContact1 = !contact1?.fullName || !contact1?.email || !contact1?.phone || !contact1?.responsibilities?.includes('Primary contact');
-      
       const missingContact2 = numContacts >= 2 && (!visibleContacts[1]?.fullName || !visibleContacts[1]?.email || !visibleContacts[1]?.phone);
-
       const hasDecisionMaker = visibleContacts.some((c: any) => c.responsibilities?.includes('Final decision-maker'));
       const hasPricing = visibleContacts.some((c: any) => c.responsibilities?.includes('Pricing/commercial approval'));
       const hasUrgent = visibleContacts.some((c: any) => c.responsibilities?.includes('Urgent approvals'));
-
       if (missingBiz || missingContact1 || missingContact2 || !hasDecisionMaker || !hasPricing || !hasUrgent) {
         return "Please fill in all required fields and nominate required roles before proceeding.";
       }
@@ -282,25 +284,22 @@ export default function OnboardingStepPage() {
     if (sid === 'profile') {
       const overview = data.businessOverview || {};
       const valProp = data.valueProposition || {};
-      const brand = data.brandPositioning || {};
       const points = valProp.topThreePoints || [];
-
       if (!overview.plainEnglishDescription) return "Business description is required.";
       if (!overview.problemSolved) return "Problem solved is required.";
       if (!valProp.clientOutcomes) return "Client outcomes are required.";
       if (!valProp.differentiators) return "Differentiators are required.";
       if (!valProp.clientsChooseUsBecause) return "The 'Clients choose us because...' field is required.";
       if (points.length < 3 || points.some((p: string) => !p)) return "All three key points are required.";
-      if (!brand.tonePreference) return "Tone preference is required.";
+      if (!data.brandPositioning?.tonePreference) return "Tone preference is required.";
     }
 
     if (sid === 'menu') {
       const setup = data.serviceSetup || { services: [] };
-      const numServices = setup.numberOfServices === '6 or more' ? 6 : (parseInt(setup.numberOfServices) || 0);
+      const numServicesRaw = setup.numberOfServices || '3';
+      const numServices = numServicesRaw === '6 or more' ? 6 : (parseInt(numServicesRaw) || 0);
       const services = setup.services || [];
-      
       if (numServices === 0) return "Please add at least one service.";
-      
       for (let i = 0; i < numServices; i++) {
         const s = services[i];
         if (!s?.name || !s?.description || !s?.inclusions || !s?.exclusions || !s?.deliveryMethods?.length || !s?.pricingMethod || !s?.suitableChannels?.length) {
@@ -311,35 +310,30 @@ export default function OnboardingStepPage() {
 
     if (sid === 'capacity') {
       const setup = data.teamSetup || { members: [] };
-      const numMembers = setup.numberOfMembers === '6 or more' ? 6 : (parseInt(setup.numberOfMembers) || 0);
+      const numMembersRaw = setup.numberOfMembers || '2';
+      const numMembers = numMembersRaw === '6 or more' ? 6 : (parseInt(numMembersRaw) || 0);
       const members = setup.members || [];
-      
       if (numMembers === 0) return "Please add at least one team member.";
       for (let i = 0; i < numMembers; i++) {
         const m = members[i];
-        if (!m?.fullName || !m?.roleTitle || !m?.responsibilities) {
-          return `Please complete required fields for Team Member ${i + 1}.`;
+        if (!m?.fullName || !m?.roleTitle || !m?.responsibilities) return `Please complete required fields for Team Member ${i + 1}.`;
+      }
+      if (!data.capacityScaling?.jobsAtOnce || !data.capacityScaling?.currentCapacity || !data.capacityScaling?.couldScale || !data.capacityScaling?.backupPlan) return "Please complete all capacity and scaling fields.";
+      if (!data.equipmentSystems?.qualityChecks) return "Please describe your quality checks and supervision processes.";
+    }
+
+    if (sid === 'proof') {
+      const setup = data.caseStudySetup || { caseStudies: [] };
+      const numRaw = setup.numberOfCaseStudies || '1';
+      if (numRaw !== 'None yet') {
+        const num = numRaw === '5 or more' ? 5 : parseInt(numRaw);
+        const studies = setup.caseStudies || [];
+        for (let i = 0; i < num; i++) {
+          const s = studies[i];
+          if (!s?.projectTitle || !s?.clientType || !s?.deliveredSummary || !s?.outcomeSummary) return `Please complete all required fields for Case Study ${i + 1}.`;
         }
       }
-
-      const partners = data.subcontractors || { partners: [] };
-      if (['Yes', 'Sometimes'].includes(partners.usePartners)) {
-        const numP = parseInt(partners.numberOfPartners) || 0;
-        const pList = partners.partners || [];
-        if (numP > 0 && (!pList[0]?.name || !pList[0]?.type)) {
-          return "Please complete details for at least one delivery partner.";
-        }
-      }
-
-      const cap = data.capacityScaling || {};
-      if (!cap.jobsAtOnce || !cap.currentCapacity || !cap.couldScale || !cap.backupPlan) {
-        return "Please complete all capacity and scaling fields.";
-      }
-
-      const eq = data.equipmentSystems || {};
-      if (!eq.qualityChecks) {
-        return "Please describe your quality checks and supervision processes.";
-      }
+      if (!data.reviewsTestimonials?.hasReviews) return "Please select whether you have reviews or testimonials.";
     }
 
     return null;
@@ -347,42 +341,25 @@ export default function OnboardingStepPage() {
 
   const handleSave = (next: boolean = false) => {
     if (!submissionId || !db) return;
-    
     const isLastStep = currentStepIndex === STEPS.length - 1;
     const nextStepId = next && !isLastStep ? STEPS[currentStepIndex + 1].id : stepId;
     
-    // Validation for next
     if (next) {
       const error = validateStep(stepId as string, formData);
       if (error) {
-        toast({
-          variant: "destructive",
-          title: "Incomplete Section",
-          description: error
-        });
+        toast({ variant: "destructive", title: "Incomplete Section", description: error });
         return;
       }
     }
 
-    const updateData: any = {
-      updatedAt: serverTimestamp(),
-      lastSavedAt: serverTimestamp(),
-    };
-
+    const updateData: any = { updatedAt: serverTimestamp(), lastSavedAt: serverTimestamp() };
     updateData[`sections.${stepId}`] = formData;
-    
-    // Sync module visibility
-    if (stepId === 'selection') {
-      updateData.enabledModules = formData.enabledModules || {};
-    }
+    if (stepId === 'selection') updateData.enabledModules = formData.enabledModules || {};
 
     if (next) {
       updateData.currentStep = nextStepId;
       const currentCompleted = submission?.completedSteps || [];
-      if (!currentCompleted.includes(stepId as string)) {
-        updateData.completedSteps = [...currentCompleted, stepId as string];
-      }
-      
+      if (!currentCompleted.includes(stepId as string)) updateData.completedSteps = [...currentCompleted, stepId as string];
       const completedCount = updateData.completedSteps?.length || currentCompleted.length;
       updateData.completionPercentage = (completedCount / STEPS.length) * 100;
     }
@@ -402,21 +379,12 @@ export default function OnboardingStepPage() {
         router.push(`/onboarding/${nextStepId}`);
         initialSyncDone.current[nextStepId] = false;
       } else {
-        updateDoc(doc(db, 'onboardingSubmissions', submissionId), {
-          status: 'submitted',
-          submittedAt: serverTimestamp()
-        });
-        toast({ 
-          title: "Onboarding Complete", 
-          description: "All steps have been submitted successfully. Welcome to Bid Manager!" 
-        });
+        updateDoc(doc(db, 'onboardingSubmissions', submissionId), { status: 'submitted', submittedAt: serverTimestamp() });
+        toast({ title: "Onboarding Complete", description: "All steps have been submitted successfully. Welcome to Bid Manager!" });
         router.push('/dashboard');
       }
     } else {
-      toast({ 
-        title: "Draft Saved", 
-        description: "Your progress for this section has been saved." 
-      });
+      toast({ title: "Draft Saved", description: "Your progress for this section has been saved." });
     }
   };
 
@@ -429,7 +397,6 @@ export default function OnboardingStepPage() {
     );
   }
 
-  // Filter sidebar steps based on enabled modules
   const visibleSteps = STEPS.filter(s => {
     if (!s.conditional) return true;
     const enabled = submission?.enabledModules?.[s.conditional];
@@ -439,7 +406,6 @@ export default function OnboardingStepPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-body">
-      {/* Wizard Sidebar */}
       <aside className="w-80 bg-white border-r hidden lg:flex flex-col shrink-0">
         <div className="p-6 border-b">
           <Logo />
@@ -460,16 +426,10 @@ export default function OnboardingStepPage() {
                 key={step.id}
                 onClick={() => handleNavigate(step.id)}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer group ${
-                  isCurrent 
-                  ? 'bg-primary/10 text-primary font-bold shadow-sm' 
-                  : isCompleted 
-                  ? 'text-green-600 hover:bg-green-50' 
-                  : 'text-muted-foreground hover:bg-slate-50'
+                  isCurrent ? 'bg-primary/10 text-primary font-bold shadow-sm' : isCompleted ? 'text-green-600 hover:bg-green-50' : 'text-muted-foreground hover:bg-slate-50'
                 }`}
               >
-                <div className={`shrink-0 flex items-center justify-center w-6 h-6 rounded-full ${
-                  isCurrent ? 'bg-primary text-white' : isCompleted ? 'bg-green-100' : 'bg-slate-100'
-                }`}>
+                <div className={`shrink-0 flex items-center justify-center w-6 h-6 rounded-full ${isCurrent ? 'bg-primary text-white' : isCompleted ? 'bg-green-100' : 'bg-slate-100'}`}>
                   {isCompleted ? <CheckCircle2 className="w-3.5 h-3.5" /> : <step.icon className="w-3.5 h-3.5" />}
                 </div>
                 <span className="text-xs font-medium truncate">{step.title}</span>
@@ -478,24 +438,17 @@ export default function OnboardingStepPage() {
           })}
         </div>
         <div className="p-4 border-t">
-          <Button 
-            variant="ghost" 
-            className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground rounded-xl transition-colors"
-            onClick={() => router.push('/dashboard')}
-          >
+          <Button variant="ghost" className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground rounded-xl transition-colors" onClick={() => router.push('/dashboard')}>
             <LayoutDashboard className="w-4 h-4" />
             <span className="text-sm font-medium">Return to Dashboard</span>
           </Button>
         </div>
       </aside>
 
-      {/* Main Content Area */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         <header className="h-16 bg-white border-b flex items-center justify-between px-8 shrink-0 z-10 shadow-sm">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" onClick={() => router.back()} className="gap-2 rounded-lg text-muted-foreground">
-              <ChevronLeft className="w-4 h-4" /> Back
-            </Button>
+            <Button variant="ghost" size="sm" onClick={() => router.back()} className="gap-2 rounded-lg text-muted-foreground"><ChevronLeft className="w-4 h-4" /> Back</Button>
             <div className="h-4 w-px bg-slate-200" />
             <div className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -505,22 +458,8 @@ export default function OnboardingStepPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => handleSave(false)} 
-              className="gap-2 rounded-lg border-2"
-            >
-              <Save className="w-3 h-3" />
-              Save Draft
-            </Button>
-            <Button 
-              size="sm" 
-              onClick={() => handleSave(true)} 
-              className="gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20"
-            >
-              {currentStepIndex === STEPS.length - 1 ? 'Finish Onboarding' : 'Next Step'} <ChevronRight className="w-4 h-4" />
-            </Button>
+            <Button variant="outline" size="sm" onClick={() => handleSave(false)} className="gap-2 rounded-lg border-2"><Save className="w-3 h-3" />Save Draft</Button>
+            <Button size="sm" onClick={() => handleSave(true)} className="gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20">{currentStepIndex === STEPS.length - 1 ? 'Finish Onboarding' : 'Next Step'} <ChevronRight className="w-4 h-4" /></Button>
           </div>
         </header>
 
@@ -528,22 +467,15 @@ export default function OnboardingStepPage() {
           <div className="max-w-4xl mx-auto p-8 lg:p-12">
             <Card className="border-none shadow-xl shadow-slate-200/50 rounded-[2.5rem] overflow-hidden bg-white">
               <CardContent className="p-10 lg:p-14">
-                <StepContent 
-                  stepId={stepId as string} 
-                  data={formData} 
-                  onChange={handleFieldChange} 
-                />
+                <StepContent stepId={stepId as string} data={formData} onChange={handleFieldChange} />
               </CardContent>
             </Card>
-            
             <div className="mt-10 flex justify-between items-center text-[11px] font-medium text-slate-400 px-6">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                 <p>Progress is synced with your account.</p>
               </div>
-              {submission?.lastSavedAt && (
-                <p>Last synced: {new Date(submission.lastSavedAt.seconds * 1000).toLocaleTimeString()}</p>
-              )}
+              {submission?.lastSavedAt && <p>Last synced: {new Date(submission.lastSavedAt.seconds * 1000).toLocaleTimeString()}</p>}
             </div>
           </div>
         </div>
@@ -563,36 +495,17 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
               This onboarding process helps us collect the information we need to understand your business, prepare proposal-ready content, assess your opportunity readiness, and support you across tenders, grants, supplier registrations, marketplace leads, quote requests, and direct proposals.
             </p>
           </div>
-          
           <div className="grid gap-8">
             <div className="p-8 bg-blue-50/40 rounded-3xl border border-blue-100/50 space-y-5">
-              <h3 className="font-bold text-lg text-blue-900 flex items-center gap-2">
-                <HelpCircle className="w-5 h-5 text-primary" /> What to Expect
-              </h3>
+              <h3 className="font-bold text-lg text-blue-900 flex items-center gap-2"><HelpCircle className="w-5 h-5 text-primary" /> What to Expect</h3>
               <ul className="space-y-4 text-sm text-blue-800/80 font-medium">
-                {[
-                  "This process usually takes approximately 45–75 minutes.",
-                  "You can save your progress and return later.",
-                  "You will be asked for business details, service information, team and capacity details, pricing rules, compliance information, opportunity preferences, and approval instructions.",
-                  "You can upload supporting documents where relevant.",
-                  "Please do not provide passwords, login credentials, or MFA codes through this portal."
-                ].map((item, i) => (
-                  <li key={i} className="flex gap-4 items-start">
-                    <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center shrink-0 border border-blue-200 text-[10px] font-bold shadow-sm">
-                      {i + 1}
-                    </div>
-                    {item}
-                  </li>
+                {["This process usually takes approximately 45–75 minutes.", "You can save your progress and return later.", "You will be asked for business details, service information, team and capacity details, pricing rules, compliance information, opportunity preferences, and approval instructions.", "You can upload supporting documents where relevant.", "Please do not provide passwords, login credentials, or MFA codes through this portal."].map((item, i) => (
+                  <li key={i} className="flex gap-4 items-start"><div className="w-5 h-5 rounded-full bg-white flex items-center justify-center shrink-0 border border-blue-200 text-[10px] font-bold shadow-sm">{i + 1}</div>{item}</li>
                 ))}
               </ul>
             </div>
-
             <div className="space-y-6 pt-4">
-              <div className="space-y-1">
-                <h4 className="font-bold text-lg text-slate-900">Before You Continue</h4>
-                <p className="text-sm text-muted-foreground">Please confirm the acknowledgements below before moving to the next step.</p>
-              </div>
-              
+              <div className="space-y-1"><h4 className="font-bold text-lg text-slate-900">Before You Continue</h4><p className="text-sm text-muted-foreground">Please confirm the acknowledgements below before moving to the next step.</p></div>
               <div className="space-y-5">
                 {[
                   { id: 'ack1', label: 'I confirm I have read, or have had the opportunity to read, the Bid Manager Terms and Conditions.' },
@@ -603,21 +516,7 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
                   { id: 'ack6', label: 'I understand I can save my progress and return later to continue from where I left off.' },
                   { id: 'ack7', label: 'I understand that the quality and completeness of the information I provide will affect the accuracy of the documents, recommendations, profiles, and action plans Bid Manager prepares.' }
                 ].map((ack) => (
-                  <div 
-                    key={ack.id} 
-                    className="flex items-start space-x-4 p-4 rounded-2xl hover:bg-slate-50 transition-colors cursor-pointer"
-                    onClick={() => onChange(ack.id, !data[ack.id])}
-                  >
-                    <Checkbox 
-                      id={ack.id} 
-                      checked={data[ack.id] || false} 
-                      onCheckedChange={() => {}} 
-                      className="mt-0.5"
-                    />
-                    <Label htmlFor={ack.id} className="text-sm leading-snug cursor-pointer font-medium text-slate-700">
-                      {ack.label}
-                    </Label>
-                  </div>
+                  <div key={ack.id} className="flex items-start space-x-4 p-4 rounded-2xl hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => onChange(ack.id, !data[ack.id])}><Checkbox id={ack.id} checked={data[ack.id] || false} onCheckedChange={() => {}} className="mt-0.5"/><Label htmlFor={ack.id} className="text-sm leading-snug cursor-pointer font-medium text-slate-700">{ack.label}</Label></div>
                 ))}
               </div>
             </div>
@@ -630,296 +529,47 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
       const contactSetup = data.contactSetup || { numberOfContacts: 2, contacts: [] };
       const contacts = contactSetup.contacts || [];
       const numContacts = contactSetup.numberOfContacts || 2;
-
-      const handleBizChange = (field: string, val: any) => {
-        onChange('businessDetails', { ...bizDetails, [field]: val });
-      };
-
+      const handleBizChange = (field: string, val: any) => onChange('businessDetails', { ...bizDetails, [field]: val });
       const handleContactChange = (index: number, field: string, val: any) => {
-        const newContacts = [...contacts];
-        if (!newContacts[index]) {
-          newContacts[index] = { contactNumber: index + 1, responsibilities: [] };
-        }
-        newContacts[index] = { ...newContacts[index], [field]: val };
-        onChange('contactSetup', { ...contactSetup, contacts: newContacts });
+        const next = [...contacts];
+        if (!next[index]) next[index] = { contactNumber: index + 1, responsibilities: [] };
+        next[index] = { ...next[index], [field]: val };
+        onChange('contactSetup', { ...contactSetup, contacts: next });
       };
-
       const handleRespToggle = (index: number, resp: string) => {
-        const newContacts = [...contacts];
-        if (!newContacts[index]) {
-          newContacts[index] = { contactNumber: index + 1, responsibilities: [] };
-        }
-        const currentResps = newContacts[index].responsibilities || [];
-        const newResps = currentResps.includes(resp)
-          ? currentResps.filter((r: string) => r !== resp)
-          : [...currentResps, resp];
-        newContacts[index] = { ...newContacts[index], responsibilities: newResps };
-        onChange('contactSetup', { ...contactSetup, contacts: newContacts });
+        const next = [...contacts];
+        if (!next[index]) next[index] = { contactNumber: index + 1, responsibilities: [] };
+        const current = next[index].responsibilities || [];
+        const nextResps = current.includes(resp) ? current.filter((r: string) => r !== resp) : [...current, resp];
+        next[index] = { ...next[index], responsibilities: nextResps };
+        onChange('contactSetup', { ...contactSetup, contacts: next });
       };
-
       const hasDecisionMaker = contacts.slice(0, numContacts).some(c => c.responsibilities?.includes('Final decision-maker'));
       const hasPricing = contacts.slice(0, numContacts).some(c => c.responsibilities?.includes('Pricing/commercial approval'));
       const hasUrgent = contacts.slice(0, numContacts).some(c => c.responsibilities?.includes('Urgent approvals'));
-
       return (
         <div className="space-y-12">
           <div className="space-y-4">
             <h2 className="text-4xl font-headline font-bold text-slate-900">Business Snapshot and Contact Details</h2>
-            <p className="text-slate-500 text-lg leading-relaxed">
-              Provide your official business details and key contact people so we can create your client profile, confirm who can approve decisions, and know who to contact for business, pricing, compliance, documents, and urgent matters.
-            </p>
+            <p className="text-slate-500 text-lg leading-relaxed">Provide your official business details and key contact people so we can create your client profile, confirm who can approve decisions, and know who to contact for business, pricing, compliance, documents, and urgent matters.</p>
           </div>
-
           <div className="space-y-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl">
-                <Building2 className="w-5 h-5 text-primary" />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900">Business Details</h3>
-            </div>
-            
-            <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-              <CardContent className="p-8 space-y-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label className="font-bold text-slate-700">Registered Business Name *</Label>
-                    <Input 
-                      value={bizDetails.registeredBusinessName || ''} 
-                      onChange={(e) => handleBizChange('registeredBusinessName', e.target.value)}
-                      placeholder="e.g. Acme Industries Pty Ltd" 
-                      className="h-12 rounded-xl"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="font-bold text-slate-700">Trading Name (if different)</Label>
-                    <Input 
-                      value={bizDetails.tradingName || ''} 
-                      onChange={(e) => handleBizChange('tradingName', e.target.value)}
-                      placeholder="Acme Solutions" 
-                      className="h-12 rounded-xl"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="font-bold text-slate-700">ABN *</Label>
-                    <Input 
-                      value={bizDetails.abn || ''} 
-                      onChange={(e) => handleBizChange('abn', e.target.value)}
-                      placeholder="00 000 000 000" 
-                      className="h-12 rounded-xl"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="font-bold text-slate-700">ACN (if applicable)</Label>
-                    <Input 
-                      value={bizDetails.acn || ''} 
-                      onChange={(e) => handleBizChange('acn', e.target.value)}
-                      placeholder="000 000 000" 
-                      className="h-12 rounded-xl"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="font-bold text-slate-700">Business Structure *</Label>
-                    <Select 
-                      value={bizDetails.businessStructure || ''} 
-                      onValueChange={(val) => handleBizChange('businessStructure', val)}
-                    >
-                      <SelectTrigger className="h-12 rounded-xl">
-                        <SelectValue placeholder="Select structure" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {["Sole trader", "Company", "Partnership", "Trust", "Not-for-profit", "Incorporated association", "Indigenous business", "Social enterprise", "Other", "Unsure"].map(opt => (
-                          <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="font-bold text-slate-700">Year Started Operating</Label>
-                    <Input 
-                      value={bizDetails.yearStarted || ''} 
-                      onChange={(e) => handleBizChange('yearStarted', e.target.value)}
-                      placeholder="YYYY" 
-                      className="h-12 rounded-xl"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-6 pt-4">
-                  <div className="space-y-2">
-                    <Label className="font-bold text-slate-700">Registered Business Address *</Label>
-                    <div className="relative">
-                      <MapPin className="absolute left-3 top-3.5 w-4 h-4 text-muted-foreground" />
-                      <Input 
-                        value={bizDetails.registeredAddress || ''} 
-                        onChange={(e) => handleBizChange('registeredAddress', e.target.value)}
-                        placeholder="Street address, Suburb, State, Postcode" 
-                        className="pl-10 h-12 rounded-xl"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-                  <div className="space-y-2">
-                    <Label className="font-bold text-slate-700">Business Phone Number *</Label>
-                    <Input 
-                      value={bizDetails.businessPhone || ''} 
-                      onChange={(e) => handleBizChange('businessPhone', e.target.value)}
-                      placeholder="+61 0 0000 0000" 
-                      className="h-12 rounded-xl"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="font-bold text-slate-700">Business Email Address *</Label>
-                    <Input 
-                      type="email"
-                      value={bizDetails.businessEmail || ''} 
-                      onChange={(e) => handleBizChange('businessEmail', e.target.value)}
-                      placeholder="hello@company.com" 
-                      className="h-12 rounded-xl"
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="flex items-center gap-3"><div className="p-2 bg-primary/10 rounded-xl"><Building2 className="w-5 h-5 text-primary" /></div><h3 className="text-xl font-bold text-slate-900">Business Details</h3></div>
+            <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm"><CardContent className="p-8 space-y-8"><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-2"><Label className="font-bold text-slate-700">Registered Business Name *</Label><Input value={bizDetails.registeredBusinessName || ''} onChange={(e) => handleBizChange('registeredBusinessName', e.target.value)} placeholder="e.g. Acme Industries Pty Ltd" className="h-12 rounded-xl"/></div><div className="space-y-2"><Label className="font-bold text-slate-700">ABN *</Label><Input value={bizDetails.abn || ''} onChange={(e) => handleBizChange('abn', e.target.value)} placeholder="00 000 000 000" className="h-12 rounded-xl"/></div><div className="space-y-2"><Label className="font-bold text-slate-700">Business Structure *</Label><Select value={bizDetails.businessStructure || ''} onValueChange={(val) => handleBizChange('businessStructure', val)}><SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Select structure" /></SelectTrigger><SelectContent>{["Sole trader", "Company", "Partnership", "Trust", "Not-for-profit", "Indigenous business", "Other"].map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label className="font-bold text-slate-700">Business Email Address *</Label><Input type="email" value={bizDetails.businessEmail || ''} onChange={(e) => handleBizChange('businessEmail', e.target.value)} placeholder="hello@company.com" className="h-12 rounded-xl"/></div></div><div className="space-y-2"><Label className="font-bold text-slate-700">Registered Business Address *</Label><div className="relative"><MapPin className="absolute left-3 top-3.5 w-4 h-4 text-muted-foreground" /><Input value={bizDetails.registeredAddress || ''} onChange={(e) => handleBizChange('registeredAddress', e.target.value)} placeholder="Full address" className="pl-10 h-12 rounded-xl"/></div></div><div className="space-y-2"><Label className="font-bold text-slate-700">Business Phone Number *</Label><Input value={bizDetails.businessPhone || ''} onChange={(e) => handleBizChange('businessPhone', e.target.value)} placeholder="+61 0 0000 0000" className="h-12 rounded-xl"/></div></CardContent></Card>
           </div>
-
           <div className="space-y-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl">
-                <Users className="w-5 h-5 text-primary" />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900">Contact Setup</h3>
-            </div>
-
-            <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-              <CardContent className="p-8 space-y-8">
-                <div className="space-y-4">
-                  <Label className="text-lg font-bold text-slate-800">How many contacts would you like to add?</Label>
-                  <div className="max-w-[240px]">
-                    <Select 
-                      value={numContacts.toString()} 
-                      onValueChange={(val) => onChange('contactSetup', { ...contactSetup, numberOfContacts: parseInt(val) })}
-                    >
-                      <SelectTrigger className="h-12 rounded-xl">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[1, 2, 3, 4, 5].map(n => (
-                          <SelectItem key={n} value={n.toString()}>{n} contact{n > 1 ? 's' : ''}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-6">
-                  {Array.from({ length: numContacts }).map((_, idx) => {
-                    const contact = contacts[idx] || { responsibilities: [] };
-                    const label = idx === 0 ? "Primary Contact" : idx === 1 ? "Secondary Contact" : "Additional Contact";
-                    
-                    return (
-                      <div key={idx} className="p-8 border border-slate-100 bg-slate-50/30 rounded-[2rem] space-y-6">
-                        <h4 className="font-bold text-slate-900 text-lg">Contact {idx + 1}: <span className="text-primary">{label}</span></h4>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div className="space-y-2">
-                            <Label className="font-bold text-slate-700">Full Name *</Label>
-                            <Input 
-                              value={contact.fullName || ''} 
-                              onChange={(e) => handleContactChange(idx, 'fullName', e.target.value)}
-                              placeholder="e.g. John Smith" 
-                              className="h-12 rounded-xl bg-white"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="font-bold text-slate-700">Role / Title</Label>
-                            <Input 
-                              value={contact.roleTitle || ''} 
-                              onChange={(e) => handleContactChange(idx, 'roleTitle', e.target.value)}
-                              placeholder="e.g. Commercial Manager" 
-                              className="h-12 rounded-xl bg-white"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="font-bold text-slate-700">Email Address *</Label>
-                            <Input 
-                              type="email"
-                              value={contact.email || ''} 
-                              onChange={(e) => handleContactChange(idx, 'email', e.target.value)}
-                              placeholder="john@company.com" 
-                              className="h-12 rounded-xl bg-white"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="font-bold text-slate-700">Phone Number *</Label>
-                            <Input 
-                              value={contact.phone || ''} 
-                              onChange={(e) => handleContactChange(idx, 'phone', e.target.value)}
-                              placeholder="+61 400 000 000" 
-                              className="h-12 rounded-xl bg-white"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="space-y-4 pt-2">
-                          <Label className="font-bold text-slate-900 block pb-2">Responsibilities / Permissions *</Label>
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {[
-                              "Primary contact", "Secondary contact", "Final decision-maker", 
-                              "Pricing/commercial approval", "Compliance documents", 
-                              "Insurance documents", "Licences/certifications", 
-                              "Document collection", "Platform access coordination", 
-                              "Urgent approvals", "Technical questions", 
-                              "General backup contact", "Other"
-                            ].map((resp) => {
-                              const isRestricted = idx === 0 && resp === "Primary contact";
-                              const checked = contact.responsibilities?.includes(resp) || (idx === 0 && resp === "Primary contact");
-                              
-                              return (
-                                <div 
-                                  key={resp} 
-                                  className={`flex items-center space-x-2 p-3 rounded-xl border transition-all cursor-pointer ${checked ? 'border-primary/30 bg-primary/5 shadow-sm' : 'border-slate-100 hover:bg-slate-50'}`}
-                                  onClick={() => !isRestricted && handleRespToggle(idx, resp)}
-                                >
-                                  <Checkbox id={`resp-${idx}-${resp}`} checked={checked} disabled={isRestricted} onCheckedChange={() => {}} />
-                                  <Label htmlFor={`resp-${idx}-${resp}`} className="text-xs font-medium cursor-pointer">{resp}</Label>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="space-y-4 pt-4">
-                  {!hasDecisionMaker && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Nomination Required</AlertTitle><AlertDescription>Please nominate at least one final decision-maker.</AlertDescription></Alert>}
-                  {!hasPricing && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Nomination Required</AlertTitle><AlertDescription>Please nominate who can approve pricing and commercial decisions.</AlertDescription></Alert>}
-                  {!hasUrgent && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Nomination Required</AlertTitle><AlertDescription>Please nominate who we should contact for urgent approvals.</AlertDescription></Alert>}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="space-y-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl">
-                <Info className="w-5 h-5 text-primary" />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900">Additional Contact Notes</h3>
-            </div>
-            <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-              <CardContent className="p-8">
-                <Textarea 
-                  value={data.additionalContactNotes || ''} 
-                  onChange={(e) => onChange('additionalContactNotes', e.target.value)}
-                  placeholder="For example, preferred contact times, people who should only be contacted for specific matters..."
-                  className="min-h-[120px] rounded-2xl"
-                />
-              </CardContent>
-            </Card>
+            <div className="flex items-center gap-3"><div className="p-2 bg-primary/10 rounded-xl"><Users className="w-5 h-5 text-primary" /></div><h3 className="text-xl font-bold text-slate-900">Contact Setup</h3></div>
+            <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm"><CardContent className="p-8 space-y-8"><div className="space-y-4"><Label className="text-lg font-bold text-slate-800">How many contacts would you like to add?</Label><div className="max-w-[240px]"><Select value={numContacts.toString()} onValueChange={(val) => onChange('contactSetup', { ...contactSetup, numberOfContacts: parseInt(val) })}><SelectTrigger className="h-12 rounded-xl"><SelectValue /></SelectTrigger><SelectContent>{[1, 2, 3, 4, 5].map(n => <SelectItem key={n} value={n.toString()}>{n} contact{n > 1 ? 's' : ''}</SelectItem>)}</SelectContent></Select></div></div>
+            <div className="space-y-6">{Array.from({ length: numContacts }).map((_, idx) => {
+              const contact = contacts[idx] || { responsibilities: [] };
+              const label = idx === 0 ? "Primary Contact" : idx === 1 ? "Secondary Contact" : "Additional Contact";
+              return (<div key={idx} className="p-8 border border-slate-100 bg-slate-50/30 rounded-[2rem] space-y-6"><h4 className="font-bold text-slate-900 text-lg">Contact {idx + 1}: <span className="text-primary">{label}</span></h4><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-2"><Label className="font-bold text-slate-700">Full Name *</Label><Input value={contact.fullName || ''} onChange={(e) => handleContactChange(idx, 'fullName', e.target.value)} className="h-12 rounded-xl bg-white"/></div><div className="space-y-2"><Label className="font-bold text-slate-700">Role / Title</Label><Input value={contact.roleTitle || ''} onChange={(e) => handleContactChange(idx, 'roleTitle', e.target.value)} className="h-12 rounded-xl bg-white"/></div><div className="space-y-2"><Label className="font-bold text-slate-700">Email Address *</Label><Input type="email" value={contact.email || ''} onChange={(e) => handleContactChange(idx, 'email', e.target.value)} className="h-12 rounded-xl bg-white"/></div><div className="space-y-2"><Label className="font-bold text-slate-700">Phone Number *</Label><Input value={contact.phone || ''} onChange={(e) => handleContactChange(idx, 'phone', e.target.value)} className="h-12 rounded-xl bg-white"/></div></div>
+              <div className="space-y-4 pt-2"><Label className="font-bold text-slate-900 block pb-2">Responsibilities / Permissions *</Label><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">{["Primary contact", "Secondary contact", "Final decision-maker", "Pricing/commercial approval", "Compliance documents", "Insurance documents", "Licences/certifications", "Urgent approvals", "Technical questions", "Other"].map((resp) => {
+                const isRestricted = idx === 0 && resp === "Primary contact";
+                const checked = contact.responsibilities?.includes(resp) || (idx === 0 && resp === "Primary contact");
+                return (<div key={resp} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${checked ? 'border-primary/30 bg-primary/5 shadow-sm' : 'border-slate-100 bg-white'}`} onClick={() => !isRestricted && handleRespToggle(idx, resp)}><Checkbox id={`resp-${idx}-${resp}`} checked={checked} disabled={isRestricted} onCheckedChange={() => {}} /><Label htmlFor={`resp-${idx}-${resp}`} className="text-xs font-medium cursor-pointer">{resp}</Label></div>);
+              })}</div></div></div>);
+            })}</div><div className="space-y-4 pt-4">{!hasDecisionMaker && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>Please nominate at least one final decision-maker.</AlertDescription></Alert>}{!hasPricing && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>Please nominate who can approve pricing and commercial decisions.</AlertDescription></Alert>}{!hasUrgent && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>Please nominate who we should contact for urgent approvals.</AlertDescription></Alert>}</div></CardContent></Card>
           </div>
         </div>
       );
@@ -927,89 +577,19 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
     case 'triage':
       const hasOpp = data.hasLiveOpportunity;
       const details = data.opportunityDetails || { supportRequired: [] };
-      
-      const handleDetailsChange = (field: string, val: any) => {
-        onChange('opportunityDetails', { ...details, [field]: val });
-      };
-
+      const handleDetailsChange = (field: string, val: any) => onChange('opportunityDetails', { ...details, [field]: val });
       const handleSupportToggle = (opt: string) => {
         const current = details.supportRequired || [];
         const next = current.includes(opt) ? current.filter((i: string) => i !== opt) : [...current, opt];
         handleDetailsChange('supportRequired', next);
       };
-
       return (
         <div className="space-y-12">
-          <div className="space-y-4">
-            <h2 className="text-4xl font-headline font-bold text-slate-900">Immediate Need and Live Opportunity Triage</h2>
-            <p className="text-slate-500 text-lg leading-relaxed">
-              Tell us whether you currently have a tender, grant, or other opportunity that needs urgent review.
-            </p>
-          </div>
-
-          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-            <CardContent className="p-8 space-y-8">
-              <div className="space-y-4">
-                <Label className="text-lg font-bold text-slate-800">Do you currently have a live opportunity? *</Label>
-                <RadioGroup value={hasOpp} onValueChange={(val) => onChange('hasLiveOpportunity', val)} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {['Yes', 'No', 'Unsure'].map((opt) => (
-                    <div key={opt} className="relative">
-                      <RadioGroupItem value={opt} id={`status-${opt}`} className="peer sr-only" />
-                      <Label htmlFor={`status-${opt}`} className="flex items-center justify-center h-14 border-2 rounded-2xl cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-slate-50 transition-all font-bold">{opt}</Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </div>
-
-              {hasOpp === 'No' && <Alert className="bg-green-50 text-green-700 border-green-100"><CheckCircle2 className="h-4 w-4" /><AlertDescription>No live opportunity recorded. You can continue.</AlertDescription></Alert>}
-              {hasOpp === 'Unsure' && (
-                <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                  <Label className="font-bold text-slate-700">Briefly explain what you are unsure about *</Label>
-                  <Textarea value={data.unsureExplanation || ''} onChange={(e) => onChange('unsureExplanation', e.target.value)} className="min-h-[100px] rounded-2xl" />
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {hasOpp === 'Yes' && (
-            <Card className="border border-amber-200 bg-amber-50/5 rounded-3xl overflow-hidden shadow-sm">
-              <CardContent className="p-8 space-y-10">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-3">
-                    <Label className="font-bold text-slate-700">Opportunity Type *</Label>
-                    <Select value={details.opportunityType || ''} onValueChange={(val) => handleDetailsChange('opportunityType', val)}>
-                      <SelectTrigger className="h-12 rounded-xl bg-white"><SelectValue placeholder="Select type" /></SelectTrigger>
-                      <SelectContent>
-                        {["Government tender", "Private tender", "Grant", "Panel or supplier registration", "Marketplace lead", "Direct proposal", "Quote request", "Other"].map(opt => (
-                          <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-3">
-                    <Label className="font-bold text-slate-700">Opportunity Name *</Label>
-                    <Input value={details.opportunityTitle || ''} onChange={(e) => handleDetailsChange('opportunityTitle', e.target.value)} className="h-12 rounded-xl bg-white" />
-                  </div>
-                  <div className="space-y-3">
-                    <Label className="font-bold text-slate-700">Deadline *</Label>
-                    <Input type="date" value={details.deadlineDate || ''} onChange={(e) => handleDetailsChange('deadlineDate', e.target.value)} className="h-12 rounded-xl bg-white" />
-                  </div>
-                </div>
-
-                <div className="space-y-6">
-                  <Label className="font-bold text-slate-800 text-lg">What support do you need? *</Label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {["Review only", "Draft response", "Prepare pricing", "Submit on our behalf", "Unsure"].map((opt) => (
-                      <div key={opt} className={`flex items-center space-x-2 p-4 rounded-xl border cursor-pointer ${details.supportRequired?.includes(opt) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleSupportToggle(opt)}>
-                        <Checkbox id={`support-${opt}`} checked={details.supportRequired?.includes(opt)} onCheckedChange={() => {}} />
-                        <Label htmlFor={`support-${opt}`} className="text-xs font-medium cursor-pointer">{opt}</Label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Immediate Need and Live Opportunity Triage</h2><p className="text-slate-500 text-lg leading-relaxed">Tell us whether you currently have a tender, grant, or other opportunity that needs urgent review.</p></div>
+          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm"><CardContent className="p-8 space-y-8"><div className="space-y-4"><Label className="text-lg font-bold text-slate-800">Do you currently have a live opportunity? *</Label><RadioGroup value={hasOpp} onValueChange={(val) => onChange('hasLiveOpportunity', val)} className="grid grid-cols-1 md:grid-cols-3 gap-4">{['Yes', 'No', 'Unsure'].map((opt) => (<div key={opt} className="relative"><RadioGroupItem value={opt} id={`status-${opt}`} className="peer sr-only" /><Label htmlFor={`status-${opt}`} className="flex items-center justify-center h-14 border-2 rounded-2xl cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-slate-50 transition-all font-bold">{opt}</Label></div>))}</RadioGroup></div>
+          {hasOpp === 'No' && <Alert className="bg-green-50 text-green-700 border-green-100"><CheckCircle2 className="h-4 w-4" /><AlertDescription>No live opportunity recorded. You can continue.</AlertDescription></Alert>}
+          {hasOpp === 'Unsure' && (<div className="space-y-4 animate-in fade-in slide-in-from-top-2"><Label className="font-bold text-slate-700">Briefly explain what you are unsure about *</Label><Textarea value={data.unsureExplanation || ''} onChange={(e) => onChange('unsureExplanation', e.target.value)} className="min-h-[100px] rounded-2xl" /></div>)}</CardContent></Card>
+          {hasOpp === 'Yes' && (<Card className="border border-amber-200 bg-amber-50/5 rounded-3xl overflow-hidden shadow-sm"><CardContent className="p-8 space-y-10"><div className="grid grid-cols-1 md:grid-cols-2 gap-8"><div className="space-y-3"><Label className="font-bold text-slate-700">Opportunity Type *</Label><Select value={details.opportunityType || ''} onValueChange={(val) => handleDetailsChange('opportunityType', val)}><SelectTrigger className="h-12 rounded-xl bg-white"><SelectValue placeholder="Select type" /></SelectTrigger><SelectContent>{["Government tender", "Private tender", "Grant", "Panel or supplier registration", "Marketplace lead", "Direct proposal", "Quote request", "Other"].map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent></Select></div><div className="space-y-3"><Label className="font-bold text-slate-700">Opportunity Name *</Label><Input value={details.opportunityTitle || ''} onChange={(e) => handleDetailsChange('opportunityTitle', e.target.value)} className="h-12 rounded-xl bg-white" /></div><div className="space-y-3"><Label className="font-bold text-slate-700">Deadline *</Label><Input type="date" value={details.deadlineDate || ''} onChange={(e) => handleDetailsChange('deadlineDate', e.target.value)} className="h-12 rounded-xl bg-white" /></div></div><div className="space-y-6"><Label className="font-bold text-slate-800 text-lg">What support do you need? *</Label><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">{["Review only", "Draft response", "Prepare pricing", "Submit on our behalf", "Unsure"].map((opt) => (<div key={opt} className={`flex items-center space-x-2 p-4 rounded-xl border cursor-pointer ${details.supportRequired?.includes(opt) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleSupportToggle(opt)}><Checkbox id={`support-${opt}`} checked={details.supportRequired?.includes(opt)} onCheckedChange={() => {}} /><Label htmlFor={`support-${opt}`} className="text-xs font-medium cursor-pointer">{opt}</Label></div>))}</div></div></CardContent></Card>)}
         </div>
       );
 
@@ -1024,549 +604,158 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
           directProposal: next.includes('Direct Proposals'),
           quoteRequests: next.includes('Quote Requests'),
         };
-        if (next.includes('Unsure, please recommend')) {
-          modules.tenderSupplier = modules.grants = modules.marketplace = modules.directProposal = modules.quoteRequests = true;
-        }
+        if (next.includes('Unsure, please recommend')) modules.tenderSupplier = modules.grants = modules.marketplace = modules.directProposal = modules.quoteRequests = true;
         onChange('selectedServices', next);
         onChange('enabledModules', modules);
       };
-
       return (
         <div className="space-y-12">
-          <div className="space-y-4">
-            <h2 className="text-4xl font-headline font-bold text-slate-900">Service Selection & Engagement Scope</h2>
-            <p className="text-slate-500 text-lg leading-relaxed">Select the services you want support with.</p>
-          </div>
-
-          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-            <CardContent className="p-8 space-y-6">
-              <Label className="text-lg font-bold text-slate-800">Which services would you like support with? *</Label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {["Government Tenders", "Private Tenders", "Panel or Supplier Registrations", "Grants", "Marketplace Leads", "Direct Proposals", "Quote Requests", "Unsure, please recommend"].map((service) => (
-                  <div key={service} className={`flex items-center space-x-3 p-4 rounded-2xl border cursor-pointer ${selectedServices.includes(service) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleServiceToggle(service)}>
-                    <Checkbox id={`service-${service}`} checked={selectedServices.includes(service)} onCheckedChange={() => {}} />
-                    <Label htmlFor={`service-${service}`} className="text-sm font-medium cursor-pointer">{service}</Label>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-            <CardContent className="p-8 space-y-6">
-              <Label className="font-bold text-slate-700">Highest Priority Service *</Label>
-              <Select value={data.highestPriorityService || ''} onValueChange={(val) => onChange('highestPriorityService', val)}>
-                <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Select priority" /></SelectTrigger>
-                <SelectContent>
-                  {["Government Tenders", "Private Tenders", "Grants", "Marketplace Leads", "Direct Proposals", "Quote Requests", "Unsure"].map(opt => (
-                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Label className="font-bold text-slate-700 pt-4 block">Why are these services important now? *</Label>
-              <Textarea value={data.reasonForSupport || ''} onChange={(e) => onChange('reasonForSupport', e.target.value)} className="min-h-[120px] rounded-2xl" />
-
-              <Label className="font-bold text-slate-700 pt-4 block text-lg">How involved should Bid Manager be? *</Label>
-              <RadioGroup value={data.supportLevel || ''} onValueChange={(val) => onChange('supportLevel', val)} className="space-y-3">
-                {["Full end-to-end management", "Opportunity review only", "Drafting only", "Submission support only", "Unsure"].map((lvl) => (
-                  <div key={lvl} className="relative">
-                    <RadioGroupItem value={lvl} id={`lvl-${lvl}`} className="peer sr-only" />
-                    <Label htmlFor={`lvl-${lvl}`} className="flex items-center p-4 border-2 rounded-2xl cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-slate-50 font-medium text-sm">{lvl}</Label>
-                  </div>
-                ))}
-              </RadioGroup>
-            </CardContent>
-          </Card>
+          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Service Selection & Engagement Scope</h2><p className="text-slate-500 text-lg leading-relaxed">Select the services you want support with.</p></div>
+          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm"><CardContent className="p-8 space-y-6"><Label className="text-lg font-bold text-slate-800">Which services would you like support with? *</Label><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{["Government Tenders", "Private Tenders", "Panel or Supplier Registrations", "Grants", "Marketplace Leads", "Direct Proposals", "Quote Requests", "Unsure, please recommend"].map((service) => (<div key={service} className={`flex items-center space-x-3 p-4 rounded-2xl border cursor-pointer ${selectedServices.includes(service) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleServiceToggle(service)}><Checkbox id={`service-${service}`} checked={selectedServices.includes(service)} onCheckedChange={() => {}} /><Label htmlFor={`service-${service}`} className="text-sm font-medium cursor-pointer">{service}</Label></div>))}</div></CardContent></Card>
+          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm"><CardContent className="p-8 space-y-6"><Label className="font-bold text-slate-700">Highest Priority Service *</Label><Select value={data.highestPriorityService || ''} onValueChange={(val) => onChange('highestPriorityService', val)}><SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Select priority" /></SelectTrigger><SelectContent>{["Government Tenders", "Private Tenders", "Grants", "Marketplace Leads", "Direct Proposals", "Quote Requests", "Unsure"].map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent></Select><Label className="font-bold text-slate-700 pt-4 block">Why are these services important now? *</Label><Textarea value={data.reasonForSupport || ''} onChange={(e) => onChange('reasonForSupport', e.target.value)} className="min-h-[120px] rounded-2xl" /><Label className="font-bold text-slate-700 pt-4 block text-lg">How involved should Bid Manager be? *</Label><RadioGroup value={data.supportLevel || ''} onValueChange={(val) => onChange('supportLevel', val)} className="space-y-3">{["Full end-to-end management", "Opportunity review only", "Drafting only", "Submission support only", "Unsure"].map((lvl) => (<div key={lvl} className="relative"><RadioGroupItem value={lvl} id={`lvl-${lvl}`} className="peer sr-only" /><Label htmlFor={`lvl-${lvl}`} className="flex items-center p-4 border-2 rounded-2xl cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-slate-50 font-medium text-sm">{lvl}</Label></div>))}</RadioGroup></CardContent></Card>
         </div>
       );
 
     case 'profile':
       const overview = data.businessOverview || {};
       const valProp = data.valueProposition || {};
-      const brand = data.brandPositioning || {};
-      const values = data.businessValues || {};
-      const points = valProp.topThreePoints || ['', '', ''];
-
       const handleOverviewChange = (field: string, val: string) => onChange('businessOverview', { ...overview, [field]: val });
       const handleValPropChange = (field: string, val: any) => onChange('valueProposition', { ...valProp, [field]: val });
-      const handleBrandChange = (field: string, val: any) => onChange('brandPositioning', { ...brand, [field]: val });
-      const handleValuesChange = (field: string, val: string) => onChange('businessValues', { ...values, [field]: val });
-
-      const handleDescriptiveToggle = (word: string) => {
-        const current = brand.descriptiveWords || [];
-        const next = current.includes(word) ? current.filter((w: string) => w !== word) : [...current, word];
-        handleBrandChange('descriptiveWords', next);
-      };
-
       const handlePointChange = (idx: number, val: string) => {
-        const nextPoints = [...points];
-        nextPoints[idx] = val;
-        handleValPropChange('topThreePoints', nextPoints);
+        const next = [...(valProp.topThreePoints || ['', '', ''])];
+        next[idx] = val;
+        handleValPropChange('topThreePoints', next);
       };
-
       return (
         <div className="space-y-12">
-          <div className="space-y-4">
-            <h2 className="text-4xl font-headline font-bold text-slate-900">Business Profile, Positioning & Value Proposition</h2>
-            <p className="text-slate-500 text-lg leading-relaxed">
-              Help us understand who your business is, what you do, and how we should position you in proposal responses.
-            </p>
-          </div>
-
-          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl"><Building2 className="w-5 h-5 text-primary" /></div>
-              <h3 className="text-xl font-bold text-slate-900">Business Overview</h3>
-            </div>
-            <CardContent className="p-8 space-y-6">
-              <div className="space-y-2">
-                <Label className="font-bold text-slate-700">In plain English, what does your business do? *</Label>
-                <Textarea value={overview.plainEnglishDescription || ''} onChange={(e) => handleOverviewChange('plainEnglishDescription', e.target.value)} placeholder="e.g. We provide civil engineering and road maintenance services..." className="min-h-[100px] rounded-2xl" />
-              </div>
-              <div className="space-y-2">
-                <Label className="font-bold text-slate-700">Why was the business started?</Label>
-                <Textarea value={overview.whyStarted || ''} onChange={(e) => handleOverviewChange('whyStarted', e.target.value)} className="min-h-[100px] rounded-2xl" />
-              </div>
-              <div className="space-y-2">
-                <Label className="font-bold text-slate-700">What problem does your business solve for clients or customers? *</Label>
-                <Textarea value={overview.problemSolved || ''} onChange={(e) => handleOverviewChange('problemSolved', e.target.value)} className="min-h-[100px] rounded-2xl" />
-              </div>
-              <div className="space-y-2">
-                <Label className="font-bold text-slate-700">Who do you mainly help?</Label>
-                <Textarea value={overview.mainClients || ''} onChange={(e) => handleOverviewChange('mainClients', e.target.value)} className="min-h-[100px] rounded-2xl" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl"><Sparkles className="w-5 h-5 text-primary" /></div>
-              <h3 className="text-xl font-bold text-slate-900">Value Proposition</h3>
-            </div>
-            <CardContent className="p-8 space-y-6">
-              <div className="space-y-2">
-                <Label className="font-bold text-slate-700">What outcomes or results do clients receive from your work? *</Label>
-                <Textarea value={valProp.clientOutcomes || ''} onChange={(e) => handleValPropChange('clientOutcomes', e.target.value)} className="min-h-[100px] rounded-2xl" />
-              </div>
-              <div className="space-y-2">
-                <Label className="font-bold text-slate-700">What makes your business different from competitors? *</Label>
-                <Textarea value={valProp.differentiators || ''} onChange={(e) => handleValPropChange('differentiators', e.target.value)} className="min-h-[100px] rounded-2xl" />
-              </div>
-              <div className="space-y-4">
-                <Label className="font-bold text-slate-700">Complete this sentence: “Clients choose us because...” *</Label>
-                <div className="flex gap-4 items-start">
-                  <Quote className="w-8 h-8 text-primary/20 shrink-0" />
-                  <Textarea value={valProp.clientsChooseUsBecause || ''} onChange={(e) => handleValPropChange('clientsChooseUsBecause', e.target.value)} className="min-h-[80px] rounded-2xl" />
-                </div>
-              </div>
-              <div className="space-y-4 pt-4">
-                <Label className="font-bold text-slate-700">Top three things buyers, funders, or clients should remember about your business *</Label>
-                <div className="space-y-3">
-                  {points.map((p: string, i: number) => (
-                    <div key={i} className="flex gap-4 items-center">
-                      <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-xs text-slate-500 shrink-0">{i + 1}</div>
-                      <Input value={p} onChange={(e) => handlePointChange(i, e.target.value)} placeholder={`Key point ${i + 1}`} className="h-12 rounded-xl" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl"><TargetIcon className="w-5 h-5 text-primary" /></div>
-              <h3 className="text-xl font-bold text-slate-900">Brand and Positioning</h3>
-            </div>
-            <CardContent className="p-8 space-y-8">
-              <div className="space-y-4">
-                <Label className="font-bold text-slate-700">Which words best describe your business?</Label>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {["Reliable", "Professional", "Fast", "Responsive", "Experienced", "Specialist", "Local", "Affordable", "Premium", "Innovative", "Practical", "Safety-focused", "Other"].map(word => (
-                    <div key={word} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${brand.descriptiveWords?.includes(word) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleDescriptiveToggle(word)}>
-                      <Checkbox id={`word-${word}`} checked={brand.descriptiveWords?.includes(word)} onCheckedChange={() => {}} />
-                      <Label htmlFor={`word-${word}`} className="text-xs font-medium cursor-pointer">{word}</Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-4">
-                <Label className="font-bold text-slate-700">What tone should Bid Manager use when writing about your business? *</Label>
-                <RadioGroup value={brand.tonePreference || ''} onValueChange={(val) => handleBrandChange('tonePreference', val)} className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {["Formal and professional", "Clear and practical", "Warm and approachable", "Confident and persuasive", "Technical and detailed", "Simple and plain English", "Unsure, please recommend"].map(tone => (
-                    <div key={tone} className="relative">
-                      <RadioGroupItem value={tone} id={`tone-${tone}`} className="peer sr-only" />
-                      <Label htmlFor={`tone-${tone}`} className="flex items-center p-4 border-2 rounded-2xl cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-slate-50 text-sm font-medium">{tone}</Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl"><Heart className="w-5 h-5 text-primary" /></div>
-              <h3 className="text-xl font-bold text-slate-900">Business Values</h3>
-            </div>
-            <CardContent className="p-8 space-y-6">
-              <div className="space-y-2">
-                <Label className="font-bold text-slate-700">What are your business values or principles?</Label>
-                <Textarea value={values.values || ''} onChange={(e) => handleValuesChange('values', e.target.value)} className="min-h-[100px] rounded-2xl" />
-              </div>
-              <div className="space-y-2">
-                <Label className="font-bold text-slate-700">What do clients usually say about working with you?</Label>
-                <Textarea value={values.clientFeedbackThemes || ''} onChange={(e) => handleValuesChange('clientFeedbackThemes', e.target.value)} className="min-h-[100px] rounded-2xl" />
-              </div>
-            </CardContent>
-          </Card>
+          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Business Profile & Positioning</h2><p className="text-slate-500 text-lg leading-relaxed">Help us understand who your business is and how we should position you.</p></div>
+          <Card className="border border-slate-200 rounded-3xl shadow-sm"><div className="p-8 border-b bg-slate-50/50 font-bold text-xl flex items-center gap-3"><Building2 className="w-5 h-5 text-primary"/>Business Overview</div><CardContent className="p-8 space-y-6"><Label className="font-bold text-slate-700">In plain English, what does your business do? *</Label><Textarea value={overview.plainEnglishDescription || ''} onChange={(e) => handleOverviewChange('plainEnglishDescription', e.target.value)} className="min-h-[100px] rounded-2xl" /><Label className="font-bold text-slate-700">What problem does your business solve? *</Label><Textarea value={overview.problemSolved || ''} onChange={(e) => handleOverviewChange('problemSolved', e.target.value)} className="min-h-[100px] rounded-2xl" /></CardContent></Card>
+          <Card className="border border-slate-200 rounded-3xl shadow-sm"><div className="p-8 border-b bg-slate-50/50 font-bold text-xl flex items-center gap-3"><Sparkles className="w-5 h-5 text-primary"/>Value Proposition</div><CardContent className="p-8 space-y-6"><Label className="font-bold text-slate-700">What outcomes do clients receive? *</Label><Textarea value={valProp.clientOutcomes || ''} onChange={(e) => handleValPropChange('clientOutcomes', e.target.value)} className="min-h-[100px] rounded-2xl" /><Label className="font-bold text-slate-700">“Clients choose us because...” *</Label><Textarea value={valProp.clientsChooseUsBecause || ''} onChange={(e) => handleValPropChange('clientsChooseUsBecause', e.target.value)} className="min-h-[80px] rounded-2xl" /><Label className="font-bold text-slate-700">Top three things clients should remember *</Label><div className="space-y-3">{[0, 1, 2].map(i => <Input key={i} value={(valProp.topThreePoints || [])[i] || ''} onChange={(e) => handlePointChange(i, e.target.value)} placeholder={`Point ${i + 1}`} className="h-12 rounded-xl" />)}</div></CardContent></Card>
         </div>
       );
 
     case 'menu':
-      const setup = data.serviceSetup || { numberOfServices: 3, services: [] };
-      const numServicesRaw = setup.numberOfServices || 3;
+      const setup = data.serviceSetup || { services: [] };
+      const numServicesRaw = setup.numberOfServices || '3';
       const numServices = numServicesRaw === '6 or more' ? 6 : (parseInt(numServicesRaw) || 3);
-      const services = setup.services || [];
-      const promoRules = data.promotionRules || {};
-      const offerMenu = data.offerMenu || {};
-
-      const handleServiceChange = (index: number, field: string, val: any) => {
-        const nextServices = [...services];
-        if (!nextServices[index]) {
-          nextServices[index] = { serviceNumber: index + 1, deliveryMethods: [], suitableChannels: [] };
-        }
-        nextServices[index] = { ...nextServices[index], [field]: val };
-        onChange('serviceSetup', { ...setup, services: nextServices });
+      const handleSChange = (i: number, f: string, v: any) => {
+        const next = [...(setup.services || [])];
+        if (!next[i]) next[i] = { serviceNumber: i + 1, deliveryMethods: [], suitableChannels: [] };
+        next[i] = { ...next[i], [f]: v };
+        onChange('serviceSetup', { ...setup, services: next });
       };
-
-      const handleServiceArrayToggle = (index: number, field: string, opt: string) => {
-        const nextServices = [...services];
-        if (!nextServices[index]) {
-          nextServices[index] = { serviceNumber: index + 1, deliveryMethods: [], suitableChannels: [] };
-        }
-        const current = nextServices[index][field] || [];
-        const next = current.includes(opt) ? current.filter((i: string) => i !== opt) : [...current, opt];
-        nextServices[index] = { ...nextServices[index], [field]: next };
-        onChange('serviceSetup', { ...setup, services: nextServices });
-      };
-
       return (
         <div className="space-y-12">
-          <div className="space-y-4">
-            <h2 className="text-4xl font-headline font-bold text-slate-900">Services, Products and Offer Menu</h2>
-            <p className="text-slate-500 text-lg leading-relaxed">
-              Tell us what your business offers, how your services are delivered, and how they should be presented in proposals, quotes, tenders, and marketplace responses.
-            </p>
-          </div>
-
-          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl"><ShoppingCart className="w-5 h-5 text-primary" /></div>
-              <h3 className="text-xl font-bold text-slate-900">Service Setup</h3>
-            </div>
-            <CardContent className="p-8 space-y-10">
-              <div className="space-y-4">
-                <Label className="text-lg font-bold text-slate-800">How many main services, products, or offers would you like to add?</Label>
-                <div className="max-w-[240px]">
-                  <Select 
-                    value={numServicesRaw.toString()} 
-                    onValueChange={(val) => onChange('serviceSetup', { ...setup, numberOfServices: val })}
-                  >
-                    <SelectTrigger className="h-12 rounded-xl">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {["1", "2", "3", "4", "5", "6 or more"].map(n => (
-                        <SelectItem key={n} value={n}>{n}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-8">
-                {Array.from({ length: numServices }).map((_, idx) => {
-                  const service = services[idx] || { deliveryMethods: [], suitableChannels: [] };
-                  return (
-                    <div key={idx} className="p-8 border border-slate-100 bg-slate-50/30 rounded-[2.5rem] space-y-8">
-                      <div className="flex justify-between items-center">
-                        <h4 className="font-bold text-slate-900 text-xl flex items-center gap-3">
-                          <Badge variant="secondary" className="w-8 h-8 rounded-full p-0 flex items-center justify-center font-bold text-primary bg-primary/10">{idx + 1}</Badge>
-                          Service {idx + 1}
-                        </h4>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                          <Label className="font-bold text-slate-700">Service/Product Name *</Label>
-                          <Input value={service.name || ''} onChange={(e) => handleServiceChange(idx, 'name', e.target.value)} placeholder="e.g. Civil Construction" className="h-12 rounded-xl bg-white" />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="font-bold text-slate-700">Service Category</Label>
-                          <Select value={service.category || ''} onValueChange={(val) => handleServiceChange(idx, 'category', val)}>
-                            <SelectTrigger className="h-12 rounded-xl bg-white"><SelectValue placeholder="Select category" /></SelectTrigger>
-                            <SelectContent>
-                              {["Core service", "Add-on service", "Emergency service", "Retainer service", "Fixed-price package", "Premium service", "Entry-level service", "Grant-funded project/service", "Government-ready service", "Other"].map(cat => (
-                                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label className="font-bold text-slate-700">Description of Service *</Label>
-                        <Textarea value={service.description || ''} onChange={(e) => handleServiceChange(idx, 'description', e.target.value)} placeholder="What is this service and what does it involve?" className="min-h-[100px] rounded-2xl bg-white" />
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                          <Label className="font-bold text-slate-700">What is included? *</Label>
-                          <Textarea value={service.inclusions || ''} onChange={(e) => handleServiceChange(idx, 'inclusions', e.target.value)} className="min-h-[80px] rounded-2xl bg-white" />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="font-bold text-slate-700">What is excluded? *</Label>
-                          <Textarea value={service.exclusions || ''} onChange={(e) => handleServiceChange(idx, 'exclusions', e.target.value)} className="min-h-[80px] rounded-2xl bg-white" />
-                        </div>
-                      </div>
-
-                      <div className="space-y-4">
-                        <Label className="font-bold text-slate-700">How is this service delivered? *</Label>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                          {["In person", "Remote", "Hybrid", "On site", "Online", "Phone/video", "Depends on project"].map(method => (
-                            <div key={method} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${service.deliveryMethods?.includes(method) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleServiceArrayToggle(idx, 'deliveryMethods', method)}>
-                              <Checkbox id={`delivery-${idx}-${method}`} checked={service.deliveryMethods?.includes(method)} onCheckedChange={() => {}} />
-                              <Label htmlFor={`delivery-${idx}-${method}`} className="text-xs font-medium cursor-pointer">{method}</Label>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                          <Label className="font-bold text-slate-700">Pricing Method *</Label>
-                          <Select value={service.pricingMethod || ''} onValueChange={(val) => handleServiceChange(idx, 'pricingMethod', val)}>
-                            <SelectTrigger className="h-12 rounded-xl bg-white"><SelectValue placeholder="Select method" /></SelectTrigger>
-                            <SelectContent>
-                              {["Hourly rate", "Daily rate", "Fixed fee", "Package price", "Quote after inspection", "Schedule of rates", "Retainer/subscription", "Project-based pricing", "Cost-plus", "Unsure"].map(opt => (
-                                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="font-bold text-slate-700">Indicative Price</Label>
-                          <Input value={service.indicativePrice || ''} onChange={(e) => handleServiceChange(idx, 'indicativePrice', e.target.value)} placeholder="e.g. $150/hr or $2,000 fixed" className="h-12 rounded-xl bg-white" />
-                        </div>
-                      </div>
-
-                      <div className="space-y-4">
-                        <Label className="font-bold text-slate-700">Which opportunity channels is this suitable for? *</Label>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                          {["Government tenders", "Private tenders", "Grants", "Supplier registrations", "Marketplace leads", "Direct proposals", "Quote requests", "Unsure"].map(ch => (
-                            <div key={ch} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${service.suitableChannels?.includes(ch) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleServiceArrayToggle(idx, 'suitableChannels', ch)}>
-                              <Checkbox id={`ch-${idx}-${ch}`} checked={service.suitableChannels?.includes(ch)} onCheckedChange={() => {}} />
-                              <Label htmlFor={`ch-${idx}-${ch}`} className="text-xs font-medium cursor-pointer">{ch}</Label>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {numServicesRaw === '6 or more' && (
-                  <div className="space-y-2 pt-4">
-                    <Label className="font-bold text-slate-700">Additional Services Notes</Label>
-                    <Textarea value={setup.additionalServicesNotes || ''} onChange={(e) => onChange('serviceSetup', { ...setup, additionalServicesNotes: e.target.value })} placeholder="List any other services here..." className="min-h-[120px] rounded-2xl" />
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl"><TargetIcon className="w-5 h-5 text-primary" /></div>
-              <h3 className="text-xl font-bold text-slate-900">Service Promotion Rules</h3>
-            </div>
-            <CardContent className="p-8 space-y-6">
-              <div className="space-y-2">
-                <Label className="font-bold text-slate-700">Which services are most profitable or strategically important?</Label>
-                <Textarea value={promoRules.profitableOrStrategicServices || ''} onChange={(e) => onChange('promotionRules', { ...promoRules, profitableOrStrategicServices: e.target.value })} className="min-h-[100px] rounded-2xl" />
-              </div>
-              <div className="space-y-2">
-                <Label className="font-bold text-slate-700">Which services should we avoid promoting unless specifically approved?</Label>
-                <Textarea value={promoRules.servicesToAvoid || ''} onChange={(e) => onChange('promotionRules', { ...promoRules, servicesToAvoid: e.target.value })} className="min-h-[100px] rounded-2xl" />
-              </div>
-              <div className="space-y-2">
-                <Label className="font-bold text-slate-700">Are there services that require scoping or extra approval before quoting?</Label>
-                <Textarea value={promoRules.servicesNeedingScoping || ''} onChange={(e) => onChange('promotionRules', { ...promoRules, servicesNeedingScoping: e.target.value })} className="min-h-[100px] rounded-2xl" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl"><Sparkles className="w-5 h-5 text-primary" /></div>
-              <h3 className="text-xl font-bold text-slate-900">Offer Menu</h3>
-            </div>
-            <CardContent className="p-8 space-y-6">
-              <div className="space-y-4">
-                <Label className="font-bold text-slate-800">Do you have existing service packages or bundles?</Label>
-                <RadioGroup value={offerMenu.hasPackages || ''} onValueChange={(val) => onChange('offerMenu', { ...offerMenu, hasPackages: val })} className="flex gap-6">
-                  {["Yes", "No", "Some", "Unsure"].map(opt => (
-                    <div key={opt} className="flex items-center space-x-2">
-                      <RadioGroupItem value={opt} id={`pkg-${opt}`} />
-                      <Label htmlFor={`pkg-${opt}`}>{opt}</Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </div>
-              {(offerMenu.hasPackages === 'Yes' || offerMenu.hasPackages === 'Some') && (
-                <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
-                  <Label className="font-bold text-slate-700">Provide package details (Names, Inclusions, Pricing)</Label>
-                  <Textarea value={offerMenu.packageDetails || ''} onChange={(e) => onChange('offerMenu', { ...offerMenu, packageDetails: e.target.value })} className="min-h-[120px] rounded-2xl" />
-                </div>
-              )}
-              <div className="space-y-4 pt-4">
-                <Label className="font-bold text-slate-800">Would you like help packaging your services into clearer offers?</Label>
-                <RadioGroup value={offerMenu.wantsPackagingHelp || ''} onValueChange={(val) => onChange('offerMenu', { ...offerMenu, wantsPackagingHelp: val })} className="flex flex-wrap gap-6">
-                  {["Yes", "No", "Maybe", "Please recommend"].map(opt => (
-                    <div key={opt} className="flex items-center space-x-2">
-                      <RadioGroupItem value={opt} id={`help-${opt}`} />
-                      <Label htmlFor={`help-${opt}`}>{opt}</Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Services & Offer Menu</h2><p className="text-slate-500 text-lg leading-relaxed">Define what you offer and how it should be presented.</p></div>
+          <Card className="border border-slate-200 rounded-3xl shadow-sm"><div className="p-8 border-b bg-slate-50/50 font-bold text-xl">Service Setup</div><CardContent className="p-8 space-y-10"><Label className="text-lg font-bold">Number of services</Label><div className="max-w-[240px]"><Select value={numServicesRaw} onValueChange={(v) => onChange('serviceSetup', { ...setup, numberOfServices: v })}><SelectTrigger className="h-12 rounded-xl"><SelectValue /></SelectTrigger><SelectContent>{["1", "2", "3", "4", "5", "6 or more"].map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent></Select></div>
+          <div className="space-y-8">{Array.from({ length: numServices }).map((_, i) => (<div key={i} className="p-8 border rounded-[2rem] bg-slate-50/30 space-y-6"><h4 className="font-bold text-lg">Service {i + 1}</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-2"><Label className="font-bold">Name *</Label><Input value={(setup.services || [])[i]?.name || ''} onChange={(e) => handleSChange(i, 'name', e.target.value)} className="h-12 rounded-xl bg-white" /></div><div className="space-y-2"><Label className="font-bold">Pricing Method *</Label><Select value={(setup.services || [])[i]?.pricingMethod || ''} onValueChange={(v) => handleSChange(i, 'pricingMethod', v)}><SelectTrigger className="h-12 rounded-xl bg-white"><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{["Hourly rate", "Fixed fee", "Package", "Quote", "Other"].map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent></Select></div></div><div className="space-y-2"><Label className="font-bold">Description *</Label><Textarea value={(setup.services || [])[i]?.description || ''} onChange={(e) => handleSChange(i, 'description', e.target.value)} className="min-h-[80px] rounded-2xl bg-white" /></div></div>))}</div></CardContent></Card>
         </div>
       );
 
     case 'capacity':
-      const teamSetup = data.teamSetup || { numberOfMembers: 2, members: [] };
-      const numMembersRaw = teamSetup.numberOfMembers || 2;
+      const team = data.teamSetup || { members: [] };
+      const numMembersRaw = team.numberOfMembers || '2';
       const numMembers = numMembersRaw === '6 or more' ? 6 : (parseInt(numMembersRaw) || 2);
-      const members = teamSetup.members || [];
-      
-      const subconSetup = data.subcontractors || { usePartners: null, numberOfPartners: 1, partners: [] };
-      const numPartners = parseInt(subconSetup.numberOfPartners) || 1;
-      const partners = subconSetup.partners || [];
-      
-      const capScaling = data.capacityScaling || { scalingRequirements: [] };
-      const eqSystems = data.equipmentSystems || { systemsUsed: [] };
-
-      const handleMemberChange = (index: number, field: string, val: any) => {
-        const nextMembers = [...members];
-        if (!nextMembers[index]) nextMembers[index] = { memberNumber: index + 1 };
-        nextMembers[index] = { ...nextMembers[index], [field]: val };
-        onChange('teamSetup', { ...teamSetup, members: nextMembers });
+      const handleMChange = (i: number, f: string, v: any) => {
+        const next = [...(team.members || [])];
+        if (!next[i]) next[i] = { memberNumber: i + 1 };
+        next[i] = { ...next[i], [f]: v };
+        onChange('teamSetup', { ...team, members: next });
       };
+      return (
+        <div className="space-y-12">
+          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Team & Capacity</h2><p className="text-slate-500 text-lg leading-relaxed">Who delivers the work and what is your capacity?</p></div>
+          <Card className="border border-slate-200 rounded-3xl shadow-sm"><div className="p-8 border-b bg-slate-50/50 font-bold text-xl">Team Setup</div><CardContent className="p-8 space-y-10"><Label className="text-lg font-bold">Number of members</Label><div className="max-w-[240px]"><Select value={numMembersRaw} onValueChange={(v) => onChange('teamSetup', { ...team, numberOfMembers: v })}><SelectTrigger className="h-12 rounded-xl"><SelectValue /></SelectTrigger><SelectContent>{["1", "2", "3", "4", "5", "6 or more"].map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent></Select></div>
+          <div className="space-y-8">{Array.from({ length: numMembers }).map((_, i) => (<div key={i} className="p-8 border rounded-[2rem] bg-slate-50/30 space-y-6"><h4 className="font-bold text-lg">Member {i + 1}</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-2"><Label className="font-bold">Full Name *</Label><Input value={(team.members || [])[i]?.fullName || ''} onChange={(e) => handleMChange(i, 'fullName', e.target.value)} className="h-12 rounded-xl bg-white" /></div><div className="space-y-2"><Label className="font-bold">Role *</Label><Input value={(team.members || [])[i]?.roleTitle || ''} onChange={(e) => handleMChange(i, 'roleTitle', e.target.value)} className="h-12 rounded-xl bg-white" /></div></div></div>))}</div></CardContent></Card>
+        </div>
+      );
 
-      const handlePartnerChange = (index: number, field: string, val: any) => {
-        const nextPartners = [...partners];
-        if (!nextPartners[index]) nextPartners[index] = { partnerNumber: index + 1 };
-        nextPartners[index] = { ...nextPartners[index], [field]: val };
-        onChange('subcontractors', { ...subconSetup, partners: nextPartners });
+    case 'proof':
+      const proofSetup = data.caseStudySetup || { numberOfCaseStudies: '1', caseStudies: [] };
+      const studiesNumRaw = proofSetup.numberOfCaseStudies || '1';
+      const studiesNum = studiesNumRaw === 'None yet' ? 0 : (studiesNumRaw === '5 or more' ? 5 : parseInt(studiesNumRaw));
+      const handleStudyChange = (i: number, f: string, v: any) => {
+        const next = [...(proofSetup.caseStudies || [])];
+        if (!next[i]) next[i] = { studyNumber: i + 1, evidence: [] };
+        next[i] = { ...next[i], [f]: v };
+        onChange('caseStudySetup', { ...proofSetup, caseStudies: next });
       };
-
-      const handleScalingToggle = (opt: string) => {
-        const current = capScaling.scalingRequirements || [];
-        const next = current.includes(opt) ? current.filter((i: string) => i !== opt) : [...current, opt];
-        onChange('capacityScaling', { ...capScaling, scalingRequirements: next });
+      const handleEvidenceToggle = (i: number, opt: string) => {
+        const next = [...(proofSetup.caseStudies || [])];
+        if (!next[i]) next[i] = { studyNumber: i + 1, evidence: [] };
+        const current = next[i].evidence || [];
+        const nextEv = current.includes(opt) ? current.filter((o: string) => o !== opt) : [...current, opt];
+        next[i] = { ...next[i], evidence: nextEv };
+        onChange('caseStudySetup', { ...proofSetup, caseStudies: next });
       };
-
-      const handleSystemToggle = (opt: string) => {
-        const current = eqSystems.systemsUsed || [];
-        const next = current.includes(opt) ? current.filter((i: string) => i !== opt) : [...current, opt];
-        onChange('equipmentSystems', { ...eqSystems, systemsUsed: next });
+      const reviews = data.reviewsTestimonials || { hasReviews: '', locations: [], links: '' };
+      const handleReviewLocToggle = (opt: string) => {
+        const current = reviews.locations || [];
+        const next = current.includes(opt) ? current.filter((o: string) => o !== opt) : [...current, opt];
+        onChange('reviewsTestimonials', { ...reviews, locations: next });
       };
+      const gaps = data.evidenceGaps || {};
 
       return (
         <div className="space-y-12">
           <div className="space-y-4">
-            <h2 className="text-4xl font-headline font-bold text-slate-900">Team, Capacity and Delivery Model</h2>
-            <p className="text-slate-500 text-lg leading-relaxed">
-              Tell us who delivers the work, what experience your team has, how much capacity you have, and how you manage quality.
-            </p>
+            <h2 className="text-4xl font-headline font-bold text-slate-900">Proof, Case Studies & Evidence</h2>
+            <p className="text-slate-500 text-lg leading-relaxed">Add examples of completed work, client outcomes, testimonials, and references we can use to support your bids.</p>
           </div>
 
-          {/* Team Setup */}
-          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
             <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl"><Users className="w-5 h-5 text-primary" /></div>
-              <h3 className="text-xl font-bold text-slate-900">Team Setup</h3>
+              <div className="p-2 bg-primary/10 rounded-xl"><FileStack className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Case Study Setup</h3>
             </div>
             <CardContent className="p-8 space-y-10">
               <div className="space-y-4">
-                <Label className="text-lg font-bold text-slate-800">How many key team members would you like to add?</Label>
+                <Label className="text-lg font-bold">How many case studies would you like to add?</Label>
                 <div className="max-w-[240px]">
-                  <Select 
-                    value={numMembersRaw.toString()} 
-                    onValueChange={(val) => onChange('teamSetup', { ...teamSetup, numberOfMembers: val })}
-                  >
-                    <SelectTrigger className="h-12 rounded-xl">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {["1", "2", "3", "4", "5", "6 or more"].map(n => (
-                        <SelectItem key={n} value={n}>{n}</SelectItem>
-                      ))}
-                    </SelectContent>
+                  <Select value={studiesNumRaw} onValueChange={(v) => onChange('caseStudySetup', { ...proofSetup, numberOfCaseStudies: v })}>
+                    <SelectTrigger className="h-12 rounded-xl"><SelectValue /></SelectTrigger>
+                    <SelectContent>{["None yet", "1", "2", "3", "4", "5 or more"].map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
               </div>
 
-              <div className="space-y-8">
-                {Array.from({ length: numMembers }).map((_, idx) => {
-                  const member = members[idx] || {};
-                  return (
-                    <div key={idx} className="p-8 border border-slate-100 bg-slate-50/30 rounded-[2.5rem] space-y-8">
-                      <div className="flex justify-between items-center">
-                        <h4 className="font-bold text-slate-900 text-xl flex items-center gap-3">
-                          <Badge variant="secondary" className="w-8 h-8 rounded-full p-0 flex items-center justify-center font-bold text-primary bg-primary/10">{idx + 1}</Badge>
-                          Team Member {idx + 1}
-                        </h4>
-                      </div>
+              {studiesNumRaw === 'None yet' && (
+                <Alert className="bg-slate-50 border-slate-200"><Info className="h-4 w-4" /><AlertDescription>No case studies recorded yet. We will treat this as a content gap to review later.</AlertDescription></Alert>
+              )}
 
+              <div className="space-y-8">
+                {Array.from({ length: studiesNum }).map((_, i) => {
+                  const study = (proofSetup.caseStudies || [])[i] || {};
+                  return (
+                    <div key={i} className="p-8 border border-slate-100 bg-slate-50/30 rounded-[2.5rem] space-y-8">
+                      <h4 className="font-bold text-xl flex items-center gap-3">
+                        <Badge variant="secondary" className="w-8 h-8 rounded-full p-0 flex items-center justify-center font-bold text-primary bg-primary/10">{i + 1}</Badge>
+                        Case Study {i + 1}
+                      </h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2"><Label className="font-bold">Project Title *</Label><Input value={study.projectTitle || ''} onChange={(e) => handleStudyChange(i, 'projectTitle', e.target.value)} placeholder="e.g. Bridge Construction Upgrade" className="h-12 rounded-xl bg-white" /></div>
+                        <div className="space-y-2"><Label className="font-bold">Client Name</Label><Input value={study.clientName || ''} onChange={(e) => handleStudyChange(i, 'clientName', e.target.value)} className="h-12 rounded-xl bg-white" /></div>
                         <div className="space-y-2">
-                          <Label className="font-bold text-slate-700">Full Name *</Label>
-                          <Input value={member.fullName || ''} onChange={(e) => handleMemberChange(idx, 'fullName', e.target.value)} className="h-12 rounded-xl bg-white" />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="font-bold text-slate-700">Role / Title *</Label>
-                          <Input value={member.roleTitle || ''} onChange={(e) => handleMemberChange(idx, 'roleTitle', e.target.value)} className="h-12 rounded-xl bg-white" />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="font-bold text-slate-700">Employment Type</Label>
-                          <Select value={member.employmentType || ''} onValueChange={(val) => handleMemberChange(idx, 'employmentType', val)}>
+                          <Label className="font-bold">Client Type *</Label>
+                          <Select value={study.clientType || ''} onValueChange={(v) => handleStudyChange(i, 'clientType', v)}>
                             <SelectTrigger className="h-12 rounded-xl bg-white"><SelectValue placeholder="Select type" /></SelectTrigger>
-                            <SelectContent>
-                              {["Owner/director", "Employee", "Contractor", "Subcontractor", "Partner", "Casual", "Other"].map(opt => (
-                                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                              ))}
-                            </SelectContent>
+                            <SelectContent>{["Residential", "Commercial", "Government", "Corporate", "Not-for-profit", "Small business", "Confidential", "Other"].map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
                           </Select>
                         </div>
-                        <div className="space-y-2">
-                          <Label className="font-bold text-slate-700">Years of Experience</Label>
-                          <Input value={member.yearsExperience || ''} onChange={(e) => handleMemberChange(idx, 'yearsExperience', e.target.value)} className="h-12 rounded-xl bg-white" />
+                        <div className="space-y-2"><Label className="font-bold">Approximate Value</Label><Input value={study.approxValue || ''} onChange={(e) => handleStudyChange(i, 'approxValue', e.target.value)} placeholder="e.g. $500k" className="h-12 rounded-xl bg-white" /></div>
+                      </div>
+                      <div className="space-y-2"><Label className="font-bold">What did your business deliver? *</Label><Textarea value={study.deliveredSummary || ''} onChange={(e) => handleStudyChange(i, 'deliveredSummary', e.target.value)} className="min-h-[80px] rounded-2xl bg-white" /></div>
+                      <div className="space-y-2"><Label className="font-bold">What was the result or outcome? *</Label><Textarea value={study.outcomeSummary || ''} onChange={(e) => handleStudyChange(i, 'outcomeSummary', e.target.value)} className="min-h-[80px] rounded-2xl bg-white" /></div>
+                      <div className="space-y-4">
+                        <Label className="font-bold">What evidence is available?</Label>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                          {["Photos", "Before/After", "Completion cert", "Testimonial", "Online review", "Referee contact", "Other"].map(opt => (
+                            <div key={opt} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${study.evidence?.includes(opt) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleEvidenceToggle(i, opt)}>
+                              <Checkbox id={`ev-${i}-${opt}`} checked={study.evidence?.includes(opt)} onCheckedChange={() => {}} />
+                              <Label htmlFor={`ev-${i}-${opt}`} className="text-xs font-medium cursor-pointer">{opt}</Label>
+                            </div>
+                          ))}
                         </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label className="font-bold text-slate-700">Key Responsibilities *</Label>
-                        <Textarea value={member.responsibilities || ''} onChange={(e) => handleMemberChange(idx, 'responsibilities', e.target.value)} className="min-h-[80px] rounded-2xl bg-white" />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label className="font-bold text-slate-700">Short Bio or Capability Summary</Label>
-                        <Textarea value={member.bio || ''} onChange={(e) => handleMemberChange(idx, 'bio', e.target.value)} className="min-h-[100px] rounded-2xl bg-white" />
                       </div>
                     </div>
                   );
@@ -1575,147 +764,46 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
             </CardContent>
           </Card>
 
-          {/* Subcontractors */}
-          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
             <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl"><Briefcase className="w-5 h-5 text-primary" /></div>
-              <h3 className="text-xl font-bold text-slate-900">Subcontractors and Delivery Partners</h3>
+              <div className="p-2 bg-primary/10 rounded-xl"><MessageSquareQuote className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Reviews and Testimonials</h3>
             </div>
             <CardContent className="p-8 space-y-8">
               <div className="space-y-4">
-                <Label className="text-lg font-bold text-slate-800">Do you use subcontractors, suppliers, or delivery partners? *</Label>
-                <RadioGroup value={subconSetup.usePartners} onValueChange={(val) => onChange('subcontractors', { ...subconSetup, usePartners: val })} className="flex flex-wrap gap-6">
-                  {["Yes", "No", "Sometimes", "Unsure"].map(opt => (
+                <Label className="text-lg font-bold">Do you have testimonials, reviews, or references? *</Label>
+                <RadioGroup value={reviews.hasReviews} onValueChange={(v) => onChange('reviewsTestimonials', { ...reviews, hasReviews: v })} className="flex flex-wrap gap-6">
+                  {["Yes", "No", "Some, but need organising", "Unsure"].map(opt => (
                     <div key={opt} className="flex items-center space-x-2">
-                      <RadioGroupItem value={opt} id={`sub-${opt}`} />
-                      <Label htmlFor={`sub-${opt}`}>{opt}</Label>
+                      <RadioGroupItem value={opt} id={`rev-${opt}`} />
+                      <Label htmlFor={`rev-${opt}`}>{opt}</Label>
                     </div>
                   ))}
                 </RadioGroup>
               </div>
-
-              {["Yes", "Sometimes"].includes(subconSetup.usePartners) && (
-                <div className="space-y-8 animate-in fade-in slide-in-from-top-2">
-                  <div className="max-w-[240px] space-y-2">
-                    <Label className="font-bold text-slate-700">Number of partners to add</Label>
-                    <Select value={numPartners.toString()} onValueChange={(val) => onChange('subcontractors', { ...subconSetup, numberOfPartners: val })}>
-                      <SelectTrigger className="h-10 rounded-xl"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {[1, 2, 3, 4, 5].map(n => <SelectItem key={n} value={n.toString()}>{n}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-6">
-                    {Array.from({ length: numPartners }).map((_, idx) => {
-                      const partner = partners[idx] || {};
-                      return (
-                        <div key={idx} className="p-6 border border-slate-100 bg-slate-50/30 rounded-2xl space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label className="font-bold text-slate-700 text-xs">Business/Person Name *</Label>
-                              <Input value={partner.name || ''} onChange={(e) => handlePartnerChange(idx, 'name', e.target.value)} className="h-10 rounded-xl bg-white" />
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="font-bold text-slate-700 text-xs">Type *</Label>
-                              <Select value={partner.type || ''} onValueChange={(val) => handlePartnerChange(idx, 'type', val)}>
-                                <SelectTrigger className="h-10 rounded-xl bg-white"><SelectValue placeholder="Select type" /></SelectTrigger>
-                                <SelectContent>
-                                  {["Subcontractor", "Supplier", "Delivery partner", "Consultant", "Referral partner", "Other"].map(opt => (
-                                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="font-bold text-slate-700 text-xs">Services or Support Provided</Label>
-                            <Input value={partner.services || ''} onChange={(e) => handlePartnerChange(idx, 'services', e.target.value)} className="h-10 rounded-xl bg-white" />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Capacity and Scaling */}
-          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl"><TargetIcon className="w-5 h-5 text-primary" /></div>
-              <h3 className="text-xl font-bold text-slate-900">Capacity and Scaling</h3>
-            </div>
-            <CardContent className="p-8 space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label className="font-bold text-slate-700">How many projects can you handle at once? *</Label>
-                  <Input value={capScaling.jobsAtOnce || ''} onChange={(e) => onChange('capacityScaling', { ...capScaling, jobsAtOnce: e.target.value })} className="h-12 rounded-xl bg-white" />
-                </div>
-                <div className="space-y-2">
-                  <Label className="font-bold text-slate-700">Current team capacity? *</Label>
-                  <Input value={capScaling.currentCapacity || ''} onChange={(e) => onChange('capacityScaling', { ...capScaling, currentCapacity: e.target.value })} className="h-12 rounded-xl bg-white" />
-                </div>
-              </div>
-
               <div className="space-y-4">
-                <Label className="font-bold text-slate-700">Could you scale up for a larger contract? *</Label>
-                <RadioGroup value={capScaling.couldScale} onValueChange={(val) => onChange('capacityScaling', { ...capScaling, couldScale: val })} className="space-y-3">
-                  {["Yes", "No", "Maybe, with subcontractors or new staff", "Unsure"].map(opt => (
-                    <div key={opt} className="relative">
-                      <RadioGroupItem value={opt} id={`scale-${opt}`} className="peer sr-only" />
-                      <Label htmlFor={`scale-${opt}`} className="flex items-center p-4 border-2 rounded-2xl cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-slate-50 text-sm font-medium">{opt}</Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </div>
-
-              <div className="space-y-4">
-                <Label className="font-bold text-slate-700">What would need to happen to scale delivery?</Label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {["Hire staff", "Engage subcontractors", "Buy equipment", "Increase insurance", "Obtain licences", "Secure funding", "Improve systems", "Extend operating hours"].map(opt => (
-                    <div key={opt} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${capScaling.scalingRequirements?.includes(opt) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleScalingToggle(opt)}>
-                      <Checkbox id={`scaling-${opt}`} checked={capScaling.scalingRequirements?.includes(opt)} onCheckedChange={() => {}} />
-                      <Label htmlFor={`scaling-${opt}`} className="text-xs font-medium cursor-pointer">{opt}</Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="font-bold text-slate-700">What happens if a key person is unavailable? *</Label>
-                <Textarea value={capScaling.backupPlan || ''} onChange={(e) => onChange('capacityScaling', { ...capScaling, backupPlan: e.target.value })} className="min-h-[80px] rounded-2xl bg-white" />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Equipment, Systems and Quality */}
-          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl"><ShieldCheck className="w-5 h-5 text-primary" /></div>
-              <h3 className="text-xl font-bold text-slate-900">Equipment, Systems and Quality</h3>
-            </div>
-            <CardContent className="p-8 space-y-8">
-              <div className="space-y-2">
-                <Label className="font-bold text-slate-700">What equipment, vehicles, or systems do you use?</Label>
-                <Textarea value={eqSystems.equipmentUsed || ''} onChange={(e) => onChange('equipmentSystems', { ...eqSystems, equipmentUsed: e.target.value })} className="min-h-[100px] rounded-2xl bg-white" />
-              </div>
-              <div className="space-y-2">
-                <Label className="font-bold text-slate-700">What quality checks or supervision processes are used? *</Label>
-                <Textarea value={eqSystems.qualityChecks || ''} onChange={(e) => onChange('equipmentSystems', { ...eqSystems, qualityChecks: e.target.value })} className="min-h-[100px] rounded-2xl bg-white" />
-              </div>
-              <div className="space-y-4">
-                <Label className="font-bold text-slate-700">Do you use any software to manage work?</Label>
+                <Label className="font-bold">Where are they located?</Label>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {["CRM", "Project management", "Accounting", "Scheduling", "Compliance", "Google Workspace", "Microsoft 365"].map(opt => (
-                    <div key={opt} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${eqSystems.systemsUsed?.includes(opt) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleSystemToggle(opt)}>
-                      <Checkbox id={`sys-${opt}`} checked={eqSystems.systemsUsed?.includes(opt)} onCheckedChange={() => {}} />
-                      <Label htmlFor={`sys-${opt}`} className="text-xs font-medium cursor-pointer">{opt}</Label>
+                  {["Google reviews", "Facebook", "Airtasker", "hipages", "Website", "Written emails", "Other"].map(opt => (
+                    <div key={opt} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${reviews.locations?.includes(opt) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleReviewLocToggle(opt)}>
+                      <Checkbox id={`loc-${opt}`} checked={reviews.locations?.includes(opt)} onCheckedChange={() => {}} />
+                      <Label htmlFor={`loc-${opt}`} className="text-xs font-medium cursor-pointer">{opt}</Label>
                     </div>
                   ))}
                 </div>
               </div>
+              <div className="space-y-2"><Label className="font-bold">Links to review pages or testimonials</Label><Textarea value={reviews.links || ''} onChange={(e) => onChange('reviewsTestimonials', { ...reviews, links: e.target.value })} placeholder="Paste URLs here..." className="min-h-[100px] rounded-2xl" /></div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><ImageIcon className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Evidence Gaps</h3>
+            </div>
+            <CardContent className="p-8 space-y-6">
+              <div className="space-y-2"><Label className="font-bold">What proof or evidence do you wish you had but do not yet have?</Label><Textarea value={gaps.missingProof || ''} onChange={(e) => onChange('evidenceGaps', { ...gaps, missingProof: e.target.value })} className="min-h-[80px] rounded-2xl" /></div>
+              <div className="space-y-2"><Label className="font-bold">Are there clients we should help turn into case studies later?</Label><Textarea value={gaps.candidates || ''} onChange={(e) => onChange('evidenceGaps', { ...gaps, candidates: e.target.value })} className="min-h-[80px] rounded-2xl" /></div>
             </CardContent>
           </Card>
         </div>
@@ -1724,18 +812,9 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
     default:
       return (
         <div className="py-24 text-center space-y-6">
-          <div className="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center mx-auto shadow-inner">
-            <FileText className="w-10 h-10 text-slate-400" />
-          </div>
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold text-slate-900">Section Under Development</h2>
-            <p className="text-slate-500 max-w-md mx-auto leading-relaxed">
-              We're currently preparing the specialized questionnaire for the <span className="text-primary font-bold">"{STEPS.find(s => s.id === stepId)?.title}"</span> section.
-            </p>
-          </div>
-          <Button variant="outline" onClick={() => handleSave(true)} className="rounded-xl border-2 px-8">
-            Skip for now <ChevronRight className="ml-2 w-4 h-4" />
-          </Button>
+          <div className="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center mx-auto shadow-inner"><FileText className="w-10 h-10 text-slate-400" /></div>
+          <div className="space-y-2"><h2 className="text-2xl font-bold text-slate-900">Section Under Development</h2><p className="text-slate-500 max-w-md mx-auto leading-relaxed">We're currently preparing the specialized questionnaire for the <span className="text-primary font-bold">"{STEPS.find(s => s.id === stepId)?.title}"</span> section.</p></div>
+          <Button variant="outline" onClick={() => handleSave(true)} className="rounded-xl border-2 px-8">Skip for now <ChevronRight className="ml-2 w-4 h-4" /></Button>
         </div>
       );
   }
