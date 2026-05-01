@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from 'react';
@@ -7,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { 
   LayoutDashboard, 
   FileText, 
-  Settings, 
+  Settings as SettingsIcon, 
   Search,
   Clock,
   TrendingUp,
@@ -18,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/firebase';
 import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function DashboardPage() {
   const auth = useAuth();
@@ -40,8 +42,12 @@ export default function DashboardPage() {
           <Logo />
         </div>
         <nav className="flex-1 px-4 space-y-1">
-          <NavItem icon={<LayoutDashboard className="w-5 h-5" />} label="Dashboard" active />
-          <NavItem icon={<Settings className="w-5 h-5" />} label="Settings" />
+          <Link href="/dashboard" className="block">
+            <NavItem icon={<LayoutDashboard className="w-5 h-5" />} label="Dashboard" active />
+          </Link>
+          <Link href="/settings" className="block">
+            <NavItem icon={<SettingsIcon className="w-5 h-5" />} label="Settings" />
+          </Link>
         </nav>
         
         <div className="p-4 px-6 border-t">
@@ -90,10 +96,10 @@ export default function DashboardPage() {
 
 function NavItem({ icon, label, active = false }: { icon: React.ReactNode, label: string, active?: boolean }) {
   return (
-    <button className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${active ? 'bg-primary/10 text-primary font-bold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
+    <div className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${active ? 'bg-primary/10 text-primary font-bold' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
       {icon}
       <span className="text-sm">{label}</span>
-    </button>
+    </div>
   );
 }
 
