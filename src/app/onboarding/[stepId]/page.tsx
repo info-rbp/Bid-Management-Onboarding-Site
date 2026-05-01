@@ -37,12 +37,28 @@ import {
   Library,
   Scale,
   Loader2,
-  HelpCircle
+  HelpCircle,
+  Plus,
+  Trash2,
+  Mail,
+  Phone,
+  User,
+  MapPin,
+  ExternalLink,
+  Info
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const STEPS = [
   { id: 'welcome', title: '1. Welcome & Expectations', icon: Zap },
@@ -120,7 +136,16 @@ export default function OnboardingStepPage() {
       if (submission.sections?.[sid]) {
         setFormData(submission.sections[sid]);
       } else {
-        setFormData({});
+        // Initialize default for snapshot if empty
+        if (sid === 'snapshot') {
+          setFormData({
+            businessDetails: {},
+            contactSetup: { numberOfContacts: 2, contacts: [] },
+            additionalContactNotes: ''
+          });
+        } else {
+          setFormData({});
+        }
       }
       initialSyncDone.current[sid] = true;
     }
@@ -162,6 +187,34 @@ export default function OnboardingStepPage() {
     const isLastStep = currentStepIndex === STEPS.length - 1;
     const nextStepId = next && !isLastStep ? STEPS[currentStepIndex + 1].id : stepId;
     
+    // Validation for next
+    if (next && stepId === 'snapshot') {
+      const biz = formData.businessDetails || {};
+      const contacts = formData.contactSetup?.contacts || [];
+      const numContacts = formData.contactSetup?.numberOfContacts || 0;
+      
+      const missingBiz = !biz.registeredBusinessName || !biz.abn || !biz.businessStructure || !biz.businessEmail || !biz.businessPhone || !biz.registeredAddress;
+      
+      const visibleContacts = contacts.slice(0, numContacts);
+      const contact1 = visibleContacts[0];
+      const missingContact1 = !contact1?.fullName || !contact1?.email || !contact1?.phone || !contact1?.responsibilities?.includes('Primary contact');
+      
+      const missingContact2 = numContacts >= 2 && (!visibleContacts[1]?.fullName || !visibleContacts[1]?.email || !visibleContacts[1]?.phone);
+
+      const hasDecisionMaker = visibleContacts.some((c: any) => c.responsibilities?.includes('Final decision-maker'));
+      const hasPricing = visibleContacts.some((c: any) => c.responsibilities?.includes('Pricing/commercial approval'));
+      const hasUrgent = visibleContacts.some((c: any) => c.responsibilities?.includes('Urgent approvals'));
+
+      if (missingBiz || missingContact1 || missingContact2 || !hasDecisionMaker || !hasPricing || !hasUrgent) {
+        toast({
+          variant: "destructive",
+          title: "Incomplete Section",
+          description: "Please fill in all required fields and nominate required roles before proceeding."
+        });
+        return;
+      }
+    }
+
     const updateData: any = {
       updatedAt: serverTimestamp(),
       lastSavedAt: serverTimestamp(),
@@ -411,106 +464,397 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
       );
 
     case 'snapshot':
+      const bizDetails = data.businessDetails || {};
+      const contactSetup = data.contactSetup || { numberOfContacts: 2, contacts: [] };
+      const contacts = contactSetup.contacts || [];
+      const numContacts = contactSetup.numberOfContacts || 2;
+
+      const handleBizChange = (field: string, val: any) => {
+        onChange('businessDetails', { ...bizDetails, [field]: val });
+      };
+
+      const handleContactChange = (index: number, field: string, val: any) => {
+        const newContacts = [...contacts];
+        if (!newContacts[index]) {
+          newContacts[index] = { contactNumber: index + 1, responsibilities: [] };
+        }
+        newContacts[index] = { ...newContacts[index], [field]: val };
+        onChange('contactSetup', { ...contactSetup, contacts: newContacts });
+      };
+
+      const handleRespToggle = (index: number, resp: string) => {
+        const newContacts = [...contacts];
+        if (!newContacts[index]) {
+          newContacts[index] = { contactNumber: index + 1, responsibilities: [] };
+        }
+        const currentResps = newContacts[index].responsibilities || [];
+        const newResps = currentResps.includes(resp)
+          ? currentResps.filter((r: string) => r !== resp)
+          : [...currentResps, resp];
+        newContacts[index] = { ...newContacts[index], responsibilities: newResps };
+        onChange('contactSetup', { ...contactSetup, contacts: newContacts });
+      };
+
+      const hasDecisionMaker = contacts.slice(0, numContacts).some(c => c.responsibilities?.includes('Final decision-maker'));
+      const hasPricing = contacts.slice(0, numContacts).some(c => c.responsibilities?.includes('Pricing/commercial approval'));
+      const hasUrgent = contacts.slice(0, numContacts).some(c => c.responsibilities?.includes('Urgent approvals'));
+
       return (
-        <div className="space-y-10">
-          <div className="space-y-3">
-            <h2 className="text-3xl font-headline font-bold text-slate-900">Business Snapshot</h2>
-            <p className="text-slate-500">Provide the foundational details for your organization's bid profile.</p>
+        <div className="space-y-12">
+          <div className="space-y-4">
+            <h2 className="text-4xl font-headline font-bold text-slate-900">Business Snapshot and Contact Details</h2>
+            <p className="text-slate-500 text-lg leading-relaxed">
+              Provide your official business details and key contact people so we can create your client profile, confirm who can approve decisions, and know who to contact for business, pricing, compliance, documents, and urgent matters.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-2">
-              <Label htmlFor="registeredName" className="font-bold text-slate-700">Registered Business Name</Label>
-              <Input 
-                id="registeredName" 
-                value={data.registeredName || ''} 
-                onChange={(e) => onChange('registeredName', e.target.value)}
-                placeholder="e.g. Acme Industries Ltd" 
-                className="h-12 rounded-xl bg-slate-50 border-slate-200 focus:bg-white transition-all" 
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tradingName" className="font-bold text-slate-700">Trading Name (if different)</Label>
-              <Input 
-                id="tradingName" 
-                value={data.tradingName || ''} 
-                onChange={(e) => onChange('tradingName', e.target.value)}
-                placeholder="Acme Solutions" 
-                className="h-12 rounded-xl bg-slate-50 border-slate-200" 
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="abn" className="font-bold text-slate-700">ABN / Tax ID</Label>
-              <Input 
-                id="abn" 
-                value={data.abn || ''} 
-                onChange={(e) => onChange('abn', e.target.value)}
-                placeholder="00 000 000 000" 
-                className="h-12 rounded-xl bg-slate-50 border-slate-200" 
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="yearStarted" className="font-bold text-slate-700">Year of Establishment</Label>
-              <Input 
-                id="yearStarted" 
-                value={data.yearStarted || ''} 
-                onChange={(e) => onChange('yearStarted', e.target.value)}
-                placeholder="YYYY" 
-                className="h-12 rounded-xl bg-slate-50 border-slate-200" 
-              />
-            </div>
-          </div>
-
-          <div className="space-y-6 pt-6">
+          {/* Business Details Card */}
+          <div className="space-y-6">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
-                <Users className="w-4 h-4 text-slate-600" />
+              <div className="p-2 bg-primary/10 rounded-xl">
+                <Building2 className="w-5 h-5 text-primary" />
               </div>
-              <h3 className="font-bold text-lg text-slate-900">Primary Contact</h3>
+              <h3 className="text-xl font-bold text-slate-900">Business Details</h3>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-6 bg-slate-50/50 rounded-[2rem] border border-slate-100">
-              <div className="space-y-2">
-                <Label htmlFor="contactName" className="font-bold text-slate-700">Full Name</Label>
-                <Input 
-                  id="contactName" 
-                  value={data.contactName || ''} 
-                  onChange={(e) => onChange('contactName', e.target.value)}
-                  placeholder="Jane Doe" 
-                  className="h-12 rounded-xl bg-white border-slate-200" 
-                />
+            
+            <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+              <CardContent className="p-8 space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label className="font-bold text-slate-700">Registered Business Name *</Label>
+                    <Input 
+                      value={bizDetails.registeredBusinessName || ''} 
+                      onChange={(e) => handleBizChange('registeredBusinessName', e.target.value)}
+                      placeholder="e.g. Acme Industries Pty Ltd" 
+                      className="h-12 rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold text-slate-700">Trading Name (if different)</Label>
+                    <Input 
+                      value={bizDetails.tradingName || ''} 
+                      onChange={(e) => handleBizChange('tradingName', e.target.value)}
+                      placeholder="Acme Solutions" 
+                      className="h-12 rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold text-slate-700">ABN *</Label>
+                    <Input 
+                      value={bizDetails.abn || ''} 
+                      onChange={(e) => handleBizChange('abn', e.target.value)}
+                      placeholder="00 000 000 000" 
+                      className="h-12 rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold text-slate-700">ACN (if applicable)</Label>
+                    <Input 
+                      value={bizDetails.acn || ''} 
+                      onChange={(e) => handleBizChange('acn', e.target.value)}
+                      placeholder="000 000 000" 
+                      className="h-12 rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold text-slate-700">Business Structure *</Label>
+                    <Select 
+                      value={bizDetails.businessStructure || ''} 
+                      onValueChange={(val) => handleBizChange('businessStructure', val)}
+                    >
+                      <SelectTrigger className="h-12 rounded-xl">
+                        <SelectValue placeholder="Select structure" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["Sole trader", "Company", "Partnership", "Trust", "Not-for-profit", "Incorporated association", "Indigenous business", "Social enterprise", "Other", "Unsure"].map(opt => (
+                          <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold text-slate-700">Year Started Operating</Label>
+                    <Input 
+                      value={bizDetails.yearStarted || ''} 
+                      onChange={(e) => handleBizChange('yearStarted', e.target.value)}
+                      placeholder="YYYY" 
+                      className="h-12 rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-6 pt-4">
+                  <div className="space-y-2">
+                    <Label className="font-bold text-slate-700">Registered Business Address *</Label>
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-3.5 w-4 h-4 text-muted-foreground" />
+                      <Input 
+                        value={bizDetails.registeredAddress || ''} 
+                        onChange={(e) => handleBizChange('registeredAddress', e.target.value)}
+                        placeholder="Street address, Suburb, State, Postcode" 
+                        className="pl-10 h-12 rounded-xl"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold text-slate-700">Main Operating Address (if different)</Label>
+                    <Input 
+                      value={bizDetails.operatingAddress || ''} 
+                      onChange={(e) => handleBizChange('operatingAddress', e.target.value)}
+                      placeholder="Street address, Suburb, State, Postcode" 
+                      className="h-12 rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold text-slate-700">Postal Address (if different)</Label>
+                    <Input 
+                      value={bizDetails.postalAddress || ''} 
+                      onChange={(e) => handleBizChange('postalAddress', e.target.value)}
+                      placeholder="PO Box or Street address" 
+                      className="h-12 rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+                  <div className="space-y-2">
+                    <Label className="font-bold text-slate-700">Business Phone Number *</Label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-3.5 w-4 h-4 text-muted-foreground" />
+                      <Input 
+                        value={bizDetails.businessPhone || ''} 
+                        onChange={(e) => handleBizChange('businessPhone', e.target.value)}
+                        placeholder="+61 0 0000 0000" 
+                        className="pl-10 h-12 rounded-xl"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold text-slate-700">Business Email Address *</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-3.5 w-4 h-4 text-muted-foreground" />
+                      <Input 
+                        type="email"
+                        value={bizDetails.businessEmail || ''} 
+                        onChange={(e) => handleBizChange('businessEmail', e.target.value)}
+                        placeholder="hello@company.com" 
+                        className="pl-10 h-12 rounded-xl"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold text-slate-700">Website</Label>
+                    <div className="relative">
+                      <ExternalLink className="absolute left-3 top-3.5 w-4 h-4 text-muted-foreground" />
+                      <Input 
+                        value={bizDetails.website || ''} 
+                        onChange={(e) => handleBizChange('website', e.target.value)}
+                        placeholder="https://www.company.com" 
+                        className="pl-10 h-12 rounded-xl"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="font-bold text-slate-700">Social Media Links</Label>
+                    <Input 
+                      value={bizDetails.socialMediaLinks || ''} 
+                      onChange={(e) => handleBizChange('socialMediaLinks', e.target.value)}
+                      placeholder="LinkedIn, Facebook, etc." 
+                      className="h-12 rounded-xl"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Contact Setup Card */}
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl">
+                <Users className="w-5 h-5 text-primary" />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="contactRole" className="font-bold text-slate-700">Official Role</Label>
-                <Input 
-                  id="contactRole" 
-                  value={data.contactRole || ''} 
-                  onChange={(e) => onChange('contactRole', e.target.value)}
-                  placeholder="Managing Director" 
-                  className="h-12 rounded-xl bg-white border-slate-200" 
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="contactEmail" className="font-bold text-slate-700">Email Address</Label>
-                <Input 
-                  id="contactEmail" 
-                  value={data.contactEmail || ''} 
-                  onChange={(e) => onChange('contactEmail', e.target.value)}
-                  type="email"
-                  placeholder="jane@acme.com" 
-                  className="h-12 rounded-xl bg-white border-slate-200" 
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="contactPhone" className="font-bold text-slate-700">Phone Number</Label>
-                <Input 
-                  id="contactPhone" 
-                  value={data.contactPhone || ''} 
-                  onChange={(e) => onChange('contactPhone', e.target.value)}
-                  placeholder="+61 400 000 000" 
-                  className="h-12 rounded-xl bg-white border-slate-200" 
-                />
-              </div>
+              <h3 className="text-xl font-bold text-slate-900">Contact Setup</h3>
             </div>
+
+            <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+              <CardContent className="p-8 space-y-8">
+                <div className="space-y-4">
+                  <Label className="text-lg font-bold text-slate-800">How many contacts would you like to add?</Label>
+                  <div className="max-w-[240px]">
+                    <Select 
+                      value={numContacts.toString()} 
+                      onValueChange={(val) => onChange('contactSetup', { ...contactSetup, numberOfContacts: parseInt(val) })}
+                    >
+                      <SelectTrigger className="h-12 rounded-xl border-2 font-bold text-primary border-primary/20">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[1, 2, 3, 4, 5].map(n => (
+                          <SelectItem key={n} value={n.toString()}>{n} contact{n > 1 ? 's' : ''}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  {Array.from({ length: numContacts }).map((_, idx) => {
+                    const contact = contacts[idx] || { responsibilities: [] };
+                    const label = idx === 0 ? "Primary Contact" : idx === 1 ? "Secondary Contact" : "Additional Contact";
+                    
+                    return (
+                      <div key={idx} className="p-8 border border-slate-100 bg-slate-50/30 rounded-[2rem] space-y-6">
+                        <div className="flex justify-between items-center">
+                          <h4 className="font-bold text-slate-900 text-lg flex items-center gap-2">
+                            <User className="w-4 h-4 text-slate-400" />
+                            Contact {idx + 1}: <span className="text-primary">{label}</span>
+                          </h4>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-2">
+                            <Label className="font-bold text-slate-700">Full Name *</Label>
+                            <Input 
+                              value={contact.fullName || ''} 
+                              onChange={(e) => handleContactChange(idx, 'fullName', e.target.value)}
+                              placeholder="e.g. John Smith" 
+                              className="h-12 rounded-xl bg-white"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="font-bold text-slate-700">Role / Title</Label>
+                            <Input 
+                              value={contact.roleTitle || ''} 
+                              onChange={(e) => handleContactChange(idx, 'roleTitle', e.target.value)}
+                              placeholder="e.g. Commercial Manager" 
+                              className="h-12 rounded-xl bg-white"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="font-bold text-slate-700">Email Address *</Label>
+                            <Input 
+                              type="email"
+                              value={contact.email || ''} 
+                              onChange={(e) => handleContactChange(idx, 'email', e.target.value)}
+                              placeholder="john@company.com" 
+                              className="h-12 rounded-xl bg-white"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="font-bold text-slate-700">Phone Number *</Label>
+                            <Input 
+                              value={contact.phone || ''} 
+                              onChange={(e) => handleContactChange(idx, 'phone', e.target.value)}
+                              placeholder="+61 400 000 000" 
+                              className="h-12 rounded-xl bg-white"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-4 pt-2">
+                          <Label className="font-bold text-slate-900 block pb-2">Responsibilities / Permissions *</Label>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {[
+                              "Primary contact", "Secondary contact", "Final decision-maker", 
+                              "Pricing/commercial approval", "Compliance documents", 
+                              "Insurance documents", "Licences/certifications", 
+                              "Document collection", "Platform access coordination", 
+                              "Urgent approvals", "Technical questions", 
+                              "General backup contact", "Other"
+                            ].map((resp) => {
+                              // Ensure primary contact has primary role
+                              const isRestricted = idx === 0 && resp === "Primary contact";
+                              const checked = contact.responsibilities?.includes(resp) || (idx === 0 && resp === "Primary contact");
+                              
+                              return (
+                                <div 
+                                  key={resp} 
+                                  className={`flex items-center space-x-2 p-3 rounded-xl border transition-all cursor-pointer ${checked ? 'border-primary/30 bg-primary/5 shadow-sm' : 'border-slate-100 hover:bg-slate-50'}`}
+                                  onClick={() => !isRestricted && handleRespToggle(idx, resp)}
+                                >
+                                  <Checkbox 
+                                    id={`resp-${idx}-${resp}`} 
+                                    checked={checked} 
+                                    disabled={isRestricted}
+                                    onCheckedChange={() => {}} // Handled by div click
+                                  />
+                                  <Label 
+                                    htmlFor={`resp-${idx}-${resp}`} 
+                                    className={`text-xs font-medium cursor-pointer ${checked ? 'text-primary' : 'text-slate-600'}`}
+                                  >
+                                    {resp}
+                                  </Label>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {contact.responsibilities?.includes('Other') && (
+                          <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                            <Label className="font-bold text-slate-700 italic">Please describe this contact's responsibility</Label>
+                            <Input 
+                              value={contact.otherResponsibility || ''} 
+                              onChange={(e) => handleContactChange(idx, 'otherResponsibility', e.target.value)}
+                              placeholder="e.g. Media inquiries, Legal reviews" 
+                              className="h-12 rounded-xl bg-white"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Role Warnings */}
+                <div className="space-y-4 pt-4">
+                  {!hasDecisionMaker && (
+                    <Alert variant="destructive" className="rounded-2xl border-none bg-red-50 text-red-900">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle className="text-xs font-bold uppercase tracking-wider">Nomination Required</AlertTitle>
+                      <AlertDescription className="text-sm font-medium">Please nominate at least one final decision-maker.</AlertDescription>
+                    </Alert>
+                  )}
+                  {!hasPricing && (
+                    <Alert variant="destructive" className="rounded-2xl border-none bg-red-50 text-red-900">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle className="text-xs font-bold uppercase tracking-wider">Nomination Required</AlertTitle>
+                      <AlertDescription className="text-sm font-medium">Please nominate who can approve pricing and commercial decisions.</AlertDescription>
+                    </Alert>
+                  )}
+                  {!hasUrgent && (
+                    <Alert variant="destructive" className="rounded-2xl border-none bg-red-50 text-red-900">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle className="text-xs font-bold uppercase tracking-wider">Nomination Required</AlertTitle>
+                      <AlertDescription className="text-sm font-medium">Please nominate who we should contact for urgent approvals.</AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Additional Notes Card */}
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl">
+                <Info className="w-5 h-5 text-primary" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900">Additional Contact Notes</h3>
+            </div>
+
+            <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+              <CardContent className="p-8 space-y-4">
+                <Label className="font-bold text-slate-700">Is there anything we should know about contacting your team?</Label>
+                <Textarea 
+                  value={data.additionalContactNotes || ''} 
+                  onChange={(e) => onChange('additionalContactNotes', e.target.value)}
+                  placeholder="For example, preferred contact times, people who should only be contacted for specific matters, or any backup arrangements."
+                  className="min-h-[120px] rounded-2xl bg-slate-50/50 border-slate-100"
+                />
+              </CardContent>
+            </Card>
           </div>
         </div>
       );
