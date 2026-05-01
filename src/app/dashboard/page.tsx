@@ -60,14 +60,6 @@ export default function DashboardPage() {
             <span className="text-sm font-medium">Log Out</span>
           </Button>
         </div>
-
-        <div className="p-6">
-          <Card className="bg-primary text-white border-none p-4 rounded-2xl">
-            <p className="text-xs font-bold uppercase opacity-80 mb-2">Current Plan</p>
-            <p className="font-bold text-lg mb-4">Professional</p>
-            <Button variant="secondary" size="sm" className="w-full text-xs font-bold h-8">Upgrade Tier</Button>
-          </Card>
-        </div>
       </aside>
 
       {/* Main Content */}
@@ -101,7 +93,6 @@ export default function DashboardPage() {
             <StatCard icon={<FileText className="text-blue-500" />} label="Active Bids" value="12" trend="+2 this week" />
             <StatCard icon={<TrendingUp className="text-green-500" />} label="Win Rate" value="68%" trend="+5% vs last month" />
             <StatCard icon={<Clock className="text-orange-500" />} label="Deadlines Today" value="3" trend="Next in 4h" />
-            <ClipboardList className="text-purple-500 w-10 h-10 p-2 bg-[#F1F5F9] rounded-xl" />
             <StatCard icon={<ClipboardList className="text-purple-500" />} label="Onboarding Status" value="85%" trend="Almost complete" />
           </div>
 
