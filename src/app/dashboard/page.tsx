@@ -14,7 +14,6 @@ import {
   Search,
   Clock,
   TrendingUp,
-  ExternalLink,
   ClipboardList,
   LogOut
 } from 'lucide-react';
@@ -95,39 +94,6 @@ export default function DashboardPage() {
             <StatCard icon={<Clock className="text-orange-500" />} label="Deadlines Today" value="3" trend="Next in 4h" />
             <StatCard icon={<ClipboardList className="text-purple-500" />} label="Onboarding Status" value="85%" trend="Almost complete" />
           </div>
-
-          <div className="grid grid-cols-1 gap-8">
-            {/* Active Bids Table */}
-            <Card className="rounded-2xl border-none shadow-sm overflow-hidden">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg">Recent Tender Activity</CardTitle>
-                  <CardDescription>Monitor your ongoing submission progress.</CardDescription>
-                </div>
-                <Button variant="ghost" className="text-primary text-sm font-bold">View All</Button>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left">
-                    <thead className="bg-[#F8FAFC] text-muted-foreground font-medium border-y">
-                      <tr>
-                        <th className="px-6 py-4">Tender Name</th>
-                        <th className="px-6 py-4">Status</th>
-                        <th className="px-6 py-4">Due Date</th>
-                        <th className="px-6 py-4">Probability</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      <BidRow name="City Infrastructure Upgrade" status="In Review" date="Oct 24, 2023" prob="High" />
-                      <BidRow name="Regional Health IT Services" status="Drafting" date="Nov 12, 2023" prob="Medium" />
-                      <BidRow name="Global Logistics Tender 2024" status="Strategy" date="Dec 05, 2023" prob="High" />
-                      <BidRow name="School District Facility Management" status="Completed" date="Oct 15, 2023" prob="N/A" won />
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
         </div>
       </main>
     </div>
@@ -157,24 +123,5 @@ function StatCard({ icon, label, value, trend }: { icon: React.ReactNode, label:
         </div>
       </CardContent>
     </Card>
-  );
-}
-
-function BidRow({ name, status, date, prob, won = false }: { name: string, status: string, date: string, prob: string, won?: boolean }) {
-  return (
-    <tr className="hover:bg-muted/30 transition-colors">
-      <td className="px-6 py-4">
-        <span className="font-semibold block">{name}</span>
-      </td>
-      <td className="px-6 py-4">
-        <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${won ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-          {status}
-        </span>
-      </td>
-      <td className="px-6 py-4 text-muted-foreground">{date}</td>
-      <td className="px-6 py-4">
-        <span className="font-medium">{prob}</span>
-      </td>
-    </tr>
   );
 }
