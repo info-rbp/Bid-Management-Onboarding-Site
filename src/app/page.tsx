@@ -29,7 +29,7 @@ export default function Home() {
               Let's Get Moving On Your <span className="text-primary">Bid Management</span>
             </h1>
             <p className="text-xl text-muted-foreground leading-relaxed max-w-lg">
-              We've automated the onboarding process so you can focus on winning. From secure payment to workspace provisioning, your journey starts here.
+              We have automated our onboarding process to make life easier. The process will take approximately 45 minutes so make sure you have plenty of time to complete this
             </p>
             <div className="flex flex-col sm:row gap-4">
               <Button asChild size="lg" className="bg-primary text-white h-14 px-10 rounded-xl text-lg group shadow-lg shadow-primary/20">
