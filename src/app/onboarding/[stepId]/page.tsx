@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Logo } from '@/components/brand/Logo';
 import { Button } from '@/components/ui/button';
@@ -75,6 +75,7 @@ export default function OnboardingStepPage() {
   const { toast } = useToast();
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [formData, setFormData] = useState<any>({});
+  const initialSyncDone = useRef<Record<string, boolean>>({});
 
   const currentStepIndex = STEPS.findIndex(s => s.id === stepId);
   const currentStep = STEPS[currentStepIndex];
@@ -113,12 +114,29 @@ export default function OnboardingStepPage() {
   }, [user, db, stepId, submissionId]);
 
   useEffect(() => {
-    if (submission?.sections?.[stepId as string]) {
-      setFormData(submission.sections[stepId as string]);
-    } else {
-      setFormData({});
+    // Only sync from server when stepId changes or when the submission first loads for this step
+    // This prevents local user input from being overwritten by delayed server snapshots
+    const sid = stepId as string;
+    if (submission && !initialSyncDone.current[sid]) {
+      if (submission.sections?.[sid]) {
+        setFormData(submission.sections[sid]);
+      } else {
+        setFormData({});
+      }
+      initialSyncDone.current[sid] = true;
     }
   }, [submission, stepId]);
+
+  // Reset sync tracking when step changes to ensure fresh data for the new step
+  useEffect(() => {
+    const sid = stepId as string;
+    if (!initialSyncDone.current[sid] && submission?.sections?.[sid]) {
+      setFormData(submission.sections[sid]);
+      initialSyncDone.current[sid] = true;
+    } else if (!initialSyncDone.current[sid]) {
+      setFormData({});
+    }
+  }, [stepId]);
 
   const handleFieldChange = (field: string, value: any) => {
     setFormData((prev: any) => ({ ...prev, [field]: value }));
@@ -183,7 +201,7 @@ export default function OnboardingStepPage() {
     }
   };
 
-  if (loadingSubmissions || !currentStep) {
+  if (loadingSubmissions || !currentStep || !submissionId) {
     return (
       <div className="h-screen flex flex-col items-center justify-center gap-4">
         <Loader2 className="animate-spin text-primary w-10 h-10" />
@@ -312,9 +330,9 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
       return (
         <div className="space-y-10">
           <div className="space-y-4">
-            <h2 className="text-4xl font-headline font-bold tracking-tight text-slate-900">Welcome to Your Onboarding</h2>
+            <h2 className="text-4xl font-headline font-bold tracking-tight text-slate-900">Welcome to Your Bid Manager Onboarding</h2>
             <p className="text-slate-500 text-lg leading-relaxed">
-              This process helps us build a comprehensive understanding of your organization to support you across tenders, grants, and strategic business development.
+              This onboarding process helps us collect the information we need to understand your business, prepare proposal-ready content, assess your opportunity readiness, and support you across tenders, grants, supplier registrations, marketplace leads, quote requests, and direct proposals.
             </p>
           </div>
           
@@ -325,11 +343,11 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
               </h3>
               <ul className="space-y-4 text-sm text-blue-800/80 font-medium">
                 {[
-                  "Completion time: 45–75 minutes.",
-                  "Save progress at any time and resume later.",
-                  "We'll cover business identity, services, team capacity, and commercial rules.",
-                  "Required: Core business documents and compliance records.",
-                  "Security: Never share passwords or MFA codes in this portal."
+                  "This process usually takes approximately 45–75 minutes.",
+                  "You can save your progress and return later.",
+                  "You will be asked for business details, service information, team and capacity details, pricing rules, compliance information, opportunity preferences, and approval instructions.",
+                  "You can upload supporting documents where relevant.",
+                  "Please do not provide passwords, login credentials, or MFA codes through this portal."
                 ].map((item, i) => (
                   <li key={i} className="flex gap-4 items-start">
                     <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center shrink-0 border border-blue-200 text-[10px] font-bold shadow-sm">
@@ -343,21 +361,21 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
 
             <div className="space-y-6 pt-4">
               <div className="space-y-1">
-                <h4 className="font-bold text-lg text-slate-900">Pre-Onboarding Acknowledgements</h4>
-                <p className="text-sm text-muted-foreground">Please review and confirm each point to proceed.</p>
+                <h4 className="font-bold text-lg text-slate-900">Before You Continue</h4>
+                <p className="text-sm text-muted-foreground">Please confirm the acknowledgements below before moving to the next step.</p>
               </div>
               
               <div className="space-y-5">
                 {[
-                  { id: 'ackTerms', label: 'I have read and agree to the Bid Manager Terms and Conditions.' },
-                  { id: 'ackAuthority', label: 'I am authorized to complete this onboarding on behalf of the business.' },
-                  { id: 'ackInfoUsage', label: 'I understand how my information will be used for bid preparation and strategy.' },
-                  { id: 'ackApprovals', label: 'I understand the approval process for final submissions.' },
-                  { id: 'ackNoPasswords', label: 'I will not provide system passwords through this portal.' },
-                  { id: 'ackSaveReturn', label: 'I understand progress can be saved and resumed later.' },
-                  { id: 'ackQuality', label: 'I acknowledge that the quality of my input directly affects the results.' }
+                  { id: 'ack1', label: 'I confirm I have read, or have had the opportunity to read, the Bid Manager Terms and Conditions.' },
+                  { id: 'ack2', label: 'I confirm I am authorised to complete this onboarding process on behalf of the business.' },
+                  { id: 'ack3', label: 'I understand that Bid Manager may use the information I provide to prepare client profiles, proposal content, opportunity recommendations, marketplace profiles, tender responses, grant applications, supplier registrations, quote responses, and business development materials, subject to agreed approvals and engagement terms.' },
+                  { id: 'ack4', label: 'I understand that final content, pricing, submissions, communications, and commitments may require approval depending on the authority and approval settings I provide later in this onboarding process.' },
+                  { id: 'ack5', label: 'I understand that I must not provide passwords, login credentials, or multi-factor authentication codes through this onboarding portal.' },
+                  { id: 'ack6', label: 'I understand I can save my progress and return later to continue from where I left off.' },
+                  { id: 'ack7', label: 'I understand that the quality and completeness of the information I provide will affect the accuracy of the documents, recommendations, profiles, and action plans Bid Manager prepares.' }
                 ].map((ack) => (
-                  <div key={ack.id} className="flex items-start space-x-4 p-4 rounded-2xl hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => onChange(ack.id, !data[ack.id])}>
+                  <div key={ack.id} className="flex items-start space-x-4 p-4 rounded-2xl hover:bg-slate-50 transition-colors">
                     <Checkbox 
                       id={ack.id} 
                       checked={data[ack.id] || false} 
