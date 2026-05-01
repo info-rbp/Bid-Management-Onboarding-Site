@@ -8,19 +8,34 @@ import { Button } from '@/components/ui/button';
 import { 
   LayoutDashboard, 
   FileText, 
-  Users, 
   Settings, 
   Bell, 
   Plus, 
   Search,
-  CheckCircle2,
   Clock,
   TrendingUp,
-  ExternalLink
+  ExternalLink,
+  ClipboardList,
+  LogOut
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { useAuth } from '@/firebase';
+import { signOut } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
 
 export default function DashboardPage() {
+  const auth = useAuth();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      router.push('/');
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-body">
       {/* Sidebar */}
@@ -30,11 +45,23 @@ export default function DashboardPage() {
         </div>
         <nav className="flex-1 px-4 space-y-1">
           <NavItem icon={<LayoutDashboard className="w-5 h-5" />} label="Dashboard" active />
+          <NavItem icon={<ClipboardList className="w-5 h-5" />} label="Onboarding" />
           <NavItem icon={<FileText className="w-5 h-5" />} label="Bids & Tenders" />
-          <NavItem icon={<Users className="w-5 h-5" />} label="Team" />
           <NavItem icon={<Settings className="w-5 h-5" />} label="Settings" />
         </nav>
-        <div className="p-6 mt-auto">
+        
+        <div className="p-4 px-6 border-t">
+          <Button 
+            variant="ghost" 
+            className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-xl transition-colors"
+            onClick={handleLogout}
+          >
+            <LogOut className="w-5 h-5" />
+            <span className="text-sm font-medium">Log Out</span>
+          </Button>
+        </div>
+
+        <div className="p-6">
           <Card className="bg-primary text-white border-none p-4 rounded-2xl">
             <p className="text-xs font-bold uppercase opacity-80 mb-2">Current Plan</p>
             <p className="font-bold text-lg mb-4">Professional</p>
@@ -63,7 +90,7 @@ export default function DashboardPage() {
 
         <div className="flex-1 overflow-y-auto p-8 space-y-8">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-headline font-bold">Welcome back, John!</h1>
+            <h1 className="text-2xl font-headline font-bold">Welcome back!</h1>
             <Button className="bg-primary gap-2 h-11 px-6 rounded-xl">
               <Plus className="w-5 h-5" /> New Bid Project
             </Button>
@@ -74,7 +101,8 @@ export default function DashboardPage() {
             <StatCard icon={<FileText className="text-blue-500" />} label="Active Bids" value="12" trend="+2 this week" />
             <StatCard icon={<TrendingUp className="text-green-500" />} label="Win Rate" value="68%" trend="+5% vs last month" />
             <StatCard icon={<Clock className="text-orange-500" />} label="Deadlines Today" value="3" trend="Next in 4h" />
-            <StatCard icon={<Users className="text-purple-500" />} label="Team Capacity" value="85%" trend="Optimization suggested" />
+            <ClipboardList className="text-purple-500 w-10 h-10 p-2 bg-[#F1F5F9] rounded-xl" />
+            <StatCard icon={<ClipboardList className="text-purple-500" />} label="Onboarding Status" value="85%" trend="Almost complete" />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
