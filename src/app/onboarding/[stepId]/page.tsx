@@ -126,17 +126,34 @@ export default function OnboardingStepPage() {
     }
   }, [submission, stepId]);
 
-  useEffect(() => {
-    const sid = stepId as string;
-    // We only reset sync status if we actually changed step IDs
-    // to avoid re-syncing when we are just reloading the same step
-    return () => {
-      // Clean up sync tracking on unmount if needed
-    };
-  }, [stepId]);
-
   const handleFieldChange = (field: string, value: any) => {
     setFormData((prev: any) => ({ ...prev, [field]: value }));
+  };
+
+  const handleNavigate = (targetStepId: string) => {
+    if (targetStepId === stepId) return;
+
+    // Save current step data before navigating
+    if (submissionId && db) {
+      const updateData: any = {
+        updatedAt: serverTimestamp(),
+        lastSavedAt: serverTimestamp(),
+      };
+      updateData[`sections.${stepId}`] = formData;
+
+      updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData)
+        .catch((error: any) => {
+          const contextualError = new FirestorePermissionError({
+            path: `onboardingSubmissions/${submissionId}`,
+            operation: 'update',
+            requestResourceData: updateData,
+          });
+          errorEmitter.emit('permission-error', contextualError);
+        });
+    }
+
+    initialSyncDone.current[targetStepId] = false;
+    router.push(`/onboarding/${targetStepId}`);
   };
 
   const handleSave = (next: boolean = false) => {
@@ -176,7 +193,6 @@ export default function OnboardingStepPage() {
     if (next) {
       if (!isLastStep) {
         router.push(`/onboarding/${nextStepId}`);
-        // Reset sync tracking for the next step immediately
         initialSyncDone.current[nextStepId] = false;
       } else {
         updateDoc(doc(db, 'onboardingSubmissions', submissionId), {
@@ -208,7 +224,7 @@ export default function OnboardingStepPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-body">
-      {/* Wizard Sidebar - Now visible from lg breakpoint */}
+      {/* Wizard Sidebar */}
       <aside className="w-80 bg-white border-r hidden lg:flex flex-col shrink-0">
         <div className="p-6 border-b">
           <Logo />
@@ -227,7 +243,8 @@ export default function OnboardingStepPage() {
             return (
               <div 
                 key={step.id}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-default group ${
+                onClick={() => handleNavigate(step.id)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer group ${
                   isCurrent 
                   ? 'bg-primary/10 text-primary font-bold shadow-sm' 
                   : isCompleted 
@@ -371,11 +388,15 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
                   { id: 'ack6', label: 'I understand I can save my progress and return later to continue from where I left off.' },
                   { id: 'ack7', label: 'I understand that the quality and completeness of the information I provide will affect the accuracy of the documents, recommendations, profiles, and action plans Bid Manager prepares.' }
                 ].map((ack) => (
-                  <div key={ack.id} className="flex items-start space-x-4 p-4 rounded-2xl hover:bg-slate-50 transition-colors">
+                  <div 
+                    key={ack.id} 
+                    className="flex items-start space-x-4 p-4 rounded-2xl hover:bg-slate-50 transition-colors cursor-pointer"
+                    onClick={() => onChange(ack.id, !data[ack.id])}
+                  >
                     <Checkbox 
                       id={ack.id} 
                       checked={data[ack.id] || false} 
-                      onCheckedChange={(checked) => onChange(ack.id, checked)} 
+                      onCheckedChange={() => {}} // Controlled via parent div click
                       className="mt-0.5"
                     />
                     <Label htmlFor={ack.id} className="text-sm leading-snug cursor-pointer font-medium text-slate-700">
