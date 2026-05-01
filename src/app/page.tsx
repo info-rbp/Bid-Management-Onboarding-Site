@@ -13,13 +13,8 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col font-body">
-      <header className="px-6 lg:px-20 h-20 flex items-center justify-between border-b bg-white/50 backdrop-blur-md sticky top-0 z-50">
+      <header className="px-6 lg:px-20 h-20 flex items-center justify-center border-b bg-white/50 backdrop-blur-md sticky top-0 z-50">
         <Logo />
-        <nav className="flex items-center gap-4">
-          <Button asChild variant="default" className="bg-primary hover:bg-primary/90 rounded-full px-6">
-            <Link href="/onboarding">Get Started</Link>
-          </Button>
-        </nav>
       </header>
 
       <main className="flex-1">
