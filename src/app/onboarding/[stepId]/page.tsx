@@ -106,16 +106,15 @@ export default function OnboardingStepPage() {
           sections: {},
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
+          completionPercentage: 0,
         });
         setSubmissionId(newDoc.id);
       }
     }
     initSubmission();
-  }, [user, db, stepId, submissionId]);
+  }, [user, db, submissionId, stepId]);
 
   useEffect(() => {
-    // Only sync from server when stepId changes or when the submission first loads for this step
-    // This prevents local user input from being overwritten by delayed server snapshots
     const sid = stepId as string;
     if (submission && !initialSyncDone.current[sid]) {
       if (submission.sections?.[sid]) {
@@ -127,15 +126,13 @@ export default function OnboardingStepPage() {
     }
   }, [submission, stepId]);
 
-  // Reset sync tracking when step changes to ensure fresh data for the new step
   useEffect(() => {
     const sid = stepId as string;
-    if (!initialSyncDone.current[sid] && submission?.sections?.[sid]) {
-      setFormData(submission.sections[sid]);
-      initialSyncDone.current[sid] = true;
-    } else if (!initialSyncDone.current[sid]) {
-      setFormData({});
-    }
+    // We only reset sync status if we actually changed step IDs
+    // to avoid re-syncing when we are just reloading the same step
+    return () => {
+      // Clean up sync tracking on unmount if needed
+    };
   }, [stepId]);
 
   const handleFieldChange = (field: string, value: any) => {
@@ -153,7 +150,6 @@ export default function OnboardingStepPage() {
       lastSavedAt: serverTimestamp(),
     };
 
-    // Update form data for the current section
     updateData[`sections.${stepId}`] = formData;
 
     if (next) {
@@ -167,7 +163,6 @@ export default function OnboardingStepPage() {
       updateData.completionPercentage = (completedCount / STEPS.length) * 100;
     }
 
-    // Initiate non-blocking update
     updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData)
       .catch((error: any) => {
         const contextualError = new FirestorePermissionError({
@@ -181,8 +176,9 @@ export default function OnboardingStepPage() {
     if (next) {
       if (!isLastStep) {
         router.push(`/onboarding/${nextStepId}`);
+        // Reset sync tracking for the next step immediately
+        initialSyncDone.current[nextStepId] = false;
       } else {
-        // Finalize submission
         updateDoc(doc(db, 'onboardingSubmissions', submissionId), {
           status: 'submitted',
           submittedAt: serverTimestamp()
@@ -196,7 +192,7 @@ export default function OnboardingStepPage() {
     } else {
       toast({ 
         title: "Draft Saved", 
-        description: "Your progress for this section has been saved to your profile." 
+        description: "Your progress for this section has been saved." 
       });
     }
   };
@@ -212,8 +208,8 @@ export default function OnboardingStepPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-body">
-      {/* Wizard Sidebar */}
-      <aside className="w-80 bg-white border-r hidden xl:flex flex-col shrink-0">
+      {/* Wizard Sidebar - Now visible from lg breakpoint */}
+      <aside className="w-80 bg-white border-r hidden lg:flex flex-col shrink-0">
         <div className="p-6 border-b">
           <Logo />
           <div className="mt-6 space-y-2">
@@ -225,7 +221,7 @@ export default function OnboardingStepPage() {
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-1">
-          {STEPS.map((step, idx) => {
+          {STEPS.map((step) => {
             const isCompleted = submission?.completedSteps?.includes(step.id);
             const isCurrent = step.id === stepId;
             return (
@@ -311,7 +307,7 @@ export default function OnboardingStepPage() {
             <div className="mt-10 flex justify-between items-center text-[11px] font-medium text-slate-400 px-6">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                <p>Changes are saved to your account in real-time.</p>
+                <p>Progress is synced with your account.</p>
               </div>
               {submission?.lastSavedAt && (
                 <p>Last synced: {new Date(submission.lastSavedAt.seconds * 1000).toLocaleTimeString()}</p>
@@ -571,6 +567,60 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
                 placeholder="e.g. Secure 3 new government contracts, Refresh bid library..." 
                 className="min-h-[100px] rounded-2xl bg-slate-50" 
               />
+            </div>
+          </div>
+        </div>
+      );
+
+    case 'selection':
+      return (
+        <div className="space-y-10">
+          <div className="space-y-3">
+            <h2 className="text-3xl font-headline font-bold text-slate-900">Service Selection & Scope</h2>
+            <p className="text-slate-500">Select the areas where you need Bid Manager's strategic support.</p>
+          </div>
+
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                { id: 'service_bid', label: 'End-to-End Bid Management' },
+                { id: 'service_writing', label: 'Technical Writing & Drafting' },
+                { id: 'service_grant', label: 'Grant Research & Application' },
+                { id: 'service_strategy', label: 'Bid Strategy & Positioning' },
+                { id: 'service_review', label: 'Final Review & Proofing' },
+                { id: 'service_library', label: 'Bid Library Management' },
+                { id: 'service_marketplace', label: 'Marketplace Lead Tracking' },
+                { id: 'service_compliance', label: 'Compliance Audit & Monitoring' },
+              ].map((service) => (
+                <div key={service.id} className="flex items-center space-x-3 p-4 rounded-xl border border-slate-100 hover:bg-slate-50 transition-colors">
+                  <Checkbox 
+                    id={service.id} 
+                    checked={data[service.id] || false} 
+                    onCheckedChange={(checked) => onChange(service.id, checked)} 
+                  />
+                  <Label htmlFor={service.id} className="text-sm font-medium cursor-pointer">{service.label}</Label>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-4">
+              <Label className="font-bold text-slate-700">Preferred Engagement Model</Label>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[
+                  { id: 'project', label: 'Project Based', desc: 'Pay per individual bid' },
+                  { id: 'retainer', label: 'Monthly Retainer', desc: 'Guaranteed capacity' },
+                  { id: 'adhoc', label: 'Ad-hoc Support', desc: 'On-demand as needed' },
+                ].map((model) => (
+                  <div 
+                    key={model.id}
+                    onClick={() => onChange('engagementModel', model.id)}
+                    className={`p-5 rounded-2xl border-2 cursor-pointer transition-all ${data.engagementModel === model.id ? 'border-primary bg-primary/5' : 'border-slate-100 hover:border-slate-200'}`}
+                  >
+                    <p className="font-bold text-sm">{model.label}</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">{model.desc}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
