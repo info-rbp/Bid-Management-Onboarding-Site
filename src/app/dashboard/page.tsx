@@ -3,7 +3,7 @@
 
 import React from 'react';
 import { Logo } from '@/components/brand/Logo';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +16,6 @@ import {
   Circle,
   Lock,
   ChevronRight,
-  FileText,
   Building2,
   AlertCircle,
   Target,
@@ -33,36 +32,37 @@ import {
   MessageSquare,
   Library,
   Scale,
-  Zap
+  Zap,
+  FileText
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { useAuth, useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { useAuth, useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
 import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-import { doc } from 'firebase/firestore';
+import { doc, query, collection, where } from 'firebase/firestore';
 import Link from 'next/link';
 
 const ONBOARDING_STEPS = [
-  { id: 'welcome', title: '1. Welcome, Terms and Onboarding Expectations', icon: Zap, status: 'completed' },
-  { id: 'snapshot', title: '2. Business Snapshot and Contact Details', icon: Building2, status: 'in_progress' },
-  { id: 'triage', title: '3. Immediate Need and Live Opportunity Triage', icon: AlertCircle, status: 'pending' },
-  { id: 'selection', title: '4. Service Selection and Engagement Scope', icon: FileText, status: 'pending' },
-  { id: 'profile', title: '5. Business Profile, Positioning and Value Proposition', icon: Award, status: 'pending' },
-  { id: 'menu', title: '6. Services, Products and Offer Menu', icon: ShoppingCart, status: 'pending' },
-  { id: 'capacity', title: '7. Team, Capacity and Delivery Model', icon: Users, status: 'pending' },
-  { id: 'proof', title: '8. Proof, Case Studies, Reviews and Evidence', icon: CheckCircle2, status: 'pending' },
-  { id: 'goals', title: '9. Goals, Opportunity Strategy and Bid/No-Bid Rules', icon: Target, status: 'pending' },
-  { id: 'commercial', title: '10. Pricing, Quoting and Commercial Rules', icon: DollarSign, status: 'pending' },
-  { id: 'platform', title: '11. Platform and Channel Setup', icon: Globe, status: 'pending' },
-  { id: 'compliance', title: '12. Compliance, Insurance and Readiness', icon: ShieldCheck, status: 'pending' },
-  { id: 'readiness', title: '13. Tender and Supplier Registration Readiness', icon: FileBadge, status: 'pending' },
-  { id: 'grants', title: '14. Grants', icon: Gift, status: 'pending' },
-  { id: 'marketplace', title: '15. Marketplace Lead Strategy', icon: BarChart3, status: 'pending' },
-  { id: 'outreach', title: '16. Direct Proposal and Outreach Strategy', icon: Send, status: 'pending' },
-  { id: 'quote', title: '17. Quote Request Support', icon: MessageSquare, status: 'pending' },
-  { id: 'workflow', title: '18. Communication, Review and Workflow Rules', icon: MessageSquare, status: 'pending' },
-  { id: 'library', title: '19. Document Upload Library', icon: Library, status: 'pending' },
-  { id: 'authority', title: '20. Authority to Act and Approval Matrix', icon: Scale, status: 'pending' },
+  { id: 'welcome', title: '1. Welcome, Terms and Onboarding Expectations', icon: Zap },
+  { id: 'snapshot', title: '2. Business Snapshot and Contact Details', icon: Building2 },
+  { id: 'triage', title: '3. Immediate Need and Live Opportunity Triage', icon: AlertCircle },
+  { id: 'selection', title: '4. Service Selection and Engagement Scope', icon: FileText },
+  { id: 'profile', title: '5. Business Profile, Positioning and Value Proposition', icon: Award },
+  { id: 'menu', title: '6. Services, Products and Offer Menu', icon: ShoppingCart },
+  { id: 'capacity', title: '7. Team, Capacity and Delivery Model', icon: Users },
+  { id: 'proof', title: '8. Proof, Case Studies, Reviews and Evidence', icon: CheckCircle2 },
+  { id: 'goals', title: '9. Goals, Opportunity Strategy and Bid/No-Bid Rules', icon: Target },
+  { id: 'commercial', title: '10. Pricing, Quoting and Commercial Rules', icon: DollarSign },
+  { id: 'platform', title: '11. Platform and Channel Setup', icon: Globe },
+  { id: 'compliance', title: '12. Compliance, Insurance and Readiness', icon: ShieldCheck },
+  { id: 'readiness', title: '13. Tender and Supplier Registration Readiness', icon: FileBadge },
+  { id: 'grants', title: '14. Grants', icon: Gift },
+  { id: 'marketplace', title: '15. Marketplace Lead Strategy', icon: BarChart3 },
+  { id: 'outreach', title: '16. Direct Proposal and Outreach Strategy', icon: Send },
+  { id: 'quote', title: '17. Quote Request Support', icon: MessageSquare },
+  { id: 'workflow', title: '18. Communication, Review and Workflow Rules', icon: MessageSquare },
+  { id: 'library', title: '19. Document Upload Library', icon: Library },
+  { id: 'authority', title: '20. Authority to Act and Approval Matrix', icon: Scale },
 ];
 
 export default function DashboardPage() {
@@ -78,6 +78,14 @@ export default function DashboardPage() {
 
   const { data: userData } = useDoc(userDocRef);
 
+  const submissionsQuery = useMemoFirebase(() => {
+    if (!user || !db) return null;
+    return query(collection(db, 'onboardingSubmissions'), where('userId', '==', user.uid));
+  }, [user, db]);
+
+  const { data: submissions } = useCollection(submissionsQuery);
+  const submission = submissions?.[0];
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -87,8 +95,18 @@ export default function DashboardPage() {
     }
   };
 
-  // Mock progress calculation
-  const completedCount = ONBOARDING_STEPS.filter(s => s.status === 'completed').length;
+  // Map steps to real-time status from Firestore
+  const stepsWithStatus = ONBOARDING_STEPS.map(step => {
+    let status: 'completed' | 'in_progress' | 'pending' | 'locked' = 'pending';
+    if (submission?.completedSteps?.includes(step.id)) {
+      status = 'completed';
+    } else if (submission?.currentStep === step.id) {
+      status = 'in_progress';
+    }
+    return { ...step, status };
+  });
+
+  const completedCount = submission?.completedSteps?.length || 0;
   const progressValue = (completedCount / ONBOARDING_STEPS.length) * 100;
 
   return (
@@ -127,9 +145,10 @@ export default function DashboardPage() {
             <Input placeholder="Search onboarding steps..." className="pl-10 bg-[#F1F5F9] border-none" />
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm font-medium text-muted-foreground hidden md:inline">
-              {userData?.businessName}
-            </span>
+            <div className="flex flex-col items-end mr-2">
+              <span className="text-xs font-bold text-slate-900 leading-none">{userData?.fullName}</span>
+              <span className="text-[10px] text-muted-foreground">{userData?.businessName}</span>
+            </div>
             <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold shadow-sm">
               {userData?.fullName?.substring(0, 2).toUpperCase() || 'JD'}
             </div>
@@ -141,7 +160,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <h1 className="text-3xl font-headline font-bold text-slate-900">Onboarding Dashboard</h1>
               <Badge variant="secondary" className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-                {userData?.onboardingStatus?.replace('_', ' ') || 'In Progress'}
+                {submission?.status?.replace('_', ' ') || 'In Progress'}
               </Badge>
             </div>
             <p className="text-slate-500">Complete the sections below to set up your bid management profile.</p>
@@ -165,7 +184,7 @@ export default function DashboardPage() {
 
           {/* Steps Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-8">
-            {ONBOARDING_STEPS.map((step) => (
+            {stepsWithStatus.map((step) => (
               <StepTile 
                 key={step.id} 
                 title={step.title} 
@@ -221,7 +240,7 @@ function StepTile({ title, icon, status, onClick }: StepTileProps) {
       className={`group border-none shadow-sm rounded-2xl transition-all duration-300 hover:shadow-md cursor-pointer ${status === 'locked' ? 'opacity-60 grayscale cursor-not-allowed' : 'hover:-translate-y-1'}`}
       onClick={status !== 'locked' ? onClick : undefined}
     >
-      <CardContent className="p-6 flex flex-col h-full justify-between gap-4">
+      <CardContent className="p-6 flex flex-col h-full justify-between gap-4 pt-6">
         <div className="flex justify-between items-start">
           <div className={`p-3 rounded-xl ${status === 'completed' ? 'bg-green-50 text-green-600' : status === 'in_progress' ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-600'} group-hover:scale-110 transition-transform`}>
             {icon}

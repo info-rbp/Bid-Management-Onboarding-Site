@@ -39,7 +39,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Textarea } from '@/components/ui/textarea';
 
 const STEPS = [
   { id: 'welcome', title: '1. Welcome & Expectations', icon: Zap },
@@ -126,27 +125,42 @@ export default function OnboardingStepPage() {
     if (!submissionId || !db) return;
     setSaving(true);
     try {
-      const nextStep = next && currentStepIndex < STEPS.length - 1 ? STEPS[currentStepIndex + 1].id : stepId;
+      const isLastStep = currentStepIndex === STEPS.length - 1;
+      const nextStep = next && !isLastStep ? STEPS[currentStepIndex + 1].id : stepId;
       
       const updateData: any = {
         updatedAt: serverTimestamp(),
         lastSavedAt: serverTimestamp(),
-        [`sections.${stepId}`]: formData,
       };
+
+      // Only save form data if there are changes to avoid bloat
+      if (Object.keys(formData).length > 0) {
+        updateData[`sections.${stepId}`] = formData;
+      }
 
       if (next) {
         updateData.currentStep = nextStep;
         if (!submission?.completedSteps?.includes(stepId as string)) {
-          updateData.completedSteps = [...(submission?.completedSteps || []), stepId];
+          // Use a set-like approach for unique steps
+          const currentCompleted = submission?.completedSteps || [];
+          if (!currentCompleted.includes(stepId as string)) {
+            updateData.completedSteps = [...currentCompleted, stepId as string];
+          }
         }
       }
 
       await updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
       
       if (next) {
-        if (currentStepIndex < STEPS.length - 1) {
+        if (!isLastStep) {
           router.push(`/onboarding/${nextStep}`);
         } else {
+          // Final submission handling
+          await updateDoc(doc(db, 'onboardingSubmissions', submissionId), {
+            status: 'submitted',
+            submittedAt: serverTimestamp()
+          });
+          toast({ title: "Onboarding Complete", description: "All steps have been submitted successfully." });
           router.push('/dashboard');
         }
       } else {
@@ -227,7 +241,7 @@ export default function OnboardingStepPage() {
               Save Draft
             </Button>
             <Button size="sm" onClick={() => handleSave(true)} disabled={saving} className="gap-2 rounded-lg">
-              Next Step <ChevronRight className="w-4 h-4" />
+              {currentStepIndex === STEPS.length - 1 ? 'Finish Onboarding' : 'Next Step'} <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
         </header>
