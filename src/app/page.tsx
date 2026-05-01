@@ -58,17 +58,6 @@ export default function Home() {
             </div>
           </div>
         </section>
-
-        {/* Final CTA */}
-        <section className="bg-primary py-20 px-6 lg:px-20 text-white text-center">
-          <div className="max-w-3xl mx-auto space-y-8">
-            <h2 className="text-4xl font-headline font-bold">Ready to win more bids?</h2>
-            <p className="text-xl opacity-90">Join the elite organizations using Bid Manager to streamline their strategic bidding operations.</p>
-            <Button asChild size="lg" variant="secondary" className="h-16 px-12 rounded-2xl text-xl font-bold hover:scale-105 transition-transform">
-              <Link href="/onboarding">Get Started Now</Link>
-            </Button>
-          </div>
-        </section>
       </main>
 
       <footer className="px-6 py-12 lg:px-20 bg-background border-t">
