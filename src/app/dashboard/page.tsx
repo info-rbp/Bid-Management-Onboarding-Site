@@ -36,11 +36,11 @@ import {
   Zap
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { useAuth, useUser, useFirestore, useDoc } from '@/firebase';
+import { useAuth, useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { doc } from 'firebase/firestore';
+import Link from 'next/link';
 
 const ONBOARDING_STEPS = [
   { id: 'welcome', title: '1. Welcome, Terms and Onboarding Expectations', icon: Zap, status: 'completed' },
@@ -71,7 +71,11 @@ export default function DashboardPage() {
   const db = useFirestore();
   const router = useRouter();
 
-  const userDocRef = user ? doc(db, 'users', user.uid) : null;
+  const userDocRef = useMemoFirebase(() => {
+    if (!user || !db) return null;
+    return doc(db, 'users', user.uid);
+  }, [user, db]);
+
   const { data: userData } = useDoc(userDocRef);
 
   const handleLogout = async () => {
