@@ -167,7 +167,7 @@ export default function Home() {
                   <div className="w-12 h-12 rounded-2xl bg-green-500 text-white flex items-center justify-center font-bold text-xl shadow-lg shadow-green-500/20">4</div>
                   <h3 className="text-2xl font-headline font-bold">Real-time Bid Management</h3>
                   <p className="text-lg text-muted-foreground leading-relaxed">
-                    Gain immediate access to your dashboard. Monitor tender progress, track win rates, and collaborate directly with your dedicated BidFlow partner in your new workspace.
+                    Gain immediate access to your dashboard. Monitor tender progress, track win rates, and collaborate directly with your dedicated bid partners in your new workspace.
                   </p>
                   <Button asChild variant="outline" className="rounded-xl border-2">
                     <Link href="/onboarding">Ready to Start?</Link>
@@ -186,7 +186,7 @@ export default function Home() {
         <section className="bg-primary py-20 px-6 lg:px-20 text-white text-center">
           <div className="max-w-3xl mx-auto space-y-8">
             <h2 className="text-4xl font-headline font-bold">Ready to win more bids?</h2>
-            <p className="text-xl opacity-90">Join the elite organizations using BidFlow Connect to streamline their strategic bidding operations.</p>
+            <p className="text-xl opacity-90">Join the elite organizations using Bid Manager to streamline their strategic bidding operations.</p>
             <Button asChild size="lg" variant="secondary" className="h-16 px-12 rounded-2xl text-xl font-bold hover:scale-105 transition-transform">
               <Link href="/onboarding">Get Started Now</Link>
             </Button>
@@ -198,7 +198,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
           <Logo />
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} BidFlow Connect. A subsidiary of Remote Business Partner.
+            © {new Date().getFullYear()} Bid Manager. A subsidiary of Remote Business Partner.
           </p>
           <div className="flex gap-6">
             <Link href="#" className="text-sm font-medium text-muted-foreground hover:text-primary">Terms</Link>

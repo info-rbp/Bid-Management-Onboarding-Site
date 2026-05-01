@@ -2,7 +2,7 @@ import type {Metadata} from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'BidFlow Connect | Strategic Bid Management Onboarding',
+  title: 'Bid Manager | Strategic Bid Management Onboarding',
   description: 'Secure payment and automated onboarding for bid management services.',
 };
 

@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -75,7 +74,7 @@ export default function OnboardingPage() {
               <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary/10 mb-4">
                 <User className="w-10 h-10 text-primary" />
               </div>
-              <h2 className="text-3xl font-headline font-bold">Welcome to BidFlow</h2>
+              <h2 className="text-3xl font-headline font-bold">Welcome to Bid Manager</h2>
               <p className="text-muted-foreground text-lg">Let's get your bid management partnership started. This process will take about 5 minutes.</p>
             </div>
             <div className="grid gap-4 mt-8">
@@ -324,7 +323,7 @@ export default function OnboardingPage() {
               <CheckCircle2 className="w-10 h-10 text-green-600" />
             </div>
             <h2 className="text-3xl font-headline font-bold">Onboarding Complete!</h2>
-            <p className="text-muted-foreground text-lg">Your BidFlow Connect environment is being prepared. You'll receive a confirmation email shortly.</p>
+            <p className="text-muted-foreground text-lg">Your Bid Manager environment is being prepared. You'll receive a confirmation email shortly.</p>
             <div className="p-6 bg-secondary/30 rounded-2xl border border-primary/10 text-left space-y-4">
               <h4 className="font-bold">Next Steps:</h4>
               <ul className="space-y-2 text-sm">
@@ -373,7 +372,7 @@ export default function OnboardingPage() {
           </Card>
 
           <p className="mt-8 text-center text-sm text-muted-foreground">
-            Need help? Contact our support at <span className="font-semibold text-primary">support@bidflowconnect.com</span>
+            Need help? Contact our support at <span className="font-semibold text-primary">support@bidmanager.com</span>
           </p>
         </div>
       </main>
