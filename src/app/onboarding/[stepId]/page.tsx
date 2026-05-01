@@ -40,7 +40,7 @@ import {
   HelpCircle,
   Mail,
   Phone,
-  User,
+  User as UserIcon,
   MapPin,
   ExternalLink,
   Info,
@@ -53,7 +53,8 @@ import {
   Sparkles,
   Heart,
   Plus,
-  Trash2
+  Trash2,
+  Briefcase
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -181,6 +182,13 @@ export default function OnboardingStepPage() {
             promotionRules: {},
             offerMenu: {}
           });
+        } else if (sid === 'capacity') {
+          setFormData({
+            teamSetup: { numberOfMembers: 2, members: [] },
+            subcontractors: { usePartners: null, numberOfPartners: 1, partners: [] },
+            capacityScaling: { scalingRequirements: [] },
+            equipmentSystems: { systemsUsed: [] }
+          });
         } else {
           setFormData({});
         }
@@ -298,6 +306,39 @@ export default function OnboardingStepPage() {
         if (!s?.name || !s?.description || !s?.inclusions || !s?.exclusions || !s?.deliveryMethods?.length || !s?.pricingMethod || !s?.suitableChannels?.length) {
           return `Please complete all required fields for Service ${i + 1}.`;
         }
+      }
+    }
+
+    if (sid === 'capacity') {
+      const setup = data.teamSetup || { members: [] };
+      const numMembers = setup.numberOfMembers === '6 or more' ? 6 : (parseInt(setup.numberOfMembers) || 0);
+      const members = setup.members || [];
+      
+      if (numMembers === 0) return "Please add at least one team member.";
+      for (let i = 0; i < numMembers; i++) {
+        const m = members[i];
+        if (!m?.fullName || !m?.roleTitle || !m?.responsibilities) {
+          return `Please complete required fields for Team Member ${i + 1}.`;
+        }
+      }
+
+      const partners = data.subcontractors || { partners: [] };
+      if (['Yes', 'Sometimes'].includes(partners.usePartners)) {
+        const numP = parseInt(partners.numberOfPartners) || 0;
+        const pList = partners.partners || [];
+        if (numP > 0 && (!pList[0]?.name || !pList[0]?.type)) {
+          return "Please complete details for at least one delivery partner.";
+        }
+      }
+
+      const cap = data.capacityScaling || {};
+      if (!cap.jobsAtOnce || !cap.currentCapacity || !cap.couldScale || !cap.backupPlan) {
+        return "Please complete all capacity and scaling fields.";
+      }
+
+      const eq = data.equipmentSystems || {};
+      if (!eq.qualityChecks) {
+        return "Please describe your quality checks and supervision processes.";
       }
     }
 
@@ -1400,6 +1441,280 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
                     </div>
                   ))}
                 </RadioGroup>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      );
+
+    case 'capacity':
+      const teamSetup = data.teamSetup || { numberOfMembers: 2, members: [] };
+      const numMembersRaw = teamSetup.numberOfMembers || 2;
+      const numMembers = numMembersRaw === '6 or more' ? 6 : (parseInt(numMembersRaw) || 2);
+      const members = teamSetup.members || [];
+      
+      const subconSetup = data.subcontractors || { usePartners: null, numberOfPartners: 1, partners: [] };
+      const numPartners = parseInt(subconSetup.numberOfPartners) || 1;
+      const partners = subconSetup.partners || [];
+      
+      const capScaling = data.capacityScaling || { scalingRequirements: [] };
+      const eqSystems = data.equipmentSystems || { systemsUsed: [] };
+
+      const handleMemberChange = (index: number, field: string, val: any) => {
+        const nextMembers = [...members];
+        if (!nextMembers[index]) nextMembers[index] = { memberNumber: index + 1 };
+        nextMembers[index] = { ...nextMembers[index], [field]: val };
+        onChange('teamSetup', { ...teamSetup, members: nextMembers });
+      };
+
+      const handlePartnerChange = (index: number, field: string, val: any) => {
+        const nextPartners = [...partners];
+        if (!nextPartners[index]) nextPartners[index] = { partnerNumber: index + 1 };
+        nextPartners[index] = { ...nextPartners[index], [field]: val };
+        onChange('subcontractors', { ...subconSetup, partners: nextPartners });
+      };
+
+      const handleScalingToggle = (opt: string) => {
+        const current = capScaling.scalingRequirements || [];
+        const next = current.includes(opt) ? current.filter((i: string) => i !== opt) : [...current, opt];
+        onChange('capacityScaling', { ...capScaling, scalingRequirements: next });
+      };
+
+      const handleSystemToggle = (opt: string) => {
+        const current = eqSystems.systemsUsed || [];
+        const next = current.includes(opt) ? current.filter((i: string) => i !== opt) : [...current, opt];
+        onChange('equipmentSystems', { ...eqSystems, systemsUsed: next });
+      };
+
+      return (
+        <div className="space-y-12">
+          <div className="space-y-4">
+            <h2 className="text-4xl font-headline font-bold text-slate-900">Team, Capacity and Delivery Model</h2>
+            <p className="text-slate-500 text-lg leading-relaxed">
+              Tell us who delivers the work, what experience your team has, how much capacity you have, and how you manage quality.
+            </p>
+          </div>
+
+          {/* Team Setup */}
+          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><Users className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Team Setup</h3>
+            </div>
+            <CardContent className="p-8 space-y-10">
+              <div className="space-y-4">
+                <Label className="text-lg font-bold text-slate-800">How many key team members would you like to add?</Label>
+                <div className="max-w-[240px]">
+                  <Select 
+                    value={numMembersRaw.toString()} 
+                    onValueChange={(val) => onChange('teamSetup', { ...teamSetup, numberOfMembers: val })}
+                  >
+                    <SelectTrigger className="h-12 rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["1", "2", "3", "4", "5", "6 or more"].map(n => (
+                        <SelectItem key={n} value={n}>{n}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-8">
+                {Array.from({ length: numMembers }).map((_, idx) => {
+                  const member = members[idx] || {};
+                  return (
+                    <div key={idx} className="p-8 border border-slate-100 bg-slate-50/30 rounded-[2.5rem] space-y-8">
+                      <div className="flex justify-between items-center">
+                        <h4 className="font-bold text-slate-900 text-xl flex items-center gap-3">
+                          <Badge variant="secondary" className="w-8 h-8 rounded-full p-0 flex items-center justify-center font-bold text-primary bg-primary/10">{idx + 1}</Badge>
+                          Team Member {idx + 1}
+                        </h4>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label className="font-bold text-slate-700">Full Name *</Label>
+                          <Input value={member.fullName || ''} onChange={(e) => handleMemberChange(idx, 'fullName', e.target.value)} className="h-12 rounded-xl bg-white" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="font-bold text-slate-700">Role / Title *</Label>
+                          <Input value={member.roleTitle || ''} onChange={(e) => handleMemberChange(idx, 'roleTitle', e.target.value)} className="h-12 rounded-xl bg-white" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="font-bold text-slate-700">Employment Type</Label>
+                          <Select value={member.employmentType || ''} onValueChange={(val) => handleMemberChange(idx, 'employmentType', val)}>
+                            <SelectTrigger className="h-12 rounded-xl bg-white"><SelectValue placeholder="Select type" /></SelectTrigger>
+                            <SelectContent>
+                              {["Owner/director", "Employee", "Contractor", "Subcontractor", "Partner", "Casual", "Other"].map(opt => (
+                                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="font-bold text-slate-700">Years of Experience</Label>
+                          <Input value={member.yearsExperience || ''} onChange={(e) => handleMemberChange(idx, 'yearsExperience', e.target.value)} className="h-12 rounded-xl bg-white" />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="font-bold text-slate-700">Key Responsibilities *</Label>
+                        <Textarea value={member.responsibilities || ''} onChange={(e) => handleMemberChange(idx, 'responsibilities', e.target.value)} className="min-h-[80px] rounded-2xl bg-white" />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="font-bold text-slate-700">Short Bio or Capability Summary</Label>
+                        <Textarea value={member.bio || ''} onChange={(e) => handleMemberChange(idx, 'bio', e.target.value)} className="min-h-[100px] rounded-2xl bg-white" />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Subcontractors */}
+          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><Briefcase className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Subcontractors and Delivery Partners</h3>
+            </div>
+            <CardContent className="p-8 space-y-8">
+              <div className="space-y-4">
+                <Label className="text-lg font-bold text-slate-800">Do you use subcontractors, suppliers, or delivery partners? *</Label>
+                <RadioGroup value={subconSetup.usePartners} onValueChange={(val) => onChange('subcontractors', { ...subconSetup, usePartners: val })} className="flex flex-wrap gap-6">
+                  {["Yes", "No", "Sometimes", "Unsure"].map(opt => (
+                    <div key={opt} className="flex items-center space-x-2">
+                      <RadioGroupItem value={opt} id={`sub-${opt}`} />
+                      <Label htmlFor={`sub-${opt}`}>{opt}</Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+
+              {["Yes", "Sometimes"].includes(subconSetup.usePartners) && (
+                <div className="space-y-8 animate-in fade-in slide-in-from-top-2">
+                  <div className="max-w-[240px] space-y-2">
+                    <Label className="font-bold text-slate-700">Number of partners to add</Label>
+                    <Select value={numPartners.toString()} onValueChange={(val) => onChange('subcontractors', { ...subconSetup, numberOfPartners: val })}>
+                      <SelectTrigger className="h-10 rounded-xl"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {[1, 2, 3, 4, 5].map(n => <SelectItem key={n} value={n.toString()}>{n}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-6">
+                    {Array.from({ length: numPartners }).map((_, idx) => {
+                      const partner = partners[idx] || {};
+                      return (
+                        <div key={idx} className="p-6 border border-slate-100 bg-slate-50/30 rounded-2xl space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label className="font-bold text-slate-700 text-xs">Business/Person Name *</Label>
+                              <Input value={partner.name || ''} onChange={(e) => handlePartnerChange(idx, 'name', e.target.value)} className="h-10 rounded-xl bg-white" />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="font-bold text-slate-700 text-xs">Type *</Label>
+                              <Select value={partner.type || ''} onValueChange={(val) => handlePartnerChange(idx, 'type', val)}>
+                                <SelectTrigger className="h-10 rounded-xl bg-white"><SelectValue placeholder="Select type" /></SelectTrigger>
+                                <SelectContent>
+                                  {["Subcontractor", "Supplier", "Delivery partner", "Consultant", "Referral partner", "Other"].map(opt => (
+                                    <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="font-bold text-slate-700 text-xs">Services or Support Provided</Label>
+                            <Input value={partner.services || ''} onChange={(e) => handlePartnerChange(idx, 'services', e.target.value)} className="h-10 rounded-xl bg-white" />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Capacity and Scaling */}
+          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><TargetIcon className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Capacity and Scaling</h3>
+            </div>
+            <CardContent className="p-8 space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label className="font-bold text-slate-700">How many projects can you handle at once? *</Label>
+                  <Input value={capScaling.jobsAtOnce || ''} onChange={(e) => onChange('capacityScaling', { ...capScaling, jobsAtOnce: e.target.value })} className="h-12 rounded-xl bg-white" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-bold text-slate-700">Current team capacity? *</Label>
+                  <Input value={capScaling.currentCapacity || ''} onChange={(e) => onChange('capacityScaling', { ...capScaling, currentCapacity: e.target.value })} className="h-12 rounded-xl bg-white" />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <Label className="font-bold text-slate-700">Could you scale up for a larger contract? *</Label>
+                <RadioGroup value={capScaling.couldScale} onValueChange={(val) => onChange('capacityScaling', { ...capScaling, couldScale: val })} className="space-y-3">
+                  {["Yes", "No", "Maybe, with subcontractors or new staff", "Unsure"].map(opt => (
+                    <div key={opt} className="relative">
+                      <RadioGroupItem value={opt} id={`scale-${opt}`} className="peer sr-only" />
+                      <Label htmlFor={`scale-${opt}`} className="flex items-center p-4 border-2 rounded-2xl cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-slate-50 text-sm font-medium">{opt}</Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+
+              <div className="space-y-4">
+                <Label className="font-bold text-slate-700">What would need to happen to scale delivery?</Label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {["Hire staff", "Engage subcontractors", "Buy equipment", "Increase insurance", "Obtain licences", "Secure funding", "Improve systems", "Extend operating hours"].map(opt => (
+                    <div key={opt} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${capScaling.scalingRequirements?.includes(opt) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleScalingToggle(opt)}>
+                      <Checkbox id={`scaling-${opt}`} checked={capScaling.scalingRequirements?.includes(opt)} onCheckedChange={() => {}} />
+                      <Label htmlFor={`scaling-${opt}`} className="text-xs font-medium cursor-pointer">{opt}</Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="font-bold text-slate-700">What happens if a key person is unavailable? *</Label>
+                <Textarea value={capScaling.backupPlan || ''} onChange={(e) => onChange('capacityScaling', { ...capScaling, backupPlan: e.target.value })} className="min-h-[80px] rounded-2xl bg-white" />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Equipment, Systems and Quality */}
+          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><ShieldCheck className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Equipment, Systems and Quality</h3>
+            </div>
+            <CardContent className="p-8 space-y-8">
+              <div className="space-y-2">
+                <Label className="font-bold text-slate-700">What equipment, vehicles, or systems do you use?</Label>
+                <Textarea value={eqSystems.equipmentUsed || ''} onChange={(e) => onChange('equipmentSystems', { ...eqSystems, equipmentUsed: e.target.value })} className="min-h-[100px] rounded-2xl bg-white" />
+              </div>
+              <div className="space-y-2">
+                <Label className="font-bold text-slate-700">What quality checks or supervision processes are used? *</Label>
+                <Textarea value={eqSystems.qualityChecks || ''} onChange={(e) => onChange('equipmentSystems', { ...eqSystems, qualityChecks: e.target.value })} className="min-h-[100px] rounded-2xl bg-white" />
+              </div>
+              <div className="space-y-4">
+                <Label className="font-bold text-slate-700">Do you use any software to manage work?</Label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {["CRM", "Project management", "Accounting", "Scheduling", "Compliance", "Google Workspace", "Microsoft 365"].map(opt => (
+                    <div key={opt} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${eqSystems.systemsUsed?.includes(opt) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleSystemToggle(opt)}>
+                      <Checkbox id={`sys-${opt}`} checked={eqSystems.systemsUsed?.includes(opt)} onCheckedChange={() => {}} />
+                      <Label htmlFor={`sys-${opt}`} className="text-xs font-medium cursor-pointer">{opt}</Label>
+                    </div>
+                  ))}
+                </div>
               </div>
             </CardContent>
           </Card>
