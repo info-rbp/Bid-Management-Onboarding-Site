@@ -64,7 +64,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
           <Logo />
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Bid Manager. A subsidiary of Remote Business Partner.
+            Bid Management Services provided by Remote Business Partner
           </p>
           <div className="flex gap-6">
             <Link href="#" className="text-sm font-medium text-muted-foreground hover:text-primary">Terms</Link>
