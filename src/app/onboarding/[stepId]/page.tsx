@@ -263,69 +263,58 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
       return (
         <div className="space-y-8">
           <div className="space-y-2">
-            <h2 className="text-3xl font-headline font-bold">Welcome to Onboarding</h2>
-            <p className="text-muted-foreground text-lg">We've designed this process to be as thorough as possible to ensure your bid success.</p>
+            <h2 className="text-3xl font-headline font-bold">Welcome to Your Bid Manager Onboarding</h2>
+            <p className="text-muted-foreground text-lg">
+              This onboarding process helps us collect the information we need to understand your business, prepare proposal-ready content, assess your opportunity readiness, and support you across tenders, grants, supplier registrations, marketplace leads, quote requests, and direct proposals.
+            </p>
           </div>
           
           <div className="grid gap-6">
             <div className="p-6 bg-blue-50/50 rounded-2xl border border-blue-100 space-y-4">
               <h3 className="font-bold flex items-center gap-2"><Zap className="w-5 h-5 text-primary" /> What to Expect</h3>
               <ul className="space-y-3 text-sm text-slate-600">
-                <li className="flex gap-3">
-                  <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
-                  Approximately 45 minutes to complete.
-                </li>
-                <li className="flex gap-3">
-                  <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
-                  You can save and return at any time.
-                </li>
-                <li className="flex gap-3">
-                  <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
-                  You'll need business registration info and core certificates.
-                </li>
+                {[
+                  "This process usually takes approximately 45–75 minutes.",
+                  "You can save your progress and return later.",
+                  "You will be asked for business details, service information, team and capacity details, pricing rules, compliance information, opportunity preferences, and approval instructions.",
+                  "You can upload supporting documents where relevant.",
+                  "Please do not provide passwords, login credentials, or MFA codes through this portal."
+                ].map((item, i) => (
+                  <li key={i} className="flex gap-3">
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+                    {item}
+                  </li>
+                ))}
               </ul>
             </div>
 
             <div className="space-y-4 pt-4">
-              <div className="flex items-start space-x-3 space-y-0">
-                <Checkbox 
-                  id="terms" 
-                  checked={data.termsAccepted} 
-                  onCheckedChange={(checked) => onChange('termsAccepted', checked)} 
-                />
-                <Label htmlFor="terms" className="text-sm leading-relaxed cursor-pointer">
-                  I acknowledge and accept the Bid Manager Terms and Conditions.
-                </Label>
+              <div className="space-y-2">
+                <h4 className="font-bold text-slate-900">Before You Continue</h4>
+                <p className="text-sm text-muted-foreground">Please confirm the acknowledgements below before moving to the next step.</p>
               </div>
-              <div className="flex items-start space-x-3 space-y-0">
-                <Checkbox 
-                  id="authority" 
-                  checked={data.hasAuthority} 
-                  onCheckedChange={(checked) => onChange('hasAuthority', checked)}
-                />
-                <Label htmlFor="authority" className="text-sm leading-relaxed cursor-pointer">
-                  I confirm I have the authority to complete this onboarding on behalf of the business.
-                </Label>
-              </div>
-              <div className="flex items-start space-x-3 space-y-0">
-                <Checkbox 
-                  id="infoUsage" 
-                  checked={data.understandsInfoUsage} 
-                  onCheckedChange={(checked) => onChange('understandsInfoUsage', checked)}
-                />
-                <Label htmlFor="infoUsage" className="text-sm leading-relaxed cursor-pointer">
-                  I understand how my information will be used for bid strategy.
-                </Label>
-              </div>
-              <div className="flex items-start space-x-3 space-y-0">
-                <Checkbox 
-                  id="passwords" 
-                  checked={data.passwordWarningAccepted} 
-                  onCheckedChange={(checked) => onChange('passwordWarningAccepted', checked)}
-                />
-                <Label htmlFor="passwords" className="text-sm leading-relaxed cursor-pointer">
-                  I understand that I should never provide passwords to internal systems through this form.
-                </Label>
+              
+              <div className="space-y-4">
+                {[
+                  { id: 'ackTerms', label: 'I confirm I have read, or have had the opportunity to read, the Bid Manager Terms and Conditions.' },
+                  { id: 'ackAuthority', label: 'I confirm I am authorised to complete this onboarding process on behalf of the business.' },
+                  { id: 'ackInfoUsage', label: 'I understand that Bid Manager may use the information I provide to prepare client profiles, proposal content, opportunity recommendations, marketplace profiles, tender responses, grant applications, supplier registrations, quote responses, and business development materials, subject to agreed approvals and engagement terms.' },
+                  { id: 'ackApprovals', label: 'I understand that final content, pricing, submissions, communications, and commitments may require approval depending on the authority and approval settings I provide later in this onboarding process.' },
+                  { id: 'ackNoPasswords', label: 'I understand that I must not provide passwords, login credentials, or multi-factor authentication codes through this onboarding portal.' },
+                  { id: 'ackSaveReturn', label: 'I understand I can save my progress and return later to continue from where I left off.' },
+                  { id: 'ackQuality', label: 'I understand that the quality and completeness of the information I provide will affect the accuracy of the documents, recommendations, profiles, and action plans Bid Manager prepares.' }
+                ].map((ack) => (
+                  <div key={ack.id} className="flex items-start space-x-3 space-y-0">
+                    <Checkbox 
+                      id={ack.id} 
+                      checked={data[ack.id] || false} 
+                      onCheckedChange={(checked) => onChange(ack.id, checked)} 
+                    />
+                    <Label htmlFor={ack.id} className="text-sm leading-relaxed cursor-pointer font-normal">
+                      {ack.label}
+                    </Label>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
