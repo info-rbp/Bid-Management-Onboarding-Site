@@ -2,13 +2,12 @@
 
 import React from 'react';
 import { Logo } from '@/components/brand/Logo';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
   LayoutDashboard, 
   FileText, 
   Settings, 
-  Plus, 
   Search,
   Clock,
   TrendingUp,
@@ -65,7 +64,7 @@ export default function DashboardPage() {
             <Input placeholder="Search bids, documents..." className="pl-10 bg-[#F1F5F9] border-none" />
           </div>
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-full bg-accent text-white flex items-center justify-center font-bold">
+            <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold">
               JD
             </div>
           </div>
@@ -74,9 +73,6 @@ export default function DashboardPage() {
         <div className="flex-1 overflow-y-auto p-8 space-y-8">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-headline font-bold">Welcome back!</h1>
-            <Button className="bg-primary gap-2 h-11 px-6 rounded-xl">
-              <Plus className="w-5 h-5" /> New Bid Project
-            </Button>
           </div>
 
           {/* Stats */}
