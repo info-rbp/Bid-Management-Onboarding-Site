@@ -51,7 +51,9 @@ import {
   Target as TargetIcon,
   Quote,
   Sparkles,
-  Heart
+  Heart,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -173,6 +175,12 @@ export default function OnboardingStepPage() {
             brandPositioning: { descriptiveWords: [] },
             businessValues: {}
           });
+        } else if (sid === 'menu') {
+          setFormData({
+            serviceSetup: { numberOfServices: 3, services: [] },
+            promotionRules: {},
+            offerMenu: {}
+          });
         } else {
           setFormData({});
         }
@@ -276,6 +284,21 @@ export default function OnboardingStepPage() {
       if (!valProp.clientsChooseUsBecause) return "The 'Clients choose us because...' field is required.";
       if (points.length < 3 || points.some((p: string) => !p)) return "All three key points are required.";
       if (!brand.tonePreference) return "Tone preference is required.";
+    }
+
+    if (sid === 'menu') {
+      const setup = data.serviceSetup || { services: [] };
+      const numServices = setup.numberOfServices === '6 or more' ? 6 : (parseInt(setup.numberOfServices) || 0);
+      const services = setup.services || [];
+      
+      if (numServices === 0) return "Please add at least one service.";
+      
+      for (let i = 0; i < numServices; i++) {
+        const s = services[i];
+        if (!s?.name || !s?.description || !s?.inclusions || !s?.exclusions || !s?.deliveryMethods?.length || !s?.pricingMethod || !s?.suitableChannels?.length) {
+          return `Please complete all required fields for Service ${i + 1}.`;
+        }
+      }
     }
 
     return null;
@@ -1065,7 +1088,7 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
                 <Textarea value={overview.whyStarted || ''} onChange={(e) => handleOverviewChange('whyStarted', e.target.value)} className="min-h-[100px] rounded-2xl" />
               </div>
               <div className="space-y-2">
-                <Label className="font-bold text-slate-700">What problem does your business solve for clients? *</Label>
+                <Label className="font-bold text-slate-700">What problem does your business solve for clients or customers? *</Label>
                 <Textarea value={overview.problemSolved || ''} onChange={(e) => handleOverviewChange('problemSolved', e.target.value)} className="min-h-[100px] rounded-2xl" />
               </div>
               <div className="space-y-2">
@@ -1082,7 +1105,7 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
             </div>
             <CardContent className="p-8 space-y-6">
               <div className="space-y-2">
-                <Label className="font-bold text-slate-700">What outcomes or results do clients receive? *</Label>
+                <Label className="font-bold text-slate-700">What outcomes or results do clients receive from your work? *</Label>
                 <Textarea value={valProp.clientOutcomes || ''} onChange={(e) => handleValPropChange('clientOutcomes', e.target.value)} className="min-h-[100px] rounded-2xl" />
               </div>
               <div className="space-y-2">
@@ -1097,7 +1120,7 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
                 </div>
               </div>
               <div className="space-y-4 pt-4">
-                <Label className="font-bold text-slate-700">Top three things clients should remember about you *</Label>
+                <Label className="font-bold text-slate-700">Top three things buyers, funders, or clients should remember about your business *</Label>
                 <div className="space-y-3">
                   {points.map((p: string, i: number) => (
                     <div key={i} className="flex gap-4 items-center">
@@ -1128,7 +1151,7 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
                 </div>
               </div>
               <div className="space-y-4">
-                <Label className="font-bold text-slate-700">What tone should we use in your proposals? *</Label>
+                <Label className="font-bold text-slate-700">What tone should Bid Manager use when writing about your business? *</Label>
                 <RadioGroup value={brand.tonePreference || ''} onValueChange={(val) => handleBrandChange('tonePreference', val)} className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {["Formal and professional", "Clear and practical", "Warm and approachable", "Confident and persuasive", "Technical and detailed", "Simple and plain English", "Unsure, please recommend"].map(tone => (
                     <div key={tone} className="relative">
@@ -1154,6 +1177,229 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
               <div className="space-y-2">
                 <Label className="font-bold text-slate-700">What do clients usually say about working with you?</Label>
                 <Textarea value={values.clientFeedbackThemes || ''} onChange={(e) => handleValuesChange('clientFeedbackThemes', e.target.value)} className="min-h-[100px] rounded-2xl" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      );
+
+    case 'menu':
+      const setup = data.serviceSetup || { numberOfServices: 3, services: [] };
+      const numServicesRaw = setup.numberOfServices || 3;
+      const numServices = numServicesRaw === '6 or more' ? 6 : (parseInt(numServicesRaw) || 3);
+      const services = setup.services || [];
+      const promoRules = data.promotionRules || {};
+      const offerMenu = data.offerMenu || {};
+
+      const handleServiceChange = (index: number, field: string, val: any) => {
+        const nextServices = [...services];
+        if (!nextServices[index]) {
+          nextServices[index] = { serviceNumber: index + 1, deliveryMethods: [], suitableChannels: [] };
+        }
+        nextServices[index] = { ...nextServices[index], [field]: val };
+        onChange('serviceSetup', { ...setup, services: nextServices });
+      };
+
+      const handleServiceArrayToggle = (index: number, field: string, opt: string) => {
+        const nextServices = [...services];
+        if (!nextServices[index]) {
+          nextServices[index] = { serviceNumber: index + 1, deliveryMethods: [], suitableChannels: [] };
+        }
+        const current = nextServices[index][field] || [];
+        const next = current.includes(opt) ? current.filter((i: string) => i !== opt) : [...current, opt];
+        nextServices[index] = { ...nextServices[index], [field]: next };
+        onChange('serviceSetup', { ...setup, services: nextServices });
+      };
+
+      return (
+        <div className="space-y-12">
+          <div className="space-y-4">
+            <h2 className="text-4xl font-headline font-bold text-slate-900">Services, Products and Offer Menu</h2>
+            <p className="text-slate-500 text-lg leading-relaxed">
+              Tell us what your business offers, how your services are delivered, and how they should be presented in proposals, quotes, tenders, and marketplace responses.
+            </p>
+          </div>
+
+          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><ShoppingCart className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Service Setup</h3>
+            </div>
+            <CardContent className="p-8 space-y-10">
+              <div className="space-y-4">
+                <Label className="text-lg font-bold text-slate-800">How many main services, products, or offers would you like to add?</Label>
+                <div className="max-w-[240px]">
+                  <Select 
+                    value={numServicesRaw.toString()} 
+                    onValueChange={(val) => onChange('serviceSetup', { ...setup, numberOfServices: val })}
+                  >
+                    <SelectTrigger className="h-12 rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["1", "2", "3", "4", "5", "6 or more"].map(n => (
+                        <SelectItem key={n} value={n}>{n}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-8">
+                {Array.from({ length: numServices }).map((_, idx) => {
+                  const service = services[idx] || { deliveryMethods: [], suitableChannels: [] };
+                  return (
+                    <div key={idx} className="p-8 border border-slate-100 bg-slate-50/30 rounded-[2.5rem] space-y-8">
+                      <div className="flex justify-between items-center">
+                        <h4 className="font-bold text-slate-900 text-xl flex items-center gap-3">
+                          <Badge variant="secondary" className="w-8 h-8 rounded-full p-0 flex items-center justify-center font-bold text-primary bg-primary/10">{idx + 1}</Badge>
+                          Service {idx + 1}
+                        </h4>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label className="font-bold text-slate-700">Service/Product Name *</Label>
+                          <Input value={service.name || ''} onChange={(e) => handleServiceChange(idx, 'name', e.target.value)} placeholder="e.g. Civil Construction" className="h-12 rounded-xl bg-white" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="font-bold text-slate-700">Service Category</Label>
+                          <Select value={service.category || ''} onValueChange={(val) => handleServiceChange(idx, 'category', val)}>
+                            <SelectTrigger className="h-12 rounded-xl bg-white"><SelectValue placeholder="Select category" /></SelectTrigger>
+                            <SelectContent>
+                              {["Core service", "Add-on service", "Emergency service", "Retainer service", "Fixed-price package", "Premium service", "Entry-level service", "Grant-funded project/service", "Government-ready service", "Other"].map(cat => (
+                                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="font-bold text-slate-700">Description of Service *</Label>
+                        <Textarea value={service.description || ''} onChange={(e) => handleServiceChange(idx, 'description', e.target.value)} placeholder="What is this service and what does it involve?" className="min-h-[100px] rounded-2xl bg-white" />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label className="font-bold text-slate-700">What is included? *</Label>
+                          <Textarea value={service.inclusions || ''} onChange={(e) => handleServiceChange(idx, 'inclusions', e.target.value)} className="min-h-[80px] rounded-2xl bg-white" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="font-bold text-slate-700">What is excluded? *</Label>
+                          <Textarea value={service.exclusions || ''} onChange={(e) => handleServiceChange(idx, 'exclusions', e.target.value)} className="min-h-[80px] rounded-2xl bg-white" />
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <Label className="font-bold text-slate-700">How is this service delivered? *</Label>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {["In person", "Remote", "Hybrid", "On site", "Online", "Phone/video", "Depends on project"].map(method => (
+                            <div key={method} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${service.deliveryMethods?.includes(method) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleServiceArrayToggle(idx, 'deliveryMethods', method)}>
+                              <Checkbox id={`delivery-${idx}-${method}`} checked={service.deliveryMethods?.includes(method)} onCheckedChange={() => {}} />
+                              <Label htmlFor={`delivery-${idx}-${method}`} className="text-xs font-medium cursor-pointer">{method}</Label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label className="font-bold text-slate-700">Pricing Method *</Label>
+                          <Select value={service.pricingMethod || ''} onValueChange={(val) => handleServiceChange(idx, 'pricingMethod', val)}>
+                            <SelectTrigger className="h-12 rounded-xl bg-white"><SelectValue placeholder="Select method" /></SelectTrigger>
+                            <SelectContent>
+                              {["Hourly rate", "Daily rate", "Fixed fee", "Package price", "Quote after inspection", "Schedule of rates", "Retainer/subscription", "Project-based pricing", "Cost-plus", "Unsure"].map(opt => (
+                                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="font-bold text-slate-700">Indicative Price</Label>
+                          <Input value={service.indicativePrice || ''} onChange={(e) => handleServiceChange(idx, 'indicativePrice', e.target.value)} placeholder="e.g. $150/hr or $2,000 fixed" className="h-12 rounded-xl bg-white" />
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <Label className="font-bold text-slate-700">Which opportunity channels is this suitable for? *</Label>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                          {["Government tenders", "Private tenders", "Grants", "Supplier registrations", "Marketplace leads", "Direct proposals", "Quote requests", "Unsure"].map(ch => (
+                            <div key={ch} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${service.suitableChannels?.includes(ch) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleServiceArrayToggle(idx, 'suitableChannels', ch)}>
+                              <Checkbox id={`ch-${idx}-${ch}`} checked={service.suitableChannels?.includes(ch)} onCheckedChange={() => {}} />
+                              <Label htmlFor={`ch-${idx}-${ch}`} className="text-xs font-medium cursor-pointer">{ch}</Label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {numServicesRaw === '6 or more' && (
+                  <div className="space-y-2 pt-4">
+                    <Label className="font-bold text-slate-700">Additional Services Notes</Label>
+                    <Textarea value={setup.additionalServicesNotes || ''} onChange={(e) => onChange('serviceSetup', { ...setup, additionalServicesNotes: e.target.value })} placeholder="List any other services here..." className="min-h-[120px] rounded-2xl" />
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><TargetIcon className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Service Promotion Rules</h3>
+            </div>
+            <CardContent className="p-8 space-y-6">
+              <div className="space-y-2">
+                <Label className="font-bold text-slate-700">Which services are most profitable or strategically important?</Label>
+                <Textarea value={promoRules.profitableOrStrategicServices || ''} onChange={(e) => onChange('promotionRules', { ...promoRules, profitableOrStrategicServices: e.target.value })} className="min-h-[100px] rounded-2xl" />
+              </div>
+              <div className="space-y-2">
+                <Label className="font-bold text-slate-700">Which services should we avoid promoting unless specifically approved?</Label>
+                <Textarea value={promoRules.servicesToAvoid || ''} onChange={(e) => onChange('promotionRules', { ...promoRules, servicesToAvoid: e.target.value })} className="min-h-[100px] rounded-2xl" />
+              </div>
+              <div className="space-y-2">
+                <Label className="font-bold text-slate-700">Are there services that require scoping or extra approval before quoting?</Label>
+                <Textarea value={promoRules.servicesNeedingScoping || ''} onChange={(e) => onChange('promotionRules', { ...promoRules, servicesNeedingScoping: e.target.value })} className="min-h-[100px] rounded-2xl" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><Sparkles className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Offer Menu</h3>
+            </div>
+            <CardContent className="p-8 space-y-6">
+              <div className="space-y-4">
+                <Label className="font-bold text-slate-800">Do you have existing service packages or bundles?</Label>
+                <RadioGroup value={offerMenu.hasPackages || ''} onValueChange={(val) => onChange('offerMenu', { ...offerMenu, hasPackages: val })} className="flex gap-6">
+                  {["Yes", "No", "Some", "Unsure"].map(opt => (
+                    <div key={opt} className="flex items-center space-x-2">
+                      <RadioGroupItem value={opt} id={`pkg-${opt}`} />
+                      <Label htmlFor={`pkg-${opt}`}>{opt}</Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+              {(offerMenu.hasPackages === 'Yes' || offerMenu.hasPackages === 'Some') && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                  <Label className="font-bold text-slate-700">Provide package details (Names, Inclusions, Pricing)</Label>
+                  <Textarea value={offerMenu.packageDetails || ''} onChange={(e) => onChange('offerMenu', { ...offerMenu, packageDetails: e.target.value })} className="min-h-[120px] rounded-2xl" />
+                </div>
+              )}
+              <div className="space-y-4 pt-4">
+                <Label className="font-bold text-slate-800">Would you like help packaging your services into clearer offers?</Label>
+                <RadioGroup value={offerMenu.wantsPackagingHelp || ''} onValueChange={(val) => onChange('offerMenu', { ...offerMenu, wantsPackagingHelp: val })} className="flex flex-wrap gap-6">
+                  {["Yes", "No", "Maybe", "Please recommend"].map(opt => (
+                    <div key={opt} className="flex items-center space-x-2">
+                      <RadioGroupItem value={opt} id={`help-${opt}`} />
+                      <Label htmlFor={`help-${opt}`}>{opt}</Label>
+                    </div>
+                  ))}
+                </RadioGroup>
               </div>
             </CardContent>
           </Card>
