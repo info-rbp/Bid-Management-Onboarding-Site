@@ -8,7 +8,6 @@ import {
   LayoutDashboard, 
   FileText, 
   Settings, 
-  Bell, 
   Plus, 
   Search,
   Clock,
@@ -66,10 +65,6 @@ export default function DashboardPage() {
             <Input placeholder="Search bids, documents..." className="pl-10 bg-[#F1F5F9] border-none" />
           </div>
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
-            </Button>
             <div className="w-10 h-10 rounded-full bg-accent text-white flex items-center justify-center font-bold">
               JD
             </div>
