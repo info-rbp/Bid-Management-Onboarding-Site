@@ -67,7 +67,7 @@ export default function Home() {
             Bid Management Services provided by Remote Business Partner
           </p>
           <div className="flex gap-6">
-            <Link href="#" className="text-sm font-medium text-muted-foreground hover:text-primary">Terms</Link>
+            <Link href="/terms" className="text-sm font-medium text-muted-foreground hover:text-primary">Terms</Link>
             <Link href="#" className="text-sm font-medium text-muted-foreground hover:text-primary">Privacy</Link>
           </div>
         </div>
