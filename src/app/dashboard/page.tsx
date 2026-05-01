@@ -96,9 +96,9 @@ export default function DashboardPage() {
             <StatCard icon={<ClipboardList className="text-purple-500" />} label="Onboarding Status" value="85%" trend="Almost complete" />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 gap-8">
             {/* Active Bids Table */}
-            <Card className="lg:col-span-2 rounded-2xl border-none shadow-sm overflow-hidden">
+            <Card className="rounded-2xl border-none shadow-sm overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-lg">Recent Tender Activity</CardTitle>
@@ -124,24 +124,6 @@ export default function DashboardPage() {
                       <BidRow name="School District Facility Management" status="Completed" date="Oct 15, 2023" prob="N/A" won />
                     </tbody>
                   </table>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Workspace Links */}
-            <Card className="rounded-2xl border-none shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg">Google Workspace</CardTitle>
-                <CardDescription>Automated shortcuts to your resources.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <WorkspaceLink title="Shared Bid Folder" desc="Cloud storage for assets" />
-                <WorkspaceLink title="Tender Calendar" desc="Deadlines & milestones" />
-                <WorkspaceLink title="Team Workspace" desc="Collaborative docs" />
-                <div className="pt-4 border-t">
-                  <Button variant="outline" className="w-full gap-2 rounded-xl h-11 border-2">
-                    Manage Integrations <Settings className="w-4 h-4" />
-                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -194,17 +176,5 @@ function BidRow({ name, status, date, prob, won = false }: { name: string, statu
         <span className="font-medium">{prob}</span>
       </td>
     </tr>
-  );
-}
-
-function WorkspaceLink({ title, desc }: { title: string, desc: string }) {
-  return (
-    <div className="flex items-center justify-between p-4 rounded-xl bg-[#F8FAFC] border border-border/50 hover:border-primary/30 transition-all cursor-pointer group">
-      <div>
-        <h4 className="font-bold text-sm mb-0.5">{title}</h4>
-        <p className="text-xs text-muted-foreground">{desc}</p>
-      </div>
-      <ExternalLink className="w-4 h-4 text-muted-foreground group-hover:text-primary" />
-    </div>
   );
 }
