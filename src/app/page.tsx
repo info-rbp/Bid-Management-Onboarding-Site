@@ -13,8 +13,19 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col font-body">
-      <header className="px-6 lg:px-20 h-20 flex items-center justify-center border-b bg-white/50 backdrop-blur-md sticky top-0 z-50">
-        <Logo />
+      <header className="px-6 lg:px-20 h-20 flex items-center justify-between border-b bg-white/50 backdrop-blur-md sticky top-0 z-50">
+        <div className="flex-1">
+          <Logo />
+        </div>
+        <nav className="hidden md:flex items-center gap-8">
+          <Link href="/onboarding-process" className="text-sm font-semibold text-muted-foreground hover:text-primary transition-colors whitespace-nowrap">Onboarding Process</Link>
+          <Link href="/document-requirements" className="text-sm font-semibold text-muted-foreground hover:text-primary transition-colors whitespace-nowrap">Documents Requirements</Link>
+          <Link href="/faqs" className="text-sm font-semibold text-muted-foreground hover:text-primary transition-colors whitespace-nowrap">FAQ's</Link>
+          <Link href="/next-steps" className="text-sm font-semibold text-muted-foreground hover:text-primary transition-colors whitespace-nowrap">Next Steps</Link>
+        </nav>
+        <div className="flex-1 hidden md:flex justify-end">
+          {/* Empty div to balance the justify-between layout */}
+        </div>
       </header>
 
       <main className="flex-1">
