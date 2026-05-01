@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from 'react';
@@ -44,8 +43,6 @@ export default function DashboardPage() {
         </div>
         <nav className="flex-1 px-4 space-y-1">
           <NavItem icon={<LayoutDashboard className="w-5 h-5" />} label="Dashboard" active />
-          <NavItem icon={<ClipboardList className="w-5 h-5" />} label="Onboarding" />
-          <NavItem icon={<FileText className="w-5 h-5" />} label="Bids & Tenders" />
           <NavItem icon={<Settings className="w-5 h-5" />} label="Settings" />
         </nav>
         
