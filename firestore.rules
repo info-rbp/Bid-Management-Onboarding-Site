@@ -23,8 +23,8 @@ service cloud.firestore {
      *    on a 'subscriptionStatus' of 'active' found in the user's profile.
      * 3. Submission Locking: Once an onboarding pack is marked as 'submitted', it is 
      *    locked from further client edits unless explicitly 'adminReopened' by an administrator.
-     * 4. Listing Restrictions: Public listing of users or submissions is strictly prohibited 
-     *    to prevent data exposure. Users typically access their data via direct document IDs.
+     * 4. Listing Restrictions: Users can list their own data by filtering by their UID. 
+     *    Public listing is strictly prohibited.
      */
 
     // --- Helper Functions ---
@@ -64,9 +64,6 @@ service cloud.firestore {
     /**
      * @description Rules for the User profile collection.
      * @path /users/{userId}
-     * @allow (create) if the user is creating their own profile.
-     * @deny (list) if a non-admin tries to enumerate users.
-     * @principle Path-based ownership and self-creation logic.
      */
     match /users/{userId} {
       allow get: if isOwner(userId) || isAdmin();
@@ -77,15 +74,12 @@ service cloud.firestore {
     }
 
     /**
-     * @description Rules for onboarding submissions containing draft and final responses.
+     * @description Rules for onboarding submissions.
      * @path /onboardingSubmissions/{submissionId}
-     * @allow (update) if the owner is editing a draft that isn't locked.
-     * @deny (create) if the user does not have an active subscription.
-     * @principle Denormalized ownership check and state-based write locking.
      */
     match /onboardingSubmissions/{submissionId} {
       allow get: if isOwner(resource.data.userId) || isAdmin();
-      allow list: if isAdmin();
+      allow list: if isSignedIn() && (isAdmin() || (resource != null && resource.data.userId == request.auth.uid));
       allow create: if isSignedIn() && isOwner(request.resource.data.userId) && isSubscriptionActive();
       allow update: if isExistingOwner(resource.data.userId) && isSubmissionEditable(resource.data) && request.resource.data.userId == resource.data.userId;
       allow delete: if isAdmin();
@@ -94,13 +88,10 @@ service cloud.firestore {
     /**
      * @description Rules for uploaded document metadata.
      * @path /uploadedDocuments/{documentId}
-     * @allow (create) if the userId in the data matches the authenticated user.
-     * @deny (update) if trying to change the owner of a document.
-     * @principle Relational integrity and ownership enforcement.
      */
     match /uploadedDocuments/{documentId} {
       allow get: if isOwner(resource.data.userId) || isAdmin();
-      allow list: if isAdmin();
+      allow list: if isSignedIn() && (isAdmin() || (resource != null && resource.data.userId == request.auth.uid));
       allow create: if isSignedIn() && isOwner(request.resource.data.userId) && isSubscriptionActive();
       allow update: if isExistingOwner(resource.data.userId) && request.resource.data.userId == resource.data.userId;
       allow delete: if isExistingOwner(resource.data.userId) || isAdmin();
@@ -109,39 +100,11 @@ service cloud.firestore {
     /**
      * @description Rules for the administrative roles collection.
      * @path /admins/{adminId}
-     * @allow (get) for signed-in users to verify permissions.
-     * @deny (write) for all client-side requests.
-     * @principle Database-Backed Access Control (DBAC).
      */
     match /admins/{adminId} {
       allow get: if isSignedIn();
       allow list: if isAdmin();
-      allow create, update, delete: if false; // Managed via Admin SDK or Console only.
+      allow create, update, delete: if false;
     }
   }
 }
-
-/**
- * STEP 1: ANALYSIS & SYNTHESIS
- * 
- * 1. Intent Adoption: 
- * The reasoning emphasizes "Authorization Independence" and "DBAC". It explicitly links 
- * subscription status to the ability to "access onboarding".
- * 
- * 2. Access Control Patterns:
- * - /users/{userId}: Ownership/Self-Creation. 
- *   The path itself defines the owner.
- * - /onboardingSubmissions: Ownership (via field). 
- *   Uses denormalized 'userId' for QAPs and efficient rules.
- * - /uploadedDocuments: Ownership (via field). 
- *   Uses denormalized 'userId'.
- * - /admins: Roles (DBAC). 
- *   Existence check for global privileges.
- * 
- * 3. Specific Logic:
- * - Subscription Check: Creation of submissions and document metadata requires a 
- *   look-up to the User document to verify 'active' status.
- * - Lock Mechanism: Update permissions on submissions are revoked if 'status' is 
- *   'submitted' unless 'adminReopened' is true.
- * - Relational Integrity: On create/update, the internal 'userId' must match the auth UID.
- */
