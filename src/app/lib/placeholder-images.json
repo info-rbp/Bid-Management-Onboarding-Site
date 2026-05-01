@@ -1,0 +1,23 @@
+
+{
+  "placeholderImages": [
+    {
+      "id": "hero-image",
+      "description": "Professional business environment showing teamwork and efficiency.",
+      "imageUrl": "https://picsum.photos/seed/bidflow1/1200/800",
+      "imageHint": "business office"
+    },
+    {
+      "id": "payment-secure",
+      "description": "Secure payment processing illustration.",
+      "imageUrl": "https://picsum.photos/seed/bidflow2/600/400",
+      "imageHint": "secure payment"
+    },
+    {
+      "id": "google-workspace",
+      "description": "Modern digital workspace and integration.",
+      "imageUrl": "https://picsum.photos/seed/bidflow3/600/400",
+      "imageHint": "digital workspace"
+    }
+  ]
+}
