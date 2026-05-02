@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -9,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useAuth, useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, addDoc } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -62,7 +62,12 @@ import {
   Search,
   UserPlus,
   Megaphone,
-  AlertOctagon
+  AlertOctagon,
+  Trash2,
+  X,
+  FileUp,
+  Files,
+  FileSearch
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -79,6 +84,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 const STEPS = [
   { id: 'welcome', title: '1. Welcome & Expectations', icon: Zap },
@@ -138,6 +144,118 @@ const HIGH_RISK_AUTHORITY_ITEMS = [
   "Provide pricing",
   "Accept terms or contract conditions",
   "Register on paid platforms"
+];
+
+// Document categories for Step 19
+const DOCUMENT_CATEGORIES = [
+  {
+    id: 'business',
+    title: '1. Business Profile and Brand',
+    icon: Building2,
+    fields: [
+      { id: 'capabilityStatement', label: 'Capability statement' },
+      { id: 'businessProfile', label: 'Business profile or brochure' },
+      { id: 'logoFiles', label: 'Logo files' },
+      { id: 'brandAssets', label: 'Brand assets' },
+      { id: 'styleGuide', label: 'Style guide' },
+      { id: 'marketingCopy', label: 'Website or marketing copy' },
+    ]
+  },
+  {
+    id: 'compliance',
+    title: '2. Compliance and Insurance',
+    icon: ShieldCheck,
+    fields: [
+      { id: 'publicLiability', label: 'Public liability insurance' },
+      { id: 'professionalIndemnity', label: 'Professional indemnity insurance' },
+      { id: 'workersComp', label: 'Workers compensation insurance' },
+      { id: 'cyberInsurance', label: 'Cyber insurance' },
+      { id: 'motorVehicle', label: 'Motor vehicle insurance' },
+      { id: 'licences', label: 'Licences' },
+      { id: 'certifications', label: 'Certifications' },
+      { id: 'staffChecks', label: 'Staff checks (Police, WWCC, etc)' },
+      { id: 'policiesProcedures', label: 'Policies and procedures' },
+    ]
+  },
+  {
+    id: 'team',
+    title: '3. Team and Capability',
+    icon: Users,
+    fields: [
+      { id: 'staffCvs', label: 'Staff CVs' },
+      { id: 'staffBios', label: 'Staff bios' },
+      { id: 'qualifications', label: 'Qualifications' },
+      { id: 'tickets', label: 'Tickets' },
+      { id: 'trainingCertificates', label: 'Training certificates' },
+      { id: 'orgChart', label: 'Organisational chart' },
+    ]
+  },
+  {
+    id: 'proof',
+    title: '4. Case Studies and Proof',
+    icon: CheckCircle2,
+    fields: [
+      { id: 'projectExamples', label: 'Project examples' },
+      { id: 'caseStudies', label: 'Case studies' },
+      { id: 'photos', label: 'Photos' },
+      { id: 'beforeAfter', label: 'Before and after images' },
+      { id: 'testimonials', label: 'Testimonials' },
+      { id: 'reviews', label: 'Reviews' },
+      { id: 'referenceLetters', label: 'Reference letters' },
+      { id: 'completionCertificates', label: 'Completion certificates' },
+      { id: 'reports', label: 'Reports' },
+    ]
+  },
+  {
+    id: 'submissions',
+    title: '5. Previous Submissions and Feedback',
+    icon: FileStack,
+    fields: [
+      { id: 'previousTenders', label: 'Previous tenders' },
+      { id: 'previousGrants', label: 'Previous grants' },
+      { id: 'previousProposals', label: 'Previous proposals' },
+      { id: 'previousQuotes', label: 'Previous quotes' },
+      { id: 'supplierRegistrations', label: 'Supplier registrations' },
+      { id: 'buyerFeedback', label: 'Buyer feedback' },
+      { id: 'grantFeedback', label: 'Grant feedback' },
+      { id: 'debriefNotes', label: 'Debrief notes' },
+    ]
+  },
+  {
+    id: 'pricing',
+    title: '6. Pricing and Commercial',
+    icon: DollarSign,
+    fields: [
+      { id: 'pricingSchedules', label: 'Pricing schedules' },
+      { id: 'rateCards', label: 'Rate cards' },
+      { id: 'packageLists', label: 'Package lists' },
+      { id: 'quoteTemplates', label: 'Quote templates' },
+      { id: 'termsConditions', label: 'Terms and conditions' },
+      { id: 'budgetTemplates', label: 'Budget templates' },
+      { id: 'grantBudgetDocs', label: 'Grant budget documents' },
+    ]
+  },
+  {
+    id: 'grantDocs',
+    title: '7. Grant Project Documents',
+    icon: Gift,
+    fields: [
+      { id: 'supplierQuotes', label: 'Supplier quotes' },
+      { id: 'projectBudgets', label: 'Project budgets' },
+      { id: 'supportLetters', label: 'Letters of support' },
+      { id: 'projectPlans', label: 'Project plans' },
+      { id: 'evidenceNeed', label: 'Evidence of need' },
+      { id: 'partnerDocuments', label: 'Partner documents' },
+    ]
+  },
+  {
+    id: 'other',
+    title: '8. Other Relevant Documents',
+    icon: Files,
+    fields: [
+      { id: 'otherDocuments', label: 'Other documents' },
+    ]
+  }
 ];
 
 export default function OnboardingStepPage() {
@@ -202,6 +320,11 @@ export default function OnboardingStepPage() {
             quoteThresholdAuthority: 'No',
             marketplaceAuthority: 'No'
           });
+        } else if (sid === 'library') {
+          setFormData({
+            documents: {},
+            acks: { docsConfirmed: false }
+          });
         } else {
           setFormData({});
         }
@@ -256,6 +379,10 @@ export default function OnboardingStepPage() {
 
       if ((data.quoteThresholdAuthority === 'Yes' || data.quoteThresholdAuthority === 'Maybe, to be discussed') && !data.quoteThresholdValue) {
         return "Please specify a maximum value threshold for quotes.";
+      }
+    } else if (sid === 'library') {
+      if (!data.acks?.docsConfirmed) {
+        return "Please confirm that you have uploaded available documents or marked them unavailable.";
       }
     }
     return null;
@@ -389,7 +516,7 @@ export default function OnboardingStepPage() {
           <div className="max-w-4xl mx-auto p-8 lg:p-12">
             <Card className="border-none shadow-xl shadow-slate-200/50 rounded-[2.5rem] overflow-hidden bg-white">
               <CardContent className="p-10 lg:p-14">
-                <StepContent stepId={stepId as string} data={formData} onChange={handleFieldChange} />
+                <StepContent stepId={stepId as string} data={formData} onChange={handleFieldChange} submissionId={submissionId} uid={user?.uid} />
               </CardContent>
             </Card>
             <div className="mt-10 flex justify-between items-center text-[11px] font-medium text-slate-400 px-6">
@@ -406,7 +533,9 @@ export default function OnboardingStepPage() {
   );
 }
 
-function StepContent({ stepId, data, onChange }: { stepId: string, data: any, onChange: (field: string, value: any) => void }) {
+function StepContent({ stepId, data, onChange, submissionId, uid }: { stepId: string, data: any, onChange: (field: string, value: any) => void, submissionId?: string | null, uid?: string }) {
+  const { toast } = useToast();
+  
   switch (stepId) {
     case 'authority': {
       return (
@@ -649,6 +778,267 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
                   <Label className="text-sm font-bold leading-snug cursor-pointer flex-1 text-slate-700 group-hover:text-slate-900">{ack.label} *</Label>
                 </div>
               ))}
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+    case 'library': {
+      const allFiles = Object.values(data.documents || {}).flatMap((doc: any) => doc.files || []);
+      const uploadedCount = allFiles.length;
+      const categoriesAnswered = Object.keys(data.documents || {}).length;
+      const lastFile = allFiles.length > 0 ? allFiles[allFiles.length - 1] : null;
+
+      const handleFileUpload = async (fieldId: string, categoryId: string, files: FileList | null) => {
+        if (!files || !submissionId || !uid) return;
+        
+        const storage = getStorage();
+        const uploadedFiles = [...(data.documents?.[fieldId]?.files || [])];
+
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          const fileName = `${Date.now()}_${file.name}`;
+          const storagePath = `onboardingUploads/${uid}/${submissionId}/${fieldId}/${fileName}`;
+          const fileRef = ref(storage, storagePath);
+
+          try {
+            const snapshot = await uploadBytes(fileRef, file);
+            const downloadUrl = await getDownloadURL(snapshot.ref);
+            
+            uploadedFiles.push({
+              id: fileName,
+              name: file.name,
+              size: file.size,
+              type: file.type,
+              url: downloadUrl,
+              path: storagePath,
+              category: categoryId,
+              field: fieldId,
+              uploadedAt: new Date().toISOString(),
+              notes: ''
+            });
+          } catch (error) {
+            console.error("Upload failed", error);
+            toast({ variant: "destructive", title: "Upload Failed", description: `Could not upload ${file.name}` });
+          }
+        }
+
+        const newDocs = { 
+          ...(data.documents || {}), 
+          [fieldId]: { 
+            ...(data.documents?.[fieldId] || {}), 
+            files: uploadedFiles 
+          } 
+        };
+        onChange('documents', newDocs);
+      };
+
+      const handleFileDelete = async (fieldId: string, fileId: string) => {
+        const fileToDelete = data.documents?.[fieldId]?.files?.find((f: any) => f.id === fileId);
+        if (!fileToDelete) return;
+
+        const storage = getStorage();
+        const fileRef = ref(storage, fileToDelete.path);
+
+        try {
+          await deleteObject(fileRef);
+          const newFiles = data.documents?.[fieldId]?.files?.filter((f: any) => f.id !== fileId);
+          const newDocs = { 
+            ...(data.documents || {}), 
+            [fieldId]: { 
+              ...(data.documents?.[fieldId] || {}), 
+              files: newFiles 
+            } 
+          };
+          onChange('documents', newDocs);
+          toast({ title: "File deleted" });
+        } catch (error) {
+          console.error("Delete failed", error);
+          toast({ variant: "destructive", title: "Delete Failed" });
+        }
+      };
+
+      const handleFileNoteChange = (fieldId: string, fileId: string, note: string) => {
+        const newFiles = data.documents?.[fieldId]?.files?.map((f: any) => 
+          f.id === fileId ? { ...f, notes: note } : f
+        );
+        const newDocs = { 
+          ...(data.documents || {}), 
+          [fieldId]: { 
+            ...(data.documents?.[fieldId] || {}), 
+            files: newFiles 
+          } 
+        };
+        onChange('documents', newDocs);
+      };
+
+      const handleStatusChange = (fieldId: string, status: string) => {
+        const newDocs = { 
+          ...(data.documents || {}), 
+          [fieldId]: { 
+            ...(data.documents?.[fieldId] || {}), 
+            status 
+          } 
+        };
+        onChange('documents', newDocs);
+      };
+
+      return (
+        <div className="space-y-12">
+          <div className="space-y-4">
+            <h2 className="text-4xl font-headline font-bold text-slate-900">Document Upload Library</h2>
+            <p className="text-slate-500 text-lg leading-relaxed">
+              Upload the documents we may need to build your profile, compliance checklist, and opportunity support library.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <Card className="bg-primary/5 border-primary/10 rounded-3xl p-6">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-primary text-white rounded-2xl"><Files className="w-5 h-5" /></div>
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase">Total Files</p>
+                  <p className="text-2xl font-bold text-primary">{uploadedCount}</p>
+                </div>
+              </div>
+            </Card>
+            <Card className="bg-amber-50 border-amber-100 rounded-3xl p-6">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-amber-500 text-white rounded-2xl"><AlertTriangle className="w-5 h-5" /></div>
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase">Missing Categories</p>
+                  <p className="text-2xl font-bold text-amber-600">{DOCUMENT_CATEGORIES.length - categoriesAnswered}</p>
+                </div>
+              </div>
+            </Card>
+            <Card className="bg-slate-50 border-slate-200 rounded-3xl p-6">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-slate-200 text-slate-600 rounded-2xl"><Clock className="w-5 h-5" /></div>
+                <div className="truncate">
+                  <p className="text-xs font-bold text-slate-500 uppercase">Last Upload</p>
+                  <p className="text-sm font-bold truncate">{lastFile?.name || 'None'}</p>
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          <Accordion type="single" collapsible className="space-y-6">
+            {DOCUMENT_CATEGORIES.map((cat) => (
+              <AccordionItem key={cat.id} value={cat.id} className="border-none">
+                <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                  <AccordionTrigger className="hover:no-underline px-8 py-6 bg-white data-[state=open]:bg-slate-50/50">
+                    <div className="flex items-center gap-4">
+                      <div className="p-2.5 bg-slate-100 text-slate-600 rounded-xl group-data-[state=open]:bg-primary/10 group-data-[state=open]:text-primary transition-colors">
+                        <cat.icon className="w-5 h-5" />
+                      </div>
+                      <span className="text-lg font-bold text-slate-900">{cat.title}</span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-8 pb-8 pt-4 space-y-10">
+                    {cat.fields.map((field) => {
+                      const fieldData = data.documents?.[field.id] || { files: [], status: 'pending' };
+                      return (
+                        <div key={field.id} className="space-y-4 border-b border-slate-100 last:border-0 pb-8 last:pb-0 pt-4 first:pt-0">
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div className="space-y-1">
+                              <Label className="text-base font-bold text-slate-800">{field.label}</Label>
+                              {fieldData.files.length === 0 && fieldData.status === 'pending' && (
+                                <p className="text-xs text-amber-600 flex items-center gap-1 font-medium">
+                                  <AlertCircle className="w-3 h-3" /> Recommended
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <Select value={fieldData.status} onValueChange={(v) => handleStatusChange(field.id, v)}>
+                                <SelectTrigger className="w-44 h-10 rounded-xl text-xs font-medium border-slate-200">
+                                  <SelectValue placeholder="Status" />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-xl">
+                                  <SelectItem value="pending">Upload Pending</SelectItem>
+                                  <SelectItem value="available">Available & Current</SelectItem>
+                                  <SelectItem value="not_available">Not available yet</SelectItem>
+                                  <SelectItem value="needs_updating">Needs updating</SelectItem>
+                                  <SelectItem value="na">Not applicable</SelectItem>
+                                  <SelectItem value="unsure">Unsure</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <div className="relative">
+                                <input 
+                                  type="file" 
+                                  id={`upload-${field.id}`} 
+                                  className="sr-only" 
+                                  multiple 
+                                  onChange={(e) => handleFileUpload(field.id, cat.id, e.target.files)} 
+                                />
+                                <Button asChild variant="outline" size="sm" className="h-10 px-5 rounded-xl border-2 hover:bg-slate-50 cursor-pointer">
+                                  <label htmlFor={`upload-${field.id}`} className="cursor-pointer gap-2">
+                                    <UploadCloud className="w-4 h-4" /> Upload
+                                  </label>
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {fieldData.files.length > 0 && (
+                            <div className="grid grid-cols-1 gap-3 pt-2">
+                              {fieldData.files.map((file: any) => (
+                                <div key={file.id} className="flex flex-col gap-2 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-100">
+                                        <FileText className="w-4 h-4 text-primary" />
+                                      </div>
+                                      <div>
+                                        <p className="text-sm font-bold truncate max-w-[200px]">{file.name}</p>
+                                        <p className="text-[10px] text-slate-500 uppercase font-medium">
+                                          {Math.round(file.size / 1024)} KB • {new Date(file.uploadedAt).toLocaleDateString()}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <Button variant="ghost" size="icon" onClick={() => handleFileDelete(field.id, file.id)} className="h-8 w-8 text-slate-400 hover:text-destructive rounded-lg">
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                  <Input 
+                                    value={file.notes || ''} 
+                                    onChange={(e) => handleFileNoteChange(field.id, file.id, e.target.value)}
+                                    placeholder="Add notes to this file..." 
+                                    className="h-8 text-[11px] rounded-lg bg-white border-slate-200"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </AccordionContent>
+                </Card>
+              </AccordionItem>
+            ))}
+          </Accordion>
+
+          <Card className="border-[3px] border-slate-900 rounded-[2.5rem] shadow-2xl overflow-hidden bg-white mt-12">
+            <div className="p-10 border-b bg-slate-900 text-white flex items-center gap-4">
+              <div className="p-3 bg-white/10 rounded-2xl"><ShieldCheck className="w-8 h-8 text-accent" /></div>
+              <div className="space-y-1">
+                <h3 className="text-2xl font-bold">Document Confirmation</h3>
+                <p className="text-slate-400 text-sm">Please confirm your upload status.</p>
+              </div>
+            </div>
+            <CardContent className="p-10">
+              <div 
+                className={`flex items-start space-x-6 p-8 rounded-[2rem] border-2 transition-all cursor-pointer group ${data.acks?.docsConfirmed ? 'border-primary bg-primary/5 shadow-inner' : 'border-slate-100 hover:border-slate-200'}`}
+                onClick={() => {
+                  const currentAcks = data.acks || {};
+                  onChange('acks', { ...currentAcks, docsConfirmed: !currentAcks.docsConfirmed });
+                }}
+              >
+                <Checkbox checked={data.acks?.docsConfirmed} onCheckedChange={() => {}} className="mt-1 w-6 h-6 rounded-lg" />
+                <Label className="text-sm font-bold leading-snug cursor-pointer flex-1 text-slate-700 group-hover:text-slate-900">
+                  I have uploaded the documents currently available to me, or marked unavailable documents where relevant. *
+                </Label>
+              </div>
             </CardContent>
           </Card>
         </div>
