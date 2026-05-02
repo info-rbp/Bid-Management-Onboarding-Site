@@ -53,7 +53,9 @@ import {
   History,
   AlertTriangle,
   UploadCloud,
-  ArrowRight
+  ArrowRight,
+  Handshake,
+  Lightbulb
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -168,6 +170,22 @@ const BUYER_TYPES = [
   "Not-for-profits",
   "Small business buyers",
   "Other"
+];
+
+const FUNDING_USES = [
+  "Equipment", "Technology", "Staff training", "Expansion", "Community project", 
+  "Sustainability", "Innovation", "Export", "Marketing", "Accessibility", 
+  "Safety upgrades", "Other"
+];
+
+const GRANT_OUTCOMES = [
+  "Create jobs", "Improve productivity", "Increase revenue", "Reduce risk", 
+  "Improve safety", "Deliver community benefit", "Support regional development", 
+  "Improve accessibility", "Improve environmental outcomes", "Other"
+];
+
+const GRANT_CONTRIBUTIONS = [
+  "Cash", "Labour", "Equipment", "In-kind support", "Partner contribution", "Unsure"
 ];
 
 export default function OnboardingStepPage() {
@@ -309,6 +327,11 @@ export default function OnboardingStepPage() {
             targetOpportunities: { targetBuyers: [] },
             readinessCheck: {},
             supplierSetup: {}
+          });
+        } else if (sid === 'grants') {
+          setFormData({
+            grantInterest: '',
+            projectSetup: { numberOfProjects: '1', projects: [] }
           });
         } else {
           setFormData({});
@@ -514,6 +537,22 @@ export default function OnboardingStepPage() {
       if (!read.submissionApprover) return "Please specify who approves final tender submissions.";
       if (!read.contractTermsApprover) return "Please specify who approves contract terms.";
       if (!read.risksToWatch) return "Please specify tender risks to watch for.";
+    }
+
+    if (sid === 'grants') {
+      if (!data.grantInterest) return "Please answer the grant interest question.";
+      if (data.grantInterest === 'Yes' || data.grantInterest === 'Maybe, please advise') {
+        const setup = data.projectSetup || {};
+        const numRaw = setup.numberOfProjects || '1';
+        const num = numRaw === '4 or more' ? 4 : parseInt(numRaw);
+        const projects = setup.projects || [];
+        for (let i = 0; i < num; i++) {
+          const p = projects[i];
+          if (!p?.projectName || !p?.fundingUse?.length || !p?.whyNeeded || !p?.beneficiaries || !p?.totalCost || !p?.fundingRequested || !p?.sustainability) {
+            return `Please complete all required fields for Grant Project ${i + 1}.`;
+          }
+        }
+      }
     }
 
     return null;
@@ -759,7 +798,7 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
     case 'triage': {
       const hasOpp = data.hasLiveOpportunity;
       const details = data.opportunityDetails || { supportRequired: [] };
-      const handleDetailsChange = (field: string, val: any) => onChange('opportunityDetails', { ...details, [field]: val });
+      const handleDetailsChange = (field: string, val: any) => handleFieldChange('opportunityDetails', { ...details, [field]: val });
       const handleSupportToggle = (opt: string) => {
         const current = details.supportRequired || [];
         const next = current.includes(opt) ? current.filter((i: string) => i !== opt) : [...current, opt];
@@ -1526,6 +1565,150 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
               )}
             </CardContent>
           </Card>
+        </div>
+      );
+    }
+
+    case 'grants': {
+      const grantInterest = data.grantInterest || '';
+      const setup = data.projectSetup || { numberOfProjects: '1', projects: [] };
+      const numProjectsRaw = setup.numberOfProjects || '1';
+      const numProjects = numProjectsRaw === '4 or more' ? 4 : (parseInt(numProjectsRaw) || 1);
+      
+      const handleProjectChange = (i: number, f: string, v: any) => {
+        const next = [...(setup.projects || [])];
+        if (!next[i]) next[i] = { projectNumber: i + 1, fundingUse: [], contribution: [], outcomes: [] };
+        next[i] = { ...next[i], [f]: v };
+        onChange('projectSetup', { ...setup, projects: next });
+      };
+
+      const handleMultiToggle = (i: number, group: 'fundingUse' | 'contribution' | 'outcomes', val: string) => {
+        const next = [...(setup.projects || [])];
+        if (!next[i]) next[i] = { projectNumber: i + 1, fundingUse: [], contribution: [], outcomes: [] };
+        const current = next[i][group] || [];
+        const nextGroup = current.includes(val) ? current.filter((v: string) => v !== val) : [...current, val];
+        next[i] = { ...next[i], [group]: nextGroup };
+        onChange('projectSetup', { ...setup, projects: next });
+      };
+
+      return (
+        <div className="space-y-12">
+          <div className="space-y-4">
+            <h2 className="text-4xl font-headline font-bold text-slate-900">Grants</h2>
+            <p className="text-slate-500 text-lg leading-relaxed">
+              Complete this section if you want help identifying, preparing, or applying for grants. Grant applications usually need a clear project idea, need, budget, outcomes, evidence, and sustainability plan.
+            </p>
+          </div>
+
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><Gift className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Grant Interest</h3>
+            </div>
+            <CardContent className="p-8 space-y-6">
+              <div className="space-y-4">
+                <Label className="text-lg font-bold">Are you interested in grant funding support? *</Label>
+                <RadioGroup value={grantInterest} onValueChange={(v) => onChange('grantInterest', v)} className="flex flex-wrap gap-6">
+                  {["Yes", "No", "Maybe, please advise"].map(opt => (
+                    <div key={opt} className="flex items-center space-x-2">
+                      <RadioGroupItem value={opt} id={`grant-${opt}`} />
+                      <Label htmlFor={`grant-${opt}`}>{opt}</Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+              {grantInterest === 'No' && (
+                <Alert className="bg-slate-50 border-slate-200">
+                  <Info className="h-4 w-4" />
+                  <AlertDescription>Grant module skipped. You can continue to the next step.</AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+
+          {(grantInterest === 'Yes' || grantInterest === 'Maybe, please advise') && (
+            <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
+              <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+                <div className="p-2 bg-primary/10 rounded-xl"><Lightbulb className="w-5 h-5 text-primary" /></div>
+                <h3 className="text-xl font-bold text-slate-900">Grant Project Setup</h3>
+              </div>
+              <CardContent className="p-8 space-y-10">
+                <div className="space-y-4">
+                  <Label className="text-lg font-bold">How many grant project ideas would you like to add?</Label>
+                  <div className="max-w-[240px]">
+                    <Select value={numProjectsRaw} onValueChange={(v) => onChange('projectSetup', { ...setup, numberOfProjects: v })}>
+                      <SelectTrigger className="h-12 rounded-xl"><SelectValue /></SelectTrigger>
+                      <SelectContent>{["1", "2", "3", "4 or more"].map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-10">
+                  {Array.from({ length: numProjects }).map((_, i) => {
+                    const project = (setup.projects || [])[i] || {};
+                    return (
+                      <div key={i} className="p-8 border border-slate-100 bg-slate-50/30 rounded-[2.5rem] space-y-8">
+                        <h4 className="font-bold text-xl flex items-center gap-3">
+                          <Badge variant="secondary" className="w-8 h-8 rounded-full p-0 flex items-center justify-center font-bold text-primary bg-primary/10">{i + 1}</Badge>
+                          Grant Project {i + 1}
+                        </h4>
+                        
+                        <div className="space-y-6">
+                          <div className="space-y-2">
+                            <Label className="font-bold">Project name or idea *</Label>
+                            <Input value={project.projectName || ''} onChange={(e) => handleProjectChange(i, 'projectName', e.target.value)} placeholder="e.g. Regional Manufacturing Expansion" className="h-12 rounded-xl bg-white" />
+                          </div>
+
+                          <div className="space-y-4">
+                            <Label className="font-bold">What would the funding be used for? *</Label>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                              {FUNDING_USES.map(opt => (
+                                <div key={opt} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${project.fundingUse?.includes(opt) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleMultiToggle(i, 'fundingUse', opt)}>
+                                  <Checkbox checked={project.fundingUse?.includes(opt)} onCheckedChange={() => {}} />
+                                  <Label className="text-xs cursor-pointer">{opt}</Label>
+                                </div>
+                              ))}
+                            </div>
+                            {project.fundingUse?.includes('Other') && (
+                              <Input value={project.otherFundingUse || ''} onChange={(e) => handleProjectChange(i, 'otherFundingUse', e.target.value)} placeholder="Please specify..." className="h-12 rounded-xl bg-white mt-2" />
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-2"><Label className="font-bold">Why is this project needed? *</Label><Textarea value={project.whyNeeded || ''} onChange={(e) => handleProjectChange(i, 'whyNeeded', e.target.value)} className="min-h-[100px] rounded-2xl bg-white" /></div>
+                            <div className="space-y-2"><Label className="font-bold">Who benefits from the project? *</Label><Textarea value={project.beneficiaries || ''} onChange={(e) => handleProjectChange(i, 'beneficiaries', e.target.value)} className="min-h-[100px] rounded-2xl bg-white" /></div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="space-y-2"><Label className="font-bold">Estimated total cost *</Label><Input value={project.totalCost || ''} onChange={(e) => handleProjectChange(i, 'totalCost', e.target.value)} placeholder="$0.00" className="h-12 rounded-xl bg-white" /></div>
+                            <div className="space-y-2"><Label className="font-bold">Funding requested *</Label><Input value={project.fundingRequested || ''} onChange={(e) => handleProjectChange(i, 'fundingRequested', e.target.value)} placeholder="$0.00" className="h-12 rounded-xl bg-white" /></div>
+                            <div className="space-y-2"><Label className="font-bold">Location</Label><Input value={project.location || ''} onChange={(e) => handleProjectChange(i, 'location', e.target.value)} className="h-12 rounded-xl bg-white" /></div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <Label className="font-bold">Expected outcomes *</Label>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                              {GRANT_OUTCOMES.map(opt => (
+                                <div key={opt} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${project.outcomes?.includes(opt) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleMultiToggle(i, 'outcomes', opt)}>
+                                  <Checkbox checked={project.outcomes?.includes(opt)} onCheckedChange={() => {}} />
+                                  <Label className="text-xs cursor-pointer">{opt}</Label>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="font-bold">What happens after grant funding ends? *</Label>
+                            <Textarea value={project.sustainability || ''} onChange={(e) => handleProjectChange(i, 'sustainability', e.target.value)} placeholder="Describe project sustainability..." className="min-h-[80px] rounded-2xl bg-white" />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       );
     }
