@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -38,36 +39,20 @@ import {
   Scale,
   Loader2,
   HelpCircle,
-  MapPin,
-  Sparkles,
-  FileStack,
-  MessageSquareQuote,
-  Target as TargetIcon,
-  Flag,
-  SlidersHorizontal,
-  Plus,
-  Info,
-  ShieldAlert,
-  Wallet,
-  Monitor,
-  FileCheck,
-  History,
   AlertTriangle,
   UploadCloud,
-  ArrowRight,
-  Handshake,
-  Lightbulb,
+  ShieldAlert,
   Clock,
-  ShieldQuestion,
-  Search,
-  UserPlus,
-  Megaphone,
-  AlertOctagon,
   Trash2,
   X,
-  FileUp,
   Files,
-  FileSearch
+  FileStack,
+  Flag,
+  UserCheck,
+  ShieldQuestion,
+  FileSearch,
+  Handshake,
+  Star
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -80,11 +65,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
 
 const STEPS = [
   { id: 'welcome', title: '1. Welcome & Expectations', icon: Zap },
@@ -104,10 +89,33 @@ const STEPS = [
   { id: 'marketplace', title: '15. Marketplace Strategy', icon: BarChart3, conditional: 'marketplace' },
   { id: 'outreach', title: '16. Outreach Strategy', icon: Send, conditional: 'directProposal' },
   { id: 'quote', title: '17. Quote Support', icon: MessageSquare, conditional: 'quoteRequests' },
-  { id: 'workflow', title: '18. Communication, Review and Workflow Rules', icon: MessageSquare },
+  { id: 'workflow', title: '18. Workflow Rules', icon: MessageSquare },
   { id: 'library', title: '19. Document Upload Library', icon: Library },
-  { id: 'authority', title: '20. Authority to Act and Approval Matrix', icon: Scale },
+  { id: 'authority', title: '20. Authority Matrix', icon: Scale },
 ];
+
+const SECTION_KEY_MAP: Record<string, string> = {
+  welcome: 'welcome',
+  snapshot: 'business_snapshot',
+  triage: 'opportunity_triage',
+  selection: 'service_selection',
+  profile: 'business_profile',
+  menu: 'offer_menu',
+  capacity: 'team_capacity',
+  proof: 'proof_evidence',
+  goals: 'goals_strategy',
+  commercial: 'pricing_commercial',
+  platform: 'platform_setup',
+  compliance: 'compliance_insurance',
+  readiness: 'tender_supplier_readiness',
+  grants: 'grants',
+  marketplace: 'marketplace_strategy',
+  outreach: 'direct_outreach_strategy',
+  quote: 'quote_request_support',
+  workflow: 'communication_workflow',
+  library: 'document_upload_library',
+  authority: 'authority_matrix',
+};
 
 const AUTHORITY_ROWS = [
   "Search for opportunities",
@@ -146,7 +154,16 @@ const HIGH_RISK_AUTHORITY_ITEMS = [
   "Register on paid platforms"
 ];
 
-// Document categories for Step 19
+const CRITICAL_DOC_FIELDS = [
+  'capabilityStatement',
+  'publicLiability',
+  'professionalIndemnity',
+  'workersComp',
+  'licences',
+  'certifications',
+  'pricingSchedules'
+];
+
 const DOCUMENT_CATEGORIES = [
   {
     id: 'business',
@@ -270,6 +287,7 @@ export default function OnboardingStepPage() {
 
   const currentStepIndex = STEPS.findIndex(s => s.id === stepId);
   const currentStep = STEPS[currentStepIndex];
+  const sectionKey = SECTION_KEY_MAP[stepId as string] || stepId as string;
 
   const submissionRef = useMemoFirebase(() => {
     if (!submissionId || !db) return null;
@@ -309,10 +327,11 @@ export default function OnboardingStepPage() {
   useEffect(() => {
     const sid = stepId as string;
     if (submission && !initialSyncDone.current[sid]) {
-      if (submission.sections?.[sid]) {
-        setFormData(submission.sections[sid]);
+      const savedData = submission.sections?.[sectionKey];
+      if (savedData) {
+        setFormData(savedData);
       } else {
-        // Initialize defaults based on step
+        // Defaults
         if (sid === 'authority') {
           setFormData({
             matrix: {},
@@ -331,7 +350,7 @@ export default function OnboardingStepPage() {
       }
       initialSyncDone.current[sid] = true;
     }
-  }, [submission, stepId]);
+  }, [submission, stepId, sectionKey]);
 
   const handleFieldChange = (field: string, value: any) => {
     setFormData((prev: any) => ({ ...prev, [field]: value }));
@@ -345,7 +364,7 @@ export default function OnboardingStepPage() {
         updatedAt: serverTimestamp(),
         lastSavedAt: serverTimestamp(),
       };
-      updateData[`sections.${stepId}`] = formData;
+      updateData[`sections.${sectionKey}`] = formData;
       
       updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData)
         .catch((error: any) => {
@@ -402,7 +421,7 @@ export default function OnboardingStepPage() {
     }
 
     const updateData: any = { updatedAt: serverTimestamp(), lastSavedAt: serverTimestamp() };
-    updateData[`sections.${stepId}`] = formData;
+    updateData[`sections.${sectionKey}`] = formData;
 
     if (next) {
       updateData.currentStep = nextStepId;
@@ -447,7 +466,7 @@ export default function OnboardingStepPage() {
 
   const visibleSteps = STEPS.filter(s => {
     if (!s.conditional) return true;
-    const selection = submission?.sections?.selection?.selectedServices || [];
+    const selection = submission?.sections?.service_selection?.selectedServices || [];
     const enabled = submission?.enabledModules?.[s.conditional];
     const unsureSelected = selection.includes('Unsure, please recommend');
     return enabled || unsureSelected;
@@ -516,7 +535,7 @@ export default function OnboardingStepPage() {
           <div className="max-w-4xl mx-auto p-8 lg:p-12">
             <Card className="border-none shadow-xl shadow-slate-200/50 rounded-[2.5rem] overflow-hidden bg-white">
               <CardContent className="p-10 lg:p-14">
-                <StepContent stepId={stepId as string} data={formData} onChange={handleFieldChange} submissionId={submissionId} uid={user?.uid} />
+                <StepContent stepId={stepId as string} data={formData} onChange={handleFieldChange} submissionId={submissionId} uid={user?.uid} lastSynced={submission?.lastSavedAt} />
               </CardContent>
             </Card>
             <div className="mt-10 flex justify-between items-center text-[11px] font-medium text-slate-400 px-6">
@@ -533,7 +552,7 @@ export default function OnboardingStepPage() {
   );
 }
 
-function StepContent({ stepId, data, onChange, submissionId, uid }: { stepId: string, data: any, onChange: (field: string, value: any) => void, submissionId?: string | null, uid?: string }) {
+function StepContent({ stepId, data, onChange, submissionId, uid, lastSynced }: { stepId: string, data: any, onChange: (field: string, value: any) => void, submissionId?: string | null, uid?: string, lastSynced?: any }) {
   const { toast } = useToast();
   
   switch (stepId) {
@@ -542,7 +561,7 @@ function StepContent({ stepId, data, onChange, submissionId, uid }: { stepId: st
         <div className="space-y-12">
           <div className="space-y-4">
             <h2 className="text-4xl font-headline font-bold text-slate-900">Authority to Act and Approval Matrix</h2>
-            <p className="text-slate-500 text-lg leading-relaxed">Confirm what Bid Manager is authorised to do on your behalf.</p>
+            <p className="text-slate-500 text-lg leading-relaxed">Confirm what Bid Manager is authorised to do on your behalf, what requires approval, and what actions are not authorised.</p>
           </div>
 
           <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
@@ -652,7 +671,7 @@ function StepContent({ stepId, data, onChange, submissionId, uid }: { stepId: st
 
           <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
             <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl"><Users className="w-5 h-5 text-primary" /></div>
+              <div className="p-2 bg-primary/10 rounded-xl"><UserCheck className="w-5 h-5 text-primary" /></div>
               <h3 className="text-xl font-bold text-slate-900">Approval Rules</h3>
             </div>
             <CardContent className="p-8 space-y-8">
@@ -670,7 +689,7 @@ function StepContent({ stepId, data, onChange, submissionId, uid }: { stepId: st
                    <Input value={data.contractApprover || ''} onChange={(e) => onChange('contractApprover', e.target.value)} className="h-12 rounded-xl" placeholder="Full name or role" />
                  </div>
                  <div className="space-y-2">
-                   <Label className="font-bold">Who provides final approval for paid platforms? *</Label>
+                   <Label className="font-bold">Who provides final approval for paid platforms or subscriptions? *</Label>
                    <Input value={data.paidPlatformApprover || ''} onChange={(e) => onChange('paidPlatformApprover', e.target.value)} className="h-12 rounded-xl" placeholder="Full name or role" />
                  </div>
               </div>
@@ -756,7 +775,7 @@ function StepContent({ stepId, data, onChange, submissionId, uid }: { stepId: st
               <div className="p-3 bg-white/10 rounded-2xl"><ShieldCheck className="w-8 h-8 text-accent" /></div>
               <div className="space-y-1">
                 <h3 className="text-2xl font-bold">Final Authority Confirmation</h3>
-                <p className="text-slate-400 text-sm">Please review and acknowledge the following statements.</p>
+                <p className="text-slate-400 text-sm">Please review and acknowledge the following statements to protect your business.</p>
               </div>
             </div>
             <CardContent className="p-10 space-y-4">
@@ -786,6 +805,7 @@ function StepContent({ stepId, data, onChange, submissionId, uid }: { stepId: st
     case 'library': {
       const allFiles = Object.values(data.documents || {}).flatMap((doc: any) => doc.files || []);
       const uploadedCount = allFiles.length;
+      const criticalCount = allFiles.filter((f: any) => CRITICAL_DOC_FIELDS.includes(f.field)).length;
       const categoriesAnswered = Object.keys(data.documents || {}).length;
       const lastFile = allFiles.length > 0 ? allFiles[allFiles.length - 1] : null;
 
@@ -827,7 +847,8 @@ function StepContent({ stepId, data, onChange, submissionId, uid }: { stepId: st
           ...(data.documents || {}), 
           [fieldId]: { 
             ...(data.documents?.[fieldId] || {}), 
-            files: uploadedFiles 
+            files: uploadedFiles,
+            status: 'available'
           } 
         };
         onChange('documents', newDocs);
@@ -892,35 +913,41 @@ function StepContent({ stepId, data, onChange, submissionId, uid }: { stepId: st
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <Card className="bg-primary/5 border-primary/10 rounded-3xl p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-primary text-white rounded-2xl"><Files className="w-5 h-5" /></div>
-                <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase">Total Files</p>
-                  <p className="text-2xl font-bold text-primary">{uploadedCount}</p>
+          <Card className="border border-slate-200 rounded-[2rem] shadow-sm overflow-hidden bg-slate-50/50">
+             <div className="p-8 border-b bg-white flex items-center gap-3">
+               <div className="p-2 bg-primary/10 rounded-xl"><Files className="w-5 h-5 text-primary" /></div>
+               <h3 className="text-lg font-bold">Upload Summary</h3>
+             </div>
+             <CardContent className="p-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="bg-white p-6 rounded-2xl border shadow-sm space-y-1">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Files</p>
+                    <p className="text-2xl font-bold text-primary">{uploadedCount}</p>
+                  </div>
+                  <div className="bg-white p-6 rounded-2xl border shadow-sm space-y-1">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Critical Docs</p>
+                    <p className="text-2xl font-bold text-amber-600">{criticalCount}</p>
+                  </div>
+                  <div className="bg-white p-6 rounded-2xl border shadow-sm space-y-1">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Missing Categories</p>
+                    <p className="text-2xl font-bold text-slate-700">{DOCUMENT_CATEGORIES.length - categoriesAnswered}</p>
+                  </div>
+                  <div className="bg-white p-6 rounded-2xl border shadow-sm space-y-1">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Last Activity</p>
+                    <p className="text-xs font-bold text-slate-600">{lastSynced ? new Date(lastSynced.seconds * 1000).toLocaleTimeString() : 'No activity'}</p>
+                  </div>
                 </div>
-              </div>
-            </Card>
-            <Card className="bg-amber-50 border-amber-100 rounded-3xl p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-amber-500 text-white rounded-2xl"><AlertTriangle className="w-5 h-5" /></div>
-                <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase">Missing Categories</p>
-                  <p className="text-2xl font-bold text-amber-600">{DOCUMENT_CATEGORIES.length - categoriesAnswered}</p>
-                </div>
-              </div>
-            </Card>
-            <Card className="bg-slate-50 border-slate-200 rounded-3xl p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-slate-200 text-slate-600 rounded-2xl"><Clock className="w-5 h-5" /></div>
-                <div className="truncate">
-                  <p className="text-xs font-bold text-slate-500 uppercase">Last Upload</p>
-                  <p className="text-sm font-bold truncate">{lastFile?.name || 'None'}</p>
-                </div>
-              </div>
-            </Card>
-          </div>
+                {lastFile && (
+                  <div className="mt-6 p-4 bg-primary/5 rounded-xl border border-primary/10 flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-sm"><FileText className="w-4 h-4 text-primary" /></div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-slate-700 truncate">Latest: {lastFile.name}</p>
+                      <p className="text-[10px] text-slate-500 uppercase">{new Date(lastFile.uploadedAt).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                )}
+             </CardContent>
+          </Card>
 
           <Accordion type="single" collapsible className="space-y-6">
             {DOCUMENT_CATEGORIES.map((cat) => (
@@ -937,14 +964,18 @@ function StepContent({ stepId, data, onChange, submissionId, uid }: { stepId: st
                   <AccordionContent className="px-8 pb-8 pt-4 space-y-10">
                     {cat.fields.map((field) => {
                       const fieldData = data.documents?.[field.id] || { files: [], status: 'pending' };
+                      const isCritical = CRITICAL_DOC_FIELDS.includes(field.id);
                       return (
                         <div key={field.id} className="space-y-4 border-b border-slate-100 last:border-0 pb-8 last:pb-0 pt-4 first:pt-0">
                           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <div className="space-y-1">
-                              <Label className="text-base font-bold text-slate-800">{field.label}</Label>
+                              <div className="flex items-center gap-2">
+                                <Label className="text-base font-bold text-slate-800">{field.label}</Label>
+                                {isCritical && <Badge variant="destructive" className="text-[9px] h-4 font-bold uppercase py-0 px-1.5 rounded-sm">Critical</Badge>}
+                              </div>
                               {fieldData.files.length === 0 && fieldData.status === 'pending' && (
                                 <p className="text-xs text-amber-600 flex items-center gap-1 font-medium">
-                                  <AlertCircle className="w-3 h-3" /> Recommended
+                                  <AlertCircle className="w-3 h-3" /> recommended upload
                                 </p>
                               )}
                             </div>
@@ -1023,7 +1054,7 @@ function StepContent({ stepId, data, onChange, submissionId, uid }: { stepId: st
               <div className="p-3 bg-white/10 rounded-2xl"><ShieldCheck className="w-8 h-8 text-accent" /></div>
               <div className="space-y-1">
                 <h3 className="text-2xl font-bold">Document Confirmation</h3>
-                <p className="text-slate-400 text-sm">Please confirm your upload status.</p>
+                <p className="text-slate-400 text-sm">Please confirm your upload status before proceeding.</p>
               </div>
             </div>
             <CardContent className="p-10">
@@ -1045,6 +1076,9 @@ function StepContent({ stepId, data, onChange, submissionId, uid }: { stepId: st
       );
     }
     default:
-      return <div className="py-24 text-center">Section under development.</div>;
+      return <div className="py-24 text-center space-y-4">
+        <AlertTriangle className="w-12 h-12 text-slate-200 mx-auto" />
+        <p className="text-slate-400 font-medium">This section ({stepId}) is currently being developed.</p>
+      </div>;
   }
 }
