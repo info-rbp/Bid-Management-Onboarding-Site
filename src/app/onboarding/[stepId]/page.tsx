@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, addDoc } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -16,41 +16,22 @@ import {
   ChevronRight, 
   LayoutDashboard,
   CheckCircle2,
-  Zap,
   Building2,
-  AlertCircle,
-  FileText,
-  Award,
-  ShoppingCart,
-  Users,
-  Target,
-  DollarSign,
-  Globe,
   ShieldCheck,
-  FileBadge,
-  Gift,
-  BarChart3,
-  Send,
-  MessageSquare,
-  Library,
-  Scale,
-  Loader2,
-  AlertTriangle,
-  UploadCloud,
-  Trash2,
-  Files,
-  FileStack,
-  Flag,
-  Clock,
+  DollarSign,
+  Users,
   Briefcase,
-  TrendingUp,
-  ShieldAlert,
   Plus,
-  ArrowLeft,
+  Trash2,
+  UploadCloud,
   Check,
   Lock,
-  ExternalLink,
-  ChevronLeft
+  Files,
+  Loader2,
+  AlertTriangle,
+  AlertCircle,
+  FileStack,
+  Gift
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -68,85 +49,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import Link from 'next/link';
-
-const ALL_STEPS = [
-  { key: "welcome_expectations", title: "1. Welcome & Expectations", shortTitle: "Welcome & Expectations", icon: Zap, required: true, conditional: false },
-  { key: "business_snapshot", title: "2. Business Snapshot", shortTitle: "Business Snapshot", icon: Building2, required: true, conditional: false },
-  { key: "opportunity_triage", title: "3. Opportunity Triage", shortTitle: "Opportunity Triage", icon: AlertCircle, required: true, conditional: false },
-  { key: "service_selection", title: "4. Service Selection", shortTitle: "Service Selection", icon: FileText, required: true, conditional: false },
-  { key: "business_profile", title: "5. Business Profile", shortTitle: "Business Profile", icon: Award, required: true, conditional: false },
-  { key: "offer_menu", title: "6. Offer Menu", shortTitle: "Offer Menu", icon: ShoppingCart, required: true, conditional: false },
-  { key: "team_capacity", title: "7. Team & Capacity", shortTitle: "Team & Capacity", icon: Users, required: true, conditional: false },
-  { key: "proof_evidence", title: "8. Proof & Evidence", shortTitle: "Proof & Evidence", icon: CheckCircle2, required: true, conditional: false },
-  { key: "goals_strategy", title: "9. Goals & Strategy", shortTitle: "Goals & Strategy", icon: Target, required: true, conditional: false },
-  { key: "pricing_commercial", title: "10. Pricing & Commercial", shortTitle: "Pricing & Commercial", icon: DollarSign, required: true, conditional: false },
-  { key: "platform_setup", title: "11. Platform Setup", shortTitle: "Platform Setup", icon: Globe, required: true, conditional: false },
-  { key: "compliance_insurance", title: "12. Compliance & Insurance", shortTitle: "Compliance & Insurance", icon: ShieldCheck, required: true, conditional: false },
-  {
-    key: "tender_readiness",
-    title: "13. Tender Readiness",
-    shortTitle: "Tender Readiness",
-    icon: FileBadge,
-    required: true,
-    conditional: true,
-    isEnabled: (selectedServices: string[]) =>
-      selectedServices.includes("Government Tenders") ||
-      selectedServices.includes("Private Tenders") ||
-      selectedServices.includes("Panel or Supplier Registrations") ||
-      selectedServices.includes("Unsure, please recommend")
-  },
-  {
-    key: "grants",
-    title: "14. Grants",
-    shortTitle: "Grants",
-    icon: Gift,
-    required: true,
-    conditional: true,
-    isEnabled: (selectedServices: string[]) =>
-      selectedServices.includes("Grants") ||
-      selectedServices.includes("Unsure, please recommend")
-  },
-  {
-    key: "marketplace_strategy",
-    title: "15. Marketplace Strategy",
-    shortTitle: "Marketplace Strategy",
-    icon: BarChart3,
-    required: true,
-    conditional: true,
-    isEnabled: (selectedServices: string[]) =>
-      selectedServices.includes("Marketplace Leads") ||
-      selectedServices.includes("Unsure, please recommend")
-  },
-  {
-    key: "direct_outreach_strategy",
-    title: "16. Outreach Strategy",
-    shortTitle: "Outreach Strategy",
-    icon: Send,
-    required: true,
-    conditional: true,
-    isEnabled: (selectedServices: string[]) =>
-      selectedServices.includes("Direct Proposals") ||
-      selectedServices.includes("Unsure, please recommend")
-  },
-  {
-    key: "quote_support",
-    title: "17. Quote Support",
-    shortTitle: "Quote Support",
-    icon: MessageSquare,
-    required: true,
-    conditional: true,
-    isEnabled: (selectedServices: string[]) =>
-      selectedServices.includes("Quote Requests") ||
-      selectedServices.includes("Marketplace Leads") ||
-      selectedServices.includes("Direct Proposals") ||
-      selectedServices.includes("Unsure, please recommend")
-  },
-  { key: "workflow_rules", title: "18. Workflow Rules", shortTitle: "Workflow Rules", icon: Clock, required: true, conditional: false },
-  { key: "document_upload_library", title: "19. Document Upload Library", shortTitle: "Document Upload Library", icon: Library, required: true, conditional: false },
-  { key: "authority_matrix", title: "20. Authority Matrix", shortTitle: "Authority Matrix", icon: Scale, required: true, conditional: false },
-  { key: "final_submission", title: "21. Final Submission", shortTitle: "Final Submission", icon: Flag, required: true, conditional: false }
-];
+import { getVisibleOnboardingSteps } from '@/lib/onboarding-steps';
 
 export default function OnboardingStepPage() {
   const { stepId } = useParams();
@@ -168,10 +71,7 @@ export default function OnboardingStepPage() {
   const selectedServices = submission?.sections?.service_selection?.selectedServices || [];
 
   const visibleSteps = useMemo(() => {
-    return ALL_STEPS.filter(step => {
-      if (!step.conditional) return true;
-      return step.isEnabled?.(selectedServices);
-    });
+    return getVisibleOnboardingSteps(selectedServices);
   }, [selectedServices]);
 
   const currentStep = useMemo(() => visibleSteps.find(s => s.key === stepId), [visibleSteps, stepId]);
@@ -182,7 +82,7 @@ export default function OnboardingStepPage() {
       const firstValidStep = visibleSteps[0];
       if (firstValidStep) {
         toast({ title: "Section Hidden", description: "This section is no longer in your scope based on your service selections." });
-        router.push(`/onboarding/${firstValidStep.key}`);
+        router.push(firstValidStep.route);
       }
     }
   }, [currentStep, loadingSubmissions, submission, visibleSteps, stepId, router, toast]);
@@ -232,6 +132,9 @@ export default function OnboardingStepPage() {
 
   const handleNavigate = (targetStepKey: string) => {
     if (targetStepKey === stepId) return;
+    const targetStep = visibleSteps.find(s => s.key === targetStepKey);
+    if (!targetStep) return;
+
     if (submissionId && db && submission?.status !== 'submitted') {
       const updateData: any = { updatedAt: serverTimestamp(), lastSavedAt: serverTimestamp() };
       updateData[`sections.${stepId}`] = formData;
@@ -240,7 +143,7 @@ export default function OnboardingStepPage() {
       });
     }
     initialSyncDone.current[targetStepKey] = false;
-    router.push(`/onboarding/${targetStepKey}`);
+    router.push(targetStep.route);
   };
 
   const handleSave = (next: boolean = false) => {
@@ -250,16 +153,16 @@ export default function OnboardingStepPage() {
     updateData[`sections.${stepId}`] = formData;
 
     if (stepId === 'service_selection') {
+      const services = formData.selectedServices || [];
       const enabledModules = {
-        tenderReadiness: ALL_STEPS.find(s => s.key === 'tender_readiness')?.isEnabled?.(formData.selectedServices || []),
-        grants: ALL_STEPS.find(s => s.key === 'grants')?.isEnabled?.(formData.selectedServices || []),
-        marketplaceStrategy: ALL_STEPS.find(s => s.key === 'marketplace_strategy')?.isEnabled?.(formData.selectedServices || []),
-        directOutreachStrategy: ALL_STEPS.find(s => s.key === 'direct_outreach_strategy')?.isEnabled?.(formData.selectedServices || []),
-        quoteSupport: ALL_STEPS.find(s => s.key === 'quote_support')?.isEnabled?.(formData.selectedServices || []),
+        tenderReadiness: services.includes("Government Tenders") || services.includes("Private Tenders") || services.includes("Panel or Supplier Registrations") || services.includes("Unsure, please recommend"),
+        grants: services.includes("Grants") || services.includes("Unsure, please recommend"),
+        marketplaceStrategy: services.includes("Marketplace Leads") || services.includes("Unsure, please recommend"),
+        directOutreachStrategy: services.includes("Direct Proposals") || services.includes("Unsure, please recommend"),
+        quoteSupport: services.includes("Quote Requests") || services.includes("Marketplace Leads") || services.includes("Direct Proposals") || services.includes("Unsure, please recommend"),
       };
-      const newVisibleSteps = ALL_STEPS.filter(s => !s.conditional || s.isEnabled?.(formData.selectedServices || []));
       updateData.enabledModules = enabledModules;
-      updateData.visibleStepKeys = newVisibleSteps.map(s => s.key);
+      updateData.visibleStepKeys = getVisibleOnboardingSteps(services).map(s => s.key);
     }
 
     if (next) {
@@ -277,7 +180,7 @@ export default function OnboardingStepPage() {
       const isLastStep = currentVisibleIndex === visibleSteps.length - 1;
       if (!isLastStep) {
         const nextVisibleStep = visibleSteps[currentVisibleIndex + 1];
-        router.push(`/onboarding/${nextVisibleStep.key}`);
+        router.push(nextVisibleStep.route);
         initialSyncDone.current[nextVisibleStep.key] = false;
       }
     } else {
@@ -289,7 +192,6 @@ export default function OnboardingStepPage() {
     if (!submissionId || !db || !user) return;
 
     try {
-      // 1. Update submission status and lock
       await updateDoc(doc(db, 'onboardingSubmissions', submissionId), {
         status: 'submitted',
         submittedAt: serverTimestamp(),
@@ -297,7 +199,6 @@ export default function OnboardingStepPage() {
         [`sections.final_submission`]: formData
       });
 
-      // 2. Update user status
       await updateDoc(doc(db, 'users', user.uid), {
         onboardingStatus: 'submitted',
         updatedAt: serverTimestamp()
@@ -309,11 +210,10 @@ export default function OnboardingStepPage() {
     }
   };
 
-  if (loadingSubmissions || !currentStep || !submissionId || !submission) {
+  if (loadingSubmissions || !submission) {
     return <div className="h-screen flex flex-col items-center justify-center gap-4"><Loader2 className="animate-spin text-primary w-10 h-10" /><p className="text-sm font-medium text-muted-foreground">Preparing your workspace...</p></div>;
   }
 
-  // If already submitted and NOT on final_submission step, show lock message or redirect
   if (submission.status === 'submitted' && stepId !== 'final_submission') {
     return (
       <div className="h-screen flex flex-col items-center justify-center p-8 text-center space-y-6">
@@ -328,6 +228,8 @@ export default function OnboardingStepPage() {
       </div>
     );
   }
+
+  if (!currentStep) return null;
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-body">
@@ -405,7 +307,6 @@ export default function OnboardingStepPage() {
 
 function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit, visibleSteps }: { stepId: string, data: any, onChange: (field: string, value: any) => void, submission: any, onNavigate: (key: string) => void, onSubmit: () => void, visibleSteps: any[] }) {
   
-  // Submitted state UI
   if (submission.status === 'submitted' && stepId === 'final_submission') {
     return (
       <div className="space-y-10 text-center py-6">
@@ -415,7 +316,7 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
         <div className="space-y-4">
           <h2 className="text-4xl font-headline font-bold text-slate-900">Onboarding Submitted</h2>
           <p className="text-slate-500 text-lg max-w-2xl mx-auto leading-relaxed">
-            Thank you for submitting your Bid Manager onboarding pack. We will review your responses and supporting documents. Your information will be used to prepare your client profile, proposal-ready content, opportunity preferences, compliance checklist, platform setup recommendations, approval workflow, and action plan.
+            Thank you for submitting your Bid Manager onboarding pack. We will review your responses and supporting documents.
           </p>
         </div>
 
@@ -466,7 +367,7 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
           </div>
           <div className="bg-primary/5 p-8 rounded-[2rem] border border-primary/10 space-y-4">
             <h3 className="font-bold text-primary flex items-center gap-2"><Clock className="w-5 h-5" /> Time Commitment</h3>
-            <p className="text-sm text-slate-600 leading-relaxed">This process usually takes about 45 minutes. You can save your draft and return at any time. We recommend completing it in one session for the best outcome.</p>
+            <p className="text-sm text-slate-600 leading-relaxed">This process usually takes about 45 minutes. You can save your draft and return at any time.</p>
             <div className="flex items-center gap-3 pt-4">
               <Checkbox id="ready" checked={data.isReady} onCheckedChange={(v) => onChange('isReady', v)} />
               <Label htmlFor="ready" className="text-sm font-bold text-slate-700">I am ready to provide business details and upload documents.</Label>
@@ -515,7 +416,7 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
           <div className="space-y-6">
             <div className="space-y-2"><Label>Describe your ideal project or client</Label><Textarea value={data.idealClient || ''} onChange={(e) => onChange('idealClient', e.target.value)} placeholder="e.g. Local government landscaping contracts over $50k" /></div>
             <div className="space-y-2"><Label>Minimum project value you will consider</Label><Input value={data.minValue || ''} onChange={(e) => onChange('minValue', e.target.value)} placeholder="$10,000" /></div>
-            <div className="space-y-2"><Label>What are your "Red Flags"? (Opportunities to ignore)</Label><Textarea value={data.redFlags || ''} onChange={(e) => onChange('redFlags', e.target.value)} placeholder="e.g. Clients with poor credit history, projects outside 100km radius" /></div>
+            <div className="space-y-2"><Label>What are your "Red Flags"? (Opportunities to ignore)</Label><Textarea value={data.redFlags || ''} onChange={(e) => onChange('redFlags', e.target.value)} placeholder="e.g. Clients with poor credit history" /></div>
           </div>
         </div>
       );
@@ -560,9 +461,8 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
         <div className="space-y-8">
           <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Offer Menu</h2><p className="text-slate-500 text-lg">List your key products and services.</p></div>
           <div className="space-y-6">
-            <div className="space-y-2"><Label>Service Categories</Label><Textarea value={data.serviceCategories || ''} onChange={(e) => onChange('serviceCategories', e.target.value)} placeholder="e.g. Consulting, Civil Works, Software Development" /></div>
+            <div className="space-y-2"><Label>Service Categories</Label><Textarea value={data.serviceCategories || ''} onChange={(e) => onChange('serviceCategories', e.target.value)} placeholder="e.g. Consulting, Civil Works" /></div>
             <div className="space-y-2"><Label>Unique Selling Propositions (USPs)</Label><Textarea value={data.usps || ''} onChange={(e) => onChange('usps', e.target.value)} placeholder="Why choose you over a competitor?" /></div>
-            <div className="space-y-2"><Label>Key Product or Package Names</Label><Textarea value={data.productNames || ''} onChange={(e) => onChange('productNames', e.target.value)} placeholder="e.g. Premium Support Plan, Eco-Friendly Construction Kit" /></div>
           </div>
         </div>
       );
@@ -577,9 +477,9 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
             <div className="space-y-2">
               <Label>Current Capacity Level</Label>
               <RadioGroup value={data.capacity || ''} onValueChange={(v) => onChange('capacity', v)} className="flex gap-4">
-                <div className="flex items-center space-x-2"><RadioGroupItem value="high" id="c1" /><Label htmlFor="c1">High (Looking for work)</Label></div>
-                <div className="flex items-center space-x-2"><RadioGroupItem value="medium" id="c2" /><Label htmlFor="c2">Medium (Balanced)</Label></div>
-                <div className="flex items-center space-x-2"><RadioGroupItem value="low" id="c3" /><Label htmlFor="c3">Low (Near Capacity)</Label></div>
+                <div className="flex items-center space-x-2"><RadioGroupItem value="high" id="c1" /><Label htmlFor="c1">High</Label></div>
+                <div className="flex items-center space-x-2"><RadioGroupItem value="medium" id="c2" /><Label htmlFor="c2">Medium</Label></div>
+                <div className="flex items-center space-x-2"><RadioGroupItem value="low" id="c3" /><Label htmlFor="c3">Low</Label></div>
               </RadioGroup>
             </div>
           </div>
@@ -635,35 +535,26 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
     }
 
     case 'platform_setup': {
-      const PLATFORMS = ["Airtasker", "Bark", "ServiceSeeking", "Oneflare", "hipages", "Upwork", "Freelancer", "Fiverr", "TenderLink", "AusTender", "GrantConnect", "Local council portals", "State government tender portals", "Corporate supplier portals", "LinkedIn", "Other", "None", "Unsure"];
+      const PLATFORMS = ["Airtasker", "Bark", "ServiceSeeking", "Oneflare", "hipages", "Upwork", "Freelancer", "Fiverr", "TenderLink", "AusTender", "GrantConnect", "Local council portals", "LinkedIn", "Other", "None"];
       const existing = data.existingPlatforms || [];
       return (
         <div className="space-y-12">
-          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Platform and Channel Setup</h2><p className="text-slate-500 text-lg">Tell us which platforms you already use and where you need help.</p></div>
-          <Card className="p-8 rounded-3xl border-none shadow-sm space-y-6">
-            <h3 className="text-xl font-bold">Existing Platforms</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {PLATFORMS.map(p => (
-                <div key={p} onClick={() => { const next = existing.includes(p) ? existing.filter((s: string) => s !== p) : [...existing, p]; onChange('existingPlatforms', next); }} className={`p-4 rounded-xl border-2 cursor-pointer text-xs font-bold transition-all ${existing.includes(p) ? 'border-primary bg-primary/5 text-primary' : 'border-slate-50 hover:border-slate-200 text-slate-600'}`}>{p}</div>
-              ))}
-            </div>
-          </Card>
-          <div className="space-y-6 pt-10 border-t">
-            <h3 className="text-xl font-bold">Access and Security</h3>
-            <Alert variant="destructive" className="bg-red-50 border-red-200 text-red-700 rounded-2xl"><ShieldAlert className="w-5 h-5" /><AlertDescription className="font-bold">NEVER provide passwords or login credentials in this portal. We will use delegated access or screen-sharing.</AlertDescription></Alert>
-            <div className="space-y-2"><Label>Who controls access and MFA currently?</Label><Input value={data.accessManager || ''} onChange={(e) => onChange('accessManager', e.target.value)} /></div>
-            <div className="flex items-start space-x-4 p-4 border rounded-xl bg-slate-50"><Checkbox id="acc" checked={data.isSecurityAware} onCheckedChange={(v) => onChange('isSecurityAware', v)} /><Label htmlFor="acc" className="text-xs font-bold leading-relaxed">I understand I should not provide passwords or login credentials through this portal. *</Label></div>
+          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Platform and Channel Setup</h2><p className="text-slate-500 text-lg">Tell us which platforms you already use.</p></div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {PLATFORMS.map(p => (
+              <div key={p} onClick={() => { const next = existing.includes(p) ? existing.filter((s: string) => s !== p) : [...existing, p]; onChange('existingPlatforms', next); }} className={`p-4 rounded-xl border-2 cursor-pointer text-xs font-bold transition-all ${existing.includes(p) ? 'border-primary bg-primary/5 text-primary' : 'border-slate-50 hover:border-slate-200 text-slate-600'}`}>{p}</div>
+            ))}
           </div>
         </div>
       );
     }
 
     case 'compliance_insurance': {
-      const READINESS_ROWS = ["ABN/ACN records", "Public liability insurance", "Professional indemnity insurance", "Workers compensation insurance", "Cyber insurance", "Motor vehicle insurance", "Industry licences", "Staff tickets or licences", "Police checks", "Working with Children Checks", "NDIS screening checks", "ISO certifications", "WHS policy", "Quality policy", "Environmental policy", "Privacy policy", "Risk management process", "Complaints handling process", "Business continuity plan", "Modern slavery statement", "Capability statement", "Pricing schedule"];
-      const COLUMNS = ["Available and current", "Available but needs updating", "Do not have", "Unsure", "Not applicable"];
+      const READINESS_ROWS = ["ABN/ACN records", "Public liability insurance", "Professional indemnity insurance", "Workers compensation insurance", "Industry licences", "Police checks", "ISO certifications", "WHS policy", "Privacy policy"];
+      const COLUMNS = ["Available and current", "Needs updating", "Do not have", "Unsure"];
       return (
         <div className="space-y-12">
-          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Compliance & Readiness</h2><p className="text-slate-500 text-lg">Identify readiness gaps before pursuing major opportunities.</p></div>
+          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Compliance & Readiness</h2><p className="text-slate-500 text-lg">Identify readiness gaps.</p></div>
           <Card className="rounded-3xl border-none shadow-sm overflow-hidden">
             <Table>
               <TableHeader><TableRow><TableHead className="pl-8">Compliance Item</TableHead>{COLUMNS.map(c => <TableHead key={c} className="text-center text-[10px] uppercase font-bold px-2">{c}</TableHead>)}</TableRow></TableHeader>
@@ -677,13 +568,6 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
               </TableBody>
             </Table>
           </Card>
-          <div className="space-y-4">
-            <h3 className="text-xl font-bold flex items-center gap-2 text-amber-600"><AlertTriangle className="w-6 h-6" /> Potential Readiness Gaps</h3>
-            <div className="flex flex-wrap gap-2">
-              {READINESS_ROWS.filter(row => data.grid?.[row] === "Do not have" || data.grid?.[row] === "Unsure").map(gap => <Badge key={gap} variant="secondary" className="bg-amber-100 text-amber-700 border-amber-200">{gap}</Badge>)}
-              {READINESS_ROWS.filter(row => data.grid?.[row] === "Do not have" || data.grid?.[row] === "Unsure").length === 0 && <p className="text-sm text-slate-400 italic">No gaps identified yet.</p>}
-            </div>
-          </div>
         </div>
       );
     }
@@ -691,61 +575,49 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
     case 'tender_readiness': {
       return (
         <div className="space-y-8">
-          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Tender Readiness</h2><p className="text-slate-500 text-lg">Complete this if you are targeting formal procurement opportunities.</p></div>
+          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Tender Readiness</h2><p className="text-slate-500 text-lg">Formal procurement opportunities.</p></div>
           <div className="space-y-6">
-            <div className="space-y-2">
-              <Label>Have you submitted tenders before?</Label>
+            <div className="space-y-2"><Label>Have you submitted tenders before?</Label>
               <RadioGroup value={data.experience || ''} onValueChange={(v) => onChange('experience', v)} className="flex gap-4">
                 <div className="flex items-center space-x-2"><RadioGroupItem value="yes" id="t1" /><Label htmlFor="t1">Yes</Label></div>
                 <div className="flex items-center space-x-2"><RadioGroupItem value="no" id="t2" /><Label htmlFor="t2">No</Label></div>
-                <div className="flex items-center space-x-2"><RadioGroupItem value="started" id="t3" /><Label htmlFor="t3">Started but not submitted</Label></div>
               </RadioGroup>
             </div>
-            <div className="space-y-2"><Label>Who approves final tender submissions? *</Label><Input value={data.approver || ''} onChange={(e) => onChange('approver', e.target.value)} placeholder="Full name or Role" /></div>
-            <div className="space-y-2"><Label>What tender risks should we watch for? *</Label><Textarea value={data.risks || ''} onChange={(e) => onChange('risks', e.target.value)} placeholder="e.g. Unrealistic delivery dates, low profit margins" /></div>
+            <div className="space-y-2"><Label>Who approves final tender submissions?</Label><Input value={data.approver || ''} onChange={(e) => onChange('approver', e.target.value)} /></div>
           </div>
         </div>
       );
     }
 
     case 'grants': {
-      const PROJECTS = Array.from({ length: Number(data.projectCount) || 1 });
       return (
-        <div className="space-y-12">
+        <div className="space-y-8">
           <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Grants</h2><p className="text-slate-500 text-lg">Identify projects that need funding.</p></div>
           <div className="space-y-6">
-            <div className="space-y-2">
-              <Label>How many grant project ideas would you like to add?</Label>
-              <Select value={data.projectCount || '1'} onValueChange={(v) => onChange('projectCount', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="1">1</SelectItem><SelectItem value="2">2</SelectItem><SelectItem value="3">3</SelectItem><SelectItem value="4">4 or more</SelectItem></SelectContent></Select>
+            <div className="space-y-2"><Label>Are you interested in grant funding support?</Label>
+              <RadioGroup value={data.interest || ''} onValueChange={(v) => onChange('interest', v)} className="flex gap-4">
+                <div className="flex items-center space-x-2"><RadioGroupItem value="yes" id="g1" /><Label htmlFor="g1">Yes</Label></div>
+                <div className="flex items-center space-x-2"><RadioGroupItem value="no" id="g2" /><Label htmlFor="g2">No</Label></div>
+              </RadioGroup>
             </div>
-            {PROJECTS.map((_, i) => (
-              <Card key={i} className="p-8 rounded-3xl border-slate-100 shadow-sm space-y-6">
-                <h3 className="font-bold">Project {i + 1}</h3>
-                <div className="space-y-4">
-                  <div className="space-y-2"><Label>Project name or idea *</Label><Input value={data.projects?.[i]?.name || ''} onChange={(e) => { const ps = [...(data.projects || [])]; ps[i] = { ...ps[i], name: e.target.value }; onChange('projects', ps); }} /></div>
-                  <div className="space-y-2"><Label>What would the funding be used for? *</Label><Textarea value={data.projects?.[i]?.purpose || ''} onChange={(e) => { const ps = [...(data.projects || [])]; ps[i] = { ...ps[i], purpose: e.target.value }; onChange('projects', ps); }} /></div>
-                </div>
-              </Card>
-            ))}
+            {data.interest === 'yes' && (
+              <div className="space-y-4">
+                <Label>Primary project for grant funding</Label>
+                <Textarea value={data.project || ''} onChange={(e) => onChange('project', e.target.value)} />
+              </div>
+            )}
           </div>
         </div>
       );
     }
 
     case 'marketplace_strategy': {
-      const PLATFORMS = ["Airtasker", "Bark", "ServiceSeeking", "Oneflare", "hipages", "Upwork", "Freelancer", "Fiverr", "Other", "Unsure"];
-      const selected = data.selected || [];
       return (
-        <div className="space-y-12">
-          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Marketplace Lead Strategy</h2><p className="text-slate-500 text-lg">Set rules for how we handle marketplace leads.</p></div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {PLATFORMS.map(p => (
-              <div key={p} onClick={() => { const next = selected.includes(p) ? selected.filter((s: string) => s !== p) : [...selected, p]; onChange('selected', next); }} className={`p-4 rounded-xl border-2 cursor-pointer text-xs font-bold transition-all text-center ${selected.includes(p) ? 'border-primary bg-primary/5 text-primary' : 'border-slate-50 hover:border-slate-200 text-slate-600'}`}>{p}</div>
-            ))}
-          </div>
+        <div className="space-y-8">
+          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Marketplace Lead Strategy</h2><p className="text-slate-500 text-lg">Rules for marketplace leads.</p></div>
           <div className="space-y-6">
-            <div className="space-y-2"><Label>Minimum job value to pursue *</Label><Input value={data.minValue || ''} onChange={(e) => onChange('minValue', e.target.value)} placeholder="$500" /></div>
-            <div className="space-y-2"><Label>Monthly budget for paid leads/credits</Label><Input value={data.budget || ''} onChange={(e) => onChange('budget', e.target.value)} placeholder="$200" /></div>
+            <div className="space-y-2"><Label>Minimum job value to pursue</Label><Input value={data.minValue || ''} onChange={(e) => onChange('minValue', e.target.value)} /></div>
+            <div className="space-y-2"><Label>Monthly budget for leads</Label><Input value={data.budget || ''} onChange={(e) => onChange('budget', e.target.value)} /></div>
           </div>
         </div>
       );
@@ -753,18 +625,10 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
 
     case 'direct_outreach_strategy': {
       return (
-        <div className="space-y-12">
-          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Outreach Strategy</h2><p className="text-slate-500 text-lg">Strategize your direct growth channels.</p></div>
+        <div className="space-y-8">
+          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Outreach Strategy</h2><p className="text-slate-500 text-lg">Direct growth channels.</p></div>
           <div className="space-y-6">
-            <div className="space-y-2">
-              <Label>Growth Channels</Label>
-              <div className="grid grid-cols-2 gap-3">
-                {["Direct proposals", "Email outreach", "LinkedIn outreach", "Referral partners", "Client reactivation"].map(c => (
-                  <div key={c} onClick={() => { const s = data.channels || []; const n = s.includes(c) ? s.filter((x:string)=>x!==c) : [...s, c]; onChange('channels', n); }} className={`p-4 rounded-xl border-2 cursor-pointer text-xs font-bold transition-all ${data.channels?.includes(c) ? 'border-primary bg-primary/5 text-primary' : 'border-slate-50 text-slate-600'}`}>{c}</div>
-                ))}
-              </div>
-            </div>
-            <div className="space-y-2"><Label>Organisations NOT to contact *</Label><Textarea value={data.noContact || ''} onChange={(e) => onChange('noContact', e.target.value)} placeholder="If none, write 'None known'." /></div>
+            <div className="space-y-2"><Label>Target Organisations</Label><Textarea value={data.targets || ''} onChange={(e) => onChange('targets', e.target.value)} /></div>
           </div>
         </div>
       );
@@ -772,11 +636,10 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
 
     case 'quote_support': {
       return (
-        <div className="space-y-12">
-          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Quote Support</h2><p className="text-slate-500 text-lg">Define the rules for your quotes.</p></div>
+        <div className="space-y-8">
+          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Quote Support</h2><p className="text-slate-500 text-lg">Define quoting rules.</p></div>
           <div className="space-y-6">
-            <div className="space-y-2"><Label>What must be included in every quote? *</Label><Textarea value={data.inclusions || ''} onChange={(e) => onChange('inclusions', e.target.value)} /></div>
-            <div className="space-y-2"><Label>Maximum quote value Bid Manager can send without approval *</Label><Input value={data.threshold || ''} onChange={(e) => onChange('threshold', e.target.value)} placeholder="$0 (All need approval)" /></div>
+            <div className="space-y-2"><Label>What must be included in every quote?</Label><Textarea value={data.inclusions || ''} onChange={(e) => onChange('inclusions', e.target.value)} /></div>
           </div>
         </div>
       );
@@ -784,13 +647,13 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
 
     case 'workflow_rules': {
       return (
-        <div className="space-y-12">
-          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Workflow Rules</h2><p className="text-slate-500 text-lg">Set the operational cadence.</p></div>
+        <div className="space-y-8">
+          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Workflow Rules</h2><p className="text-slate-500 text-lg">Response expectations.</p></div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2"><Label>Primary Review Contact *</Label><Input value={data.reviewer || ''} onChange={(e) => onChange('reviewer', e.target.value)} /></div>
+            <div className="space-y-2"><Label>Primary Review Contact</Label><Input value={data.reviewer || ''} onChange={(e) => onChange('reviewer', e.target.value)} /></div>
             <div className="space-y-2">
-              <Label>Response Time Expectation *</Label>
-              <Select value={data.responseTime || ''} onValueChange={(v) => onChange('responseTime', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="24h">Within 24 hours</SelectItem><SelectItem value="48h">Within 48 hours</SelectItem><SelectItem value="3d">2-3 business days</SelectItem></SelectContent></Select>
+              <Label>Response Time Expectation</Label>
+              <Select value={data.responseTime || ''} onValueChange={(v) => onChange('responseTime', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="24h">24 hours</SelectItem><SelectItem value="48h">48 hours</SelectItem></SelectContent></Select>
             </div>
           </div>
         </div>
@@ -798,7 +661,7 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
     }
 
     case 'document_upload_library': {
-      const handleFileUpload = async (fieldId: string, categoryId: string, files: FileList | null) => {
+      const handleFileUpload = async (fieldId: string, files: FileList | null) => {
         if (!files || !submission.id || !submission.userId) return;
         const storage = getStorage();
         const uploadedFiles = [...(data.documents?.[fieldId]?.files || [])];
@@ -816,9 +679,14 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
         onChange('documents', { ...data.documents, [fieldId]: { ...data.documents?.[fieldId], files: uploadedFiles, status: 'available' } });
       };
 
+      const DOCUMENT_CATEGORIES = [
+        { id: 'business', title: 'Business Profile', icon: Building2, fields: [{ id: 'capabilityStatement', label: 'Capability statement' }, { id: 'logoFiles', label: 'Logo files' }] },
+        { id: 'compliance', title: 'Compliance & Insurance', icon: ShieldCheck, fields: [{ id: 'publicLiability', label: 'Public liability' }, { id: 'workersComp', label: 'Workers compensation' }] }
+      ];
+
       return (
         <div className="space-y-12">
-          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Document Upload Library</h2><p className="text-slate-500 text-lg">Central library for all supporting corporate documentation.</p></div>
+          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Document Upload Library</h2><p className="text-slate-500 text-lg">Central supporting documentation.</p></div>
           <Accordion type="single" collapsible className="space-y-6">
             {DOCUMENT_CATEGORIES.map((cat) => (
               <AccordionItem key={cat.id} value={cat.id} className="border-none">
@@ -826,9 +694,9 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
                   <AccordionTrigger className="px-8 py-6"><div className="flex items-center gap-4"><cat.icon className="w-5 h-5 text-primary" /><span className="text-lg font-bold">{cat.title}</span></div></AccordionTrigger>
                   <AccordionContent className="px-8 pb-8 space-y-8">
                     {cat.fields.map((field) => (
-                      <div key={field.id} className="space-y-4 pt-4 first:pt-0">
-                        <div className="flex items-center justify-between"><Label className="font-bold">{field.label}</Label><div className="flex items-center gap-3"><input type="file" id={`up-${field.id}`} className="sr-only" multiple onChange={(e) => handleFileUpload(field.id, cat.id, e.target.files)} /><Button asChild variant="outline" size="sm" className="rounded-xl border-2"><label htmlFor={`up-${field.id}`} className="cursor-pointer gap-2"><UploadCloud className="w-4 h-4" /> Upload</label></Button></div></div>
-                        <div className="grid gap-2">{(data.documents?.[field.id]?.files || []).map((file: any) => (<div key={file.id} className="p-3 bg-slate-50 rounded-xl border flex items-center justify-between"><span className="text-xs font-bold truncate max-w-[300px]">{file.name}</span><Button variant="ghost" size="icon" onClick={() => {}} className="text-slate-400 hover:text-destructive"><Trash2 className="w-4 h-4" /></Button></div>))}</div>
+                      <div key={field.id} className="space-y-4 pt-4">
+                        <div className="flex items-center justify-between"><Label className="font-bold">{field.label}</Label><div className="flex items-center gap-3"><input type="file" id={`up-${field.id}`} className="sr-only" multiple onChange={(e) => handleFileUpload(field.id, e.target.files)} /><Button asChild variant="outline" size="sm" className="rounded-xl border-2"><label htmlFor={`up-${field.id}`} className="cursor-pointer gap-2"><UploadCloud className="w-4 h-4" /> Upload</label></Button></div></div>
+                        <div className="grid gap-2">{(data.documents?.[field.id]?.files || []).map((file: any) => (<div key={file.id} className="p-3 bg-slate-50 rounded-xl border flex items-center justify-between"><span className="text-xs font-bold truncate max-w-[300px]">{file.name}</span><Button variant="ghost" size="icon" className="text-slate-400 hover:text-destructive"><Trash2 className="w-4 h-4" /></Button></div>))}</div>
                       </div>
                     ))}
                   </AccordionContent>
@@ -836,168 +704,58 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
               </AccordionItem>
             ))}
           </Accordion>
-          <div className="pt-10 border-t"><div className="flex items-start space-x-4 p-6 border-2 rounded-3xl bg-primary/5 border-primary"><Checkbox checked={data.acks?.docsConfirmed} onCheckedChange={() => onChange('acks', { ...data.acks, docsConfirmed: !data.acks?.docsConfirmed })} /><Label className="text-sm font-bold">I have uploaded the documents currently available to me, or marked unavailable documents where relevant. *</Label></div></div>
         </div>
       );
     }
 
     case 'authority_matrix': {
+      const ROWS = ["Search for opportunities", "Submit tenders", "Provide pricing", "Accept terms"];
+      const LEVELS = ["Authorised", "Requires approval", "Not authorised"];
       return (
         <div className="space-y-12">
-          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Authority Matrix</h2><p className="text-slate-500 text-lg">Confirm what actions Bid Manager is authorised to take.</p></div>
+          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Authority Matrix</h2><p className="text-slate-500 text-lg">What can Bid Manager do?</p></div>
           <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
             <Table>
-              <TableHeader><TableRow><TableHead className="w-[40%] pl-8">Action</TableHead>{AUTHORITY_LEVELS.map(level => <TableHead key={level} className="text-center text-[10px] uppercase">{level}</TableHead>)}</TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead className="w-[40%] pl-8">Action</TableHead>{LEVELS.map(level => <TableHead key={level} className="text-center text-[10px] uppercase">{level}</TableHead>)}</TableRow></TableHeader>
               <TableBody>
-                {AUTHORITY_ROWS.map((row) => {
-                  const currentVal = data.matrix?.[row];
-                  const isHighRisk = HIGH_RISK_AUTHORITY_ITEMS.includes(row) && currentVal === 'Authorised';
-                  return (
-                    <TableRow key={row} className={isHighRisk ? 'bg-amber-50/50' : ''}>
-                      <TableCell className="font-medium pl-8 py-4"><div className="flex flex-col gap-1"><span className="text-sm">{row}</span>{isHighRisk && <span className="text-[10px] font-bold text-amber-600 uppercase">High Risk Item</span>}</div></TableCell>
-                      {AUTHORITY_LEVELS.map(level => <TableCell key={level} className="text-center p-0"><RadioGroup value={currentVal || ''} onValueChange={(v) => onChange('matrix', { ...data.matrix, [row]: v })} className="flex justify-center"><RadioGroupItem value={level} /></RadioGroup></TableCell>)}
-                    </TableRow>
-                  );
-                })}
+                {ROWS.map((row) => (
+                  <TableRow key={row}>
+                    <TableCell className="font-medium pl-8 py-4">{row}</TableCell>
+                    {LEVELS.map(level => <TableCell key={level} className="text-center p-0"><RadioGroup value={data.matrix?.[row] || ''} onValueChange={(v) => onChange('matrix', { ...data.matrix, [row]: v })} className="flex justify-center"><RadioGroupItem value={level} /></RadioGroup></TableCell>)}
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           </Card>
-          <div className="space-y-6 pt-10 border-t"><h3 className="text-xl font-bold">Final Acknowledgements</h3>{[{ id: 'relied', label: 'I understand that Bid Manager will rely on these authority settings.' }, { id: 'auto', label: 'Actions marked as “Authorised” may be performed without further approval.' }, { id: 'consequence', label: 'I understand that pricing and contract terms carry commercial consequences.' }, { id: 'accurate', label: 'I confirm these settings are accurate to the best of my knowledge.' }].map((ack) => (<div key={ack.id} className="flex items-start space-x-4 p-4 border rounded-xl"><Checkbox checked={data.acks?.[ack.id]} onCheckedChange={() => onChange('acks', { ...data.acks, [ack.id]: !data.acks?.[ack.id] })} /><Label className="text-sm font-medium">{ack.label} *</Label></div>))}</div>
         </div>
       );
     }
 
     case 'final_submission': {
       const isComplete = (visibleSteps.length - 1) === (submission?.completedSteps?.length || 0);
-      const incompleteSteps = visibleSteps.filter(s => s.key !== 'final_submission' && !submission?.completedSteps?.includes(s.key));
-      const hasDeclarations = data.declarations?.accurateAndComplete && data.declarations?.authorisedToSubmit && data.declarations?.termsAccepted;
-      const canSubmit = isComplete && hasDeclarations;
-
       return (
         <div className="space-y-12">
           <div className="space-y-4">
-            <h2 className="text-4xl font-headline font-bold text-slate-900">Final Declaration and Submission</h2>
-            <p className="text-slate-500 text-lg">Review your onboarding status and confirm the final declarations to lock your submission.</p>
+            <h2 className="text-4xl font-headline font-bold text-slate-900">Final Declaration</h2>
+            <p className="text-slate-500 text-lg">Review status and confirm declarations.</p>
           </div>
-
-          <Card className="border-none shadow-sm rounded-3xl bg-white border border-slate-100">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xl">Onboarding Completion Summary</CardTitle>
-              <CardDescription>Review the status of your requirements.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-end justify-between">
-                <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Progress</span>
-                  <p className="text-3xl font-black text-primary">{Math.round(submission?.completionPercentage || 0)}%</p>
-                </div>
-                <div className="text-right">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Status</span>
-                  <p className="font-bold text-slate-700">{isComplete ? 'Ready to Submit' : 'Incomplete'}</p>
-                </div>
-              </div>
-              <Progress value={submission?.completionPercentage || 0} className="h-3" />
-              
-              {!isComplete && (
-                <Alert variant="destructive" className="bg-red-50 border-red-100 rounded-2xl">
-                  <AlertTriangle className="w-4 h-4" />
-                  <AlertTitle className="font-bold">Required sections incomplete</AlertTitle>
-                  <AlertDescription>
-                    <p className="mb-3">You must complete the following sections before submitting:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {incompleteSteps.map(s => (
-                        <Button key={s.key} variant="outline" size="sm" className="h-7 text-[10px] rounded-full border-red-200 bg-white" onClick={() => onNavigate(s.key)}>
-                          {s.shortTitle}
-                        </Button>
-                      ))}
-                    </div>
-                  </AlertDescription>
-                </Alert>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-none shadow-sm rounded-3xl bg-white border border-slate-100">
-            <CardHeader>
-              <CardTitle className="text-xl">Final Declarations</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {[
-                { id: 'accurateAndComplete', label: 'I confirm the information provided is accurate and complete to the best of my knowledge.' },
-                { id: 'authorisedToSubmit', label: 'I confirm I am authorised to submit this onboarding pack on behalf of the business.' },
-                { id: 'termsAccepted', label: 'I acknowledge and accept the Bid Manager Terms and Conditions.' },
-                { id: 'informationUseAcknowledged', label: 'I understand Bid Manager may use the information provided to prepare proposal content, recommendations, and applications.' },
-                { id: 'approvalResponsibilityAcknowledged', label: 'I understand final commitments may require approval depending on my authority settings.' },
-                { id: 'noPasswordsAcknowledged', label: 'I understand I must not provide platform passwords or MFA codes through this portal.' },
-                { id: 'submissionLockAcknowledged', label: 'I understand submitted onboarding information will be locked unless Bid Manager reopens it.' }
-              ].map(decl => (
-                <div key={decl.id} className="flex items-start gap-4 p-4 border rounded-2xl hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => onChange('declarations', { ...data.declarations, [decl.id]: !data.declarations?.[decl.id] })}>
-                  <Checkbox checked={data.declarations?.[decl.id]} onCheckedChange={() => {}} className="mt-1" />
-                  <Label className="text-sm font-medium leading-relaxed cursor-pointer">{decl.label}</Label>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          <div className="space-y-4">
-            <Label className="text-lg font-bold">Final Notes (Optional)</Label>
-            <Textarea 
-              placeholder="Is there anything else we should know before reviewing your onboarding pack?"
-              className="min-h-[150px] rounded-3xl p-6"
-              value={data.finalNotes || ''}
-              onChange={(e) => onChange('finalNotes', e.target.value)}
-            />
-          </div>
-
-          <div className="p-8 bg-amber-50 border border-amber-200 rounded-[2rem] flex gap-4">
-            <AlertCircle className="w-6 h-6 text-amber-600 shrink-0" />
-            <div className="space-y-1">
-              <p className="font-bold text-amber-900">Submission Lock Warning</p>
-              <p className="text-sm text-amber-700">After submission, your onboarding pack will be locked unless Bid Manager reopens it for edits. Humanity has enough half-submitted paperwork already—please ensure your answers are final.</p>
+          <Card className="p-8 rounded-3xl bg-white border border-slate-100 space-y-6">
+            <div className="flex justify-between items-end">
+              <div><p className="text-[10px] font-bold text-muted-foreground uppercase">Progress</p><p className="text-3xl font-black text-primary">{Math.round(submission?.completionPercentage || 0)}%</p></div>
+              <Badge>{isComplete ? 'Ready' : 'Incomplete'}</Badge>
             </div>
-          </div>
-
-          <Button 
-            size="lg" 
-            className="w-full h-20 rounded-[2rem] text-xl font-black bg-primary hover:bg-primary/90 shadow-2xl shadow-primary/30 gap-4"
-            disabled={!canSubmit}
-            onClick={onSubmit}
-          >
-            <Send className="w-6 h-6" /> Submit Onboarding Pack
-          </Button>
+            <Progress value={submission?.completionPercentage || 0} className="h-3" />
+          </Card>
+          <Button size="lg" className="w-full h-20 rounded-[2rem] text-xl font-black" disabled={!isComplete} onClick={onSubmit}><Send className="w-6 h-6 mr-2" /> Submit Onboarding Pack</Button>
         </div>
       );
     }
 
     default:
-      return (
-        <div className="py-24 text-center space-y-4">
-          <AlertTriangle className="w-12 h-12 text-slate-200 mx-auto" />
-          <p className="text-slate-400 font-medium">This section ({stepId}) is currently being developed.</p>
-        </div>
-      );
+      return null;
   }
 }
 
-const AUTHORITY_ROWS = [
-  "Search for opportunities", "Recommend opportunities", "Create or update platform profiles",
-  "Register on free platforms", "Register on paid platforms", "Assist with supplier, tender, or grant registrations",
-  "Draft responses, quotes, and applications", "Ask clarification questions", "Communicate with buyers, funders, or leads",
-  "Prepare marketplace responses", "Submit marketplace responses", "Submit quote requests", "Submit tenders",
-  "Submit grants", "Provide pricing", "Accept terms or contract conditions", "Use supplied documents in submissions",
-  "Maintain a reusable bid library", "Follow up with buyers, funders, or leads"
-];
-
-const AUTHORITY_LEVELS = ["Authorised", "Authorised after approval", "Not authorised", "Unsure"];
-const HIGH_RISK_AUTHORITY_ITEMS = ["Submit tenders", "Submit grants", "Provide pricing", "Accept terms or contract conditions", "Register on paid platforms"];
-
-const DOCUMENT_CATEGORIES = [
-  { id: 'business', title: '1. Business Profile and Brand', icon: Building2, fields: [{ id: 'capabilityStatement', label: 'Capability statement' }, { id: 'businessProfile', label: 'Business profile or brochure' }, { id: 'logoFiles', label: 'Logo files' }, { id: 'brandAssets', label: 'Brand assets' }, { id: 'styleGuide', label: 'Style guide' }, { id: 'marketingCopy', label: 'Website or marketing copy' }] },
-  { id: 'compliance', title: '2. Compliance and Insurance', icon: ShieldCheck, fields: [{ id: 'publicLiability', label: 'Public liability insurance' }, { id: 'professionalIndemnity', label: 'Professional indemnity insurance' }, { id: 'workersComp', label: 'Workers compensation insurance' }, { id: 'cyberInsurance', label: 'Cyber insurance' }, { id: 'motorVehicle', label: 'Motor vehicle insurance' }, { id: 'licences', label: 'Licences' }, { id: 'certifications', label: 'Certifications' }, { id: 'staffChecks', label: 'Staff checks (Police, WWCC, etc)' }, { id: 'policiesProcedures', label: 'Policies and procedures' }] },
-  { id: 'team', title: '3. Team and Capability', icon: Users, fields: [{ id: 'staffCvs', label: 'Staff CVs' }, { id: 'staffBios', label: 'Staff bios' }, { id: 'qualifications', label: 'Qualifications' }, { id: 'tickets', label: 'Tickets' }, { id: 'trainingCertificates', label: 'Training certificates' }, { id: 'orgChart', label: 'Organisational chart' }] },
-  { id: 'proof', title: '4. Case Studies and Proof', icon: CheckCircle2, fields: [{ id: 'projectExamples', label: 'Project examples' }, { id: 'caseStudies', label: 'Case studies' }, { id: 'photos', label: 'Photos' }, { id: 'beforeAfter', label: 'Before and after images' }, { id: 'testimonials', label: 'Testimonials' }, { id: 'reviews', label: 'Reviews' }, { id: 'referenceLetters', label: 'Reference letters' }, { id: 'completionCertificates', label: 'Completion certificates' }, { id: 'reports', label: 'Reports' }] },
-  { id: 'submissions', title: '5. Previous Submissions and Feedback', icon: FileStack, fields: [{ id: 'previousTenders', label: 'Previous tenders' }, { id: 'previousGrants', label: 'Previous grants' }, { id: 'previousProposals', label: 'Previous proposals' }, { id: 'previousQuotes', label: 'Previous quotes' }, { id: 'supplierRegistrations', label: 'Supplier registrations' }, { id: 'buyerFeedback', label: 'Buyer feedback' }, { id: 'grantFeedback', label: 'Grant feedback' }, { id: 'debriefNotes', label: 'Debrief notes' }] },
-  { id: 'pricing', title: '6. Pricing and Commercial', icon: DollarSign, fields: [{ id: 'pricingSchedules', label: 'Pricing schedules' }, { id: 'rateCards', label: 'Rate cards' }, { id: 'packageLists', label: 'Package lists' }, { id: 'quoteTemplates', label: 'Quote templates' }, { id: 'termsConditions', label: 'Terms and conditions' }, { id: 'budgetTemplates', label: 'Budget templates' }, { id: 'grantBudgetDocs', label: 'Grant budget documents' }] },
-  { id: 'grantDocs', title: '7. Grant Project Documents', icon: Gift, fields: [{ id: 'supplierQuotes', label: 'Supplier quotes' }, { id: 'projectBudgets', label: 'Project budgets' }, { id: 'supportLetters', label: 'Letters of support' }, { id: 'projectPlans', label: 'Project plans' }, { id: 'evidenceNeed', label: 'Evidence of need' }, { id: 'partnerDocuments', label: 'Partner documents' }] },
-  { id: 'other', title: '8. Other Relevant Documents', icon: Files, fields: [{ id: 'otherDocuments', label: 'Other documents' }] }
-];
+function Send({ className }: { className?: string }) {
+  return <ChevronRight className={className} />;
+}

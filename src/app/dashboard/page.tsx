@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useMemo } from 'react';
@@ -14,28 +13,7 @@ import {
   LogOut,
   CheckCircle2,
   Circle,
-  Lock,
   ChevronRight,
-  Zap,
-  Building2,
-  AlertCircle,
-  FileText,
-  Award,
-  ShoppingCart,
-  Users,
-  Target,
-  DollarSign,
-  Globe,
-  ShieldCheck,
-  FileBadge,
-  Gift,
-  BarChart3,
-  Send,
-  MessageSquare,
-  Library,
-  Scale,
-  Clock,
-  Flag
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useAuth, useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
@@ -43,60 +21,7 @@ import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { doc, query, collection, where } from 'firebase/firestore';
 import Link from 'next/link';
-
-const ALL_STEPS = [
-  { key: "welcome_expectations", shortTitle: "Welcome & Expectations", icon: Zap, conditional: false },
-  { key: "business_snapshot", shortTitle: "Business Snapshot", icon: Building2, conditional: false },
-  { key: "opportunity_triage", shortTitle: "Opportunity Triage", icon: AlertCircle, conditional: false },
-  { key: "service_selection", shortTitle: "Service Selection", icon: FileText, conditional: false },
-  { key: "business_profile", shortTitle: "Business Profile", icon: Award, conditional: false },
-  { key: "offer_menu", shortTitle: "Offer Menu", icon: ShoppingCart, conditional: false },
-  { key: "team_capacity", shortTitle: "Team & Capacity", icon: Users, conditional: false },
-  { key: "proof_evidence", shortTitle: "Proof & Evidence", icon: CheckCircle2, conditional: false },
-  { key: "goals_strategy", shortTitle: "Goals & Strategy", icon: Target, conditional: false },
-  { key: "pricing_commercial", shortTitle: "Pricing & Commercial", icon: DollarSign, conditional: false },
-  { key: "platform_setup", shortTitle: "Platform Setup", icon: Globe, conditional: false },
-  { key: "compliance_insurance", shortTitle: "Compliance & Insurance", icon: ShieldCheck, conditional: false },
-  { 
-    key: "tender_readiness", 
-    shortTitle: "Tender Readiness", 
-    icon: FileBadge, 
-    conditional: true,
-    isEnabled: (services: string[]) => services.includes("Government Tenders") || services.includes("Private Tenders") || services.includes("Panel or Supplier Registrations") || services.includes("Unsure, please recommend")
-  },
-  { 
-    key: "grants", 
-    shortTitle: "Grants", 
-    icon: Gift, 
-    conditional: true,
-    isEnabled: (services: string[]) => services.includes("Grants") || services.includes("Unsure, please recommend")
-  },
-  { 
-    key: "marketplace_strategy", 
-    shortTitle: "Marketplace Strategy", 
-    icon: BarChart3, 
-    conditional: true,
-    isEnabled: (services: string[]) => services.includes("Marketplace Leads") || services.includes("Unsure, please recommend")
-  },
-  { 
-    key: "direct_outreach_strategy", 
-    shortTitle: "Outreach Strategy", 
-    icon: Send, 
-    conditional: true,
-    isEnabled: (services: string[]) => services.includes("Direct Proposals") || services.includes("Unsure, please recommend")
-  },
-  { 
-    key: "quote_support", 
-    shortTitle: "Quote Support", 
-    icon: MessageSquare, 
-    conditional: true,
-    isEnabled: (services: string[]) => services.includes("Quote Requests") || services.includes("Marketplace Leads") || services.includes("Direct Proposals") || services.includes("Unsure, please recommend")
-  },
-  { key: "workflow_rules", shortTitle: "Workflow Rules", icon: Clock, conditional: false },
-  { key: "document_upload_library", shortTitle: "Document Upload Library", icon: Library, conditional: false },
-  { key: "authority_matrix", shortTitle: "Authority Matrix", icon: Scale, conditional: false },
-  { key: "final_submission", shortTitle: "Final Submission", icon: Flag, conditional: false }
-];
+import { getVisibleOnboardingSteps } from '@/lib/onboarding-steps';
 
 export default function DashboardPage() {
   const auth = useAuth();
@@ -131,11 +56,11 @@ export default function DashboardPage() {
   const selectedServices = submission?.sections?.service_selection?.selectedServices || [];
   
   const visibleSteps = useMemo(() => {
-    return ALL_STEPS.filter(step => !step.conditional || step.isEnabled?.(selectedServices));
+    return getVisibleOnboardingSteps(selectedServices);
   }, [selectedServices]);
 
   const completedCount = submission?.completedSteps?.length || 0;
-  const progressValue = (completedCount / visibleSteps.length) * 100;
+  const progressValue = visibleSteps.length > 0 ? (completedCount / visibleSteps.length) * 100 : 0;
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-body">
@@ -221,7 +146,7 @@ export default function DashboardPage() {
                   title={`${idx + 1}. ${step.shortTitle}`} 
                   icon={<step.icon className="w-5 h-5" />} 
                   status={status}
-                  onClick={() => router.push(`/onboarding/${step.key}`)}
+                  onClick={() => router.push(step.route)}
                 />
               );
             })}
