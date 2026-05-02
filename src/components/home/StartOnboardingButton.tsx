@@ -49,7 +49,7 @@ export function StartOnboardingButton() {
 
       // 4. Create new onboarding submission
       const newSubmissionId = doc(collection(db, 'onboardingSubmissions')).id;
-      const initialVisibleSteps = getVisibleOnboardingSteps([]); // Default steps when no services selected
+      const initialVisibleSteps = getVisibleOnboardingSteps(); // Default steps when no services selected
       
       const newSubmission = {
         id: newSubmissionId,

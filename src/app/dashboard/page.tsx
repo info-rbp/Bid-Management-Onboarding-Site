@@ -22,9 +22,9 @@ import { Input } from '@/components/ui/input';
 import { useAuth, useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
 import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-import { doc, query, collection, where } from 'firebase/firestore';
+import { doc, query, collection, where, addDoc, serverTimestamp } from 'firebase/firestore';
 import Link from 'next/link';
-import { getVisibleOnboardingSteps } from '@/lib/onboarding-steps';
+import { getVisibleOnboardingSteps, allSteps } from '@/lib/onboarding-steps';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 
 export default function DashboardPage() {
@@ -56,6 +56,46 @@ export default function DashboardPage() {
       console.error("Logout failed", error);
     }
   };
+
+  const handleStartOnboarding = async () => {
+    if (!user || !db) return;
+    const newSubmission = {
+      userId: user.uid,
+      businessName: userData?.businessName || 'My Business',
+      status: 'in_progress',
+      currentStep: 'welcome_expectations',
+      visibleStepKeys: getVisibleOnboardingSteps().map(s => s.key),
+      completionPercentage: 0,
+      selectedServices: [],
+      enabledModules: {
+        tenderReadiness: false,
+        grants: false,
+        marketplaceStrategy: false,
+        outreachStrategy: false,
+        quoteSupport: false,
+      },
+      sections: {},
+      sectionStatuses: allSteps.reduce((acc, step) => {
+        acc[step.key] = {
+          sectionKey: step.key,
+          status: 'not_started',
+          required: step.required,
+          missingFields: [],
+          lastUpdatedAt: null
+        };
+        return acc;
+      }, {} as { [key: string]: any }),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      lastSavedAt: serverTimestamp(),
+      submittedAt: null,
+      adminReopened: false,
+      googleDriveFolderId: null,
+      googleDriveFolderUrl: null,
+    };
+    const newDocRef = await addDoc(collection(db, 'onboardingSubmissions'), newSubmission);
+    router.push('/onboarding/welcome_expectations');
+  }
 
   const enabledModules = submission?.enabledModules;
 
@@ -136,13 +176,17 @@ export default function DashboardPage() {
                 <h1 className="text-3xl font-headline font-bold text-slate-900">Onboarding Dashboard</h1>
                 <div className="flex items-center gap-3">
                   <Badge variant={isSubmitted ? "default" : "secondary"} className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${isSubmitted ? 'bg-green-500 hover:bg-green-600' : ''}`}>
-                    {submission?.status?.replace('_', ' ') || 'In Progress'}
+                    {submission?.status?.replace('_', ' ') || 'Not Started'}
                   </Badge>
-                  {submission && (
+                  {submission ? (
                     <Button asChild size="sm" className={`gap-2 rounded-xl font-bold ${isSubmitted ? 'bg-slate-100 text-slate-900 hover:bg-slate-200 border-none' : 'bg-primary shadow-lg shadow-primary/20'}`}>
                       <Link href={continueRoute}>
                         {isSubmitted ? 'View Submitted Pack' : 'Continue Onboarding'} <ArrowRight className="w-4 h-4" />
                       </Link>
+                    </Button>
+                  ) : (
+                    <Button size="sm" onClick={handleStartOnboarding} className="gap-2 rounded-xl font-bold bg-primary shadow-lg shadow-primary/20">
+                      Start Onboarding <ArrowRight className="w-4 h-4" />
                     </Button>
                   )}
                 </div>
@@ -155,7 +199,7 @@ export default function DashboardPage() {
                 <div className="flex justify-between items-end">
                   <div className="space-y-1">
                     <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Overall Completion</h2>
-                    <p className={font-bold font-headline text-4xl">{Math.round(progressValue)}%</p>
+                    <p className="font-bold font-headline text-4xl">{Math.round(progressValue)}%</p>
                   </div>
                   <p className="text-sm text-muted-foreground font-medium">
                     {completedCount} of {visibleSteps.length} steps completed

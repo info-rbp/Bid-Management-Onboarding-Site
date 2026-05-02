@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Lock, Shield, BookOpen, UserCheck, MessageSquareWarning, Save, Info } from 'lucide-react';
+import { Lock, Shield, BookOpen, UserCheck, MessageSquareWarning, Save, Info, Check } from 'lucide-react';
 
 interface WelcomeExpectationsProps {
   data: any;

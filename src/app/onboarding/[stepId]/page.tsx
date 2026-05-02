@@ -26,24 +26,24 @@ import {
   CloudOff
 } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
-import { getVisibleOnboardingSteps, allSteps, EnabledModules } from '@/lib/onboarding-steps';
+import { getVisibleOnboardingSteps, allSteps, EnabledModules, OnboardingStep } from '@/lib/onboarding-steps';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { validateOnboardingSection } from '@/lib/onboardingValidation';
-import { WelcomeExpectations } from './welcome_expectations';
-import { BusinessSnapshot } from './business_snapshot';
-import { ServiceSelection } from './service_selection';
-import { OfferMenu } from './offer_menu';
-import { DocumentUploadLibrary } from './document_upload_library';
-import { AuthorityMatrix } from './authority_matrix';
-import { OpportunityTriage } from './opportunity_triage';
-import { ComplianceInsurance } from './compliance_insurance';
-import { WorkflowRules } from './workflow_rules';
-import { TenderReadiness } from './tender_readiness';
-import { Grants } from './grants';
-import { MarketplaceStrategy } from './marketplace_strategy';
-import { OutreachStrategy } from './outreach_strategy';
-import { QuoteSupport } from './quote_support';
-import { FinalSubmission } from './final_submission';
+import { WelcomeExpectations } from '@/app/onboarding/welcome_expectations';
+import { BusinessSnapshot } from '@/app/onboarding/business_snapshot';
+import { ServiceSelection } from '@/app/onboarding/service_selection';
+import { OfferMenu } from '@/app/onboarding/offer_menu';
+import { DocumentUploadLibrary } from '@/app/onboarding/document_upload_library';
+import { AuthorityMatrix } from '@/app/onboarding/authority_matrix';
+import { OpportunityTriage } from '@/app/onboarding/opportunity_triage';
+import { ComplianceInsurance } from '@/app/onboarding/compliance_insurance';
+import { WorkflowRules } from '@/app/onboarding/workflow_rules';
+import { TenderReadiness } from '@/app/onboarding/tender_readiness';
+import { Grants } from '@/app/onboarding/grants';
+import { MarketplaceStrategy } from '@/app/onboarding/marketplace_strategy';
+import { OutreachStrategy } from '@/app/onboarding/outreach_strategy';
+import { QuoteSupport } from '@/app/onboarding/quote_support';
+import { FinalSubmission } from '@/app/onboarding/final_submission';
 
 export default function OnboardingStepPage() {
   const { stepId } = useParams();
@@ -122,6 +122,11 @@ export default function OnboardingStepPage() {
           currentStep: sid
         };
         updateData[`sections.${sid}`] = formData;
+        updateData[`sectionStatuses.${sid}`] = {
+            ...(submission.sectionStatuses[sid] || {}),
+            status: 'in_progress',
+            lastUpdatedAt: serverTimestamp(),
+        }
 
         await updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
         
@@ -135,7 +140,7 @@ export default function OnboardingStepPage() {
     }, 1500);
 
     return () => clearTimeout(timeout);
-  }, [formData, stepId, submissionId, db, isLocked]);
+  }, [formData, stepId, submissionId, db, isLocked, submission]);
 
   useEffect(() => {
     if (!loadingSubmissions && submission && !currentStep && stepId) {
@@ -155,14 +160,12 @@ export default function OnboardingStepPage() {
       if (!querySnapshot.empty) {
         setSubmissionId(querySnapshot.docs[0].id);
       } else {
-        const initialVisible = getVisibleOnboardingSteps();
         const newDoc = await addDoc(collection(db, 'onboardingSubmissions'), {
           userId: user.uid,
           businessName: user.displayName || 'My Business',
           status: 'in_progress',
           currentStep: stepId,
-          completedSteps: [],
-          visibleStepKeys: initialVisible.map(s => s.key),
+          visibleStepKeys: allSteps.map(s => s.key),
           completionPercentage: 0,
           selectedServices: [],
           enabledModules: {
@@ -173,7 +176,16 @@ export default function OnboardingStepPage() {
             quoteSupport: false,
           },
           sections: {},
-          sectionStatuses: {},
+          sectionStatuses: allSteps.reduce((acc, step) => {
+            acc[step.key] = {
+              sectionKey: step.key,
+              status: 'not_started',
+              required: step.required,
+              missingFields: [],
+              lastUpdatedAt: null
+            };
+            return acc;
+          }, {} as { [key: string]: any }),
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           lastSavedAt: serverTimestamp(),
@@ -228,6 +240,7 @@ export default function OnboardingStepPage() {
         const updateData: any = { updatedAt: serverTimestamp() };
         updateData[`sections.${stepId}`] = formData;
         updateData[`sectionStatuses.${stepId}`] = {
+          ...(submission.sectionStatuses[stepId as string] || {}),
           status: 'needs_attention',
           missingFields: validation.missingFields,
           lastUpdatedAt: serverTimestamp()
@@ -248,34 +261,77 @@ export default function OnboardingStepPage() {
     updateData[`sections.${stepId}`] = formData;
 
     let targetStepKey = stepId as string;
+    let postSaveNavigation = true;
+    let tempEnabledModules = submission.enabledModules;
 
     if (stepId === 'service_selection') {
       const services = formData.selectedServices || [];
-      const enabledModules: EnabledModules = {
+      const newEnabledModules: EnabledModules = {
         tenderReadiness: services.includes("Government Tenders") || services.includes("Private Tenders") || services.includes("Panel or Supplier Registrations") || services.includes("Unsure, please recommend"),
         grants: services.includes("Grants") || services.includes("Unsure, please recommend"),
         marketplaceStrategy: services.includes("Marketplace Leads") || services.includes("Unsure, please recommend"),
         outreachStrategy: services.includes("Direct Proposals") || services.includes("Unsure, please recommend"),
         quoteSupport: services.includes("Quote Requests") || services.includes("Marketplace Leads") || services.includes("Direct Proposals") || services.includes("Unsure, please recommend"),
       };
-      updateData.enabledModules = enabledModules;
-      updateData.visibleStepKeys = getVisibleOnboardingSteps(enabledModules).map(s => s.key);
+      tempEnabledModules = newEnabledModules;
+
+      const newVisibleSteps = getVisibleOnboardingSteps(newEnabledModules);
+      const newVisibleStepKeys = newVisibleSteps.map(s => s.key);
+      const currentStatuses = { ...submission.sectionStatuses };
+      let shouldRedirect = false;
+
+      for (const step of allSteps) {
+          if (step.isConditional) {
+              const isNowVisible = newVisibleStepKeys.includes(step.key);
+              const wasVisible = submission.visibleStepKeys.includes(step.key);
+
+              if (isNowVisible && !wasVisible) {
+                  const previousStatus = currentStatuses[step.key].status === 'skipped' ? 'in_progress' : currentStatuses[step.key].status;
+                  currentStatuses[step.key].status = previousStatus;
+              } else if (!isNowVisible && wasVisible) {
+                  currentStatuses[step.key].status = 'skipped';
+                  if (stepId === step.key) {
+                      shouldRedirect = true;
+                  }
+              }
+          }
+      }
+
+      updateData.enabledModules = newEnabledModules;
+      updateData.visibleStepKeys = newVisibleStepKeys;
+      updateData.selectedServices = services;
+      updateData.sectionStatuses = currentStatuses;
+
+      if(shouldRedirect){
+        const nextPageIndex = visibleSteps.findIndex(s => s.key === stepId);
+        if (nextPageIndex !== -1 && nextPageIndex + 1 < newVisibleSteps.length) {
+            targetStepKey = newVisibleSteps[nextPageIndex + 1].key;
+        } else {
+            targetStepKey = 'final_submission';
+        }
+        postSaveNavigation = false;
+        toast({ title: "Section Hidden", description: "This section has been hidden because it is no longer selected in your service scope." });
+        router.push(allSteps.find(s => s.key === targetStepKey)!.route);
+      }
     }
 
     if (direction === 'next') {
-      const currentCompleted = submission?.completedSteps || [];
-      if (!currentCompleted.includes(stepId as string)) {
-        updateData.completedSteps = [...currentCompleted, stepId as string];
-      }
-      
-      updateData[`sectionStatuses.${stepId}`] = {
-        status: 'complete',
-        missingFields: [],
-        lastUpdatedAt: serverTimestamp()
-      };
+      const finalVisibleSteps = getVisibleOnboardingSteps(tempEnabledModules);
+      const finalVisibleRequiredSteps = finalVisibleSteps.filter(s => s.required);
+      const completedVisibleRequiredSteps = finalVisibleRequiredSteps.filter(
+          s => (s.key !== stepId && submission.sectionStatuses[s.key]?.status === 'complete') || (s.key === stepId)
+      ).length;
 
-      const completedCount = (updateData.completedSteps || submission.completedSteps).length;
-      updateData.completionPercentage = (completedCount / visibleSteps.length) * 100;
+      const completionPercentage = (completedVisibleRequiredSteps / finalVisibleRequiredSteps.length) * 100;
+
+      updateData[`sectionStatuses.${stepId}`] = {
+          ...(submission.sectionStatuses[stepId as string] || {}),
+          status: 'complete',
+          missingFields: [],
+          lastUpdatedAt: serverTimestamp()
+      };
+      
+      updateData.completionPercentage = completionPercentage;
       
       if (currentVisibleIndex < visibleSteps.length - 1) {
         targetStepKey = visibleSteps[currentVisibleIndex + 1].key;
@@ -286,8 +342,9 @@ export default function OnboardingStepPage() {
       }
     } else {
       updateData[`sectionStatuses.${stepId}`] = {
-        status: 'in_progress',
-        lastUpdatedAt: serverTimestamp()
+          ...(submission.sectionStatuses[stepId as string] || {}),
+          status: 'in_progress',
+          lastUpdatedAt: serverTimestamp()
       };
     }
 
@@ -303,13 +360,13 @@ export default function OnboardingStepPage() {
       errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `onboardingSubmissions/${submissionId}`, operation: 'update', requestResourceData: updateData }));
     });
 
-    if (direction !== 'stay') {
+    if (direction !== 'stay' && postSaveNavigation) {
       const nextStep = visibleSteps.find(s => s.key === targetStepKey);
       if(nextStep) {
         router.push(nextStep.route);
         initialSyncDone.current[nextStep.key] = false;
       }
-    } else {
+    } else if(direction === 'stay') {
       toast({ title: "Draft Saved", description: "Your progress has been saved." });
     }
   };
@@ -317,13 +374,27 @@ export default function OnboardingStepPage() {
   const handleSubmitPack = async () => {
     if (!submissionId || !db || !user) return;
 
+    const finalStatuses = { ...submission.sectionStatuses };
+    for (const step of visibleSteps) {
+        if(finalStatuses[step.key].status !== 'complete') {
+            finalStatuses[step.key].status = step.required ? finalStatuses[step.key].status : 'skipped';
+        }
+    }
+    finalStatuses['final_submission'] = {
+        sectionKey: 'final_submission',
+        status: 'complete',
+        required: true,
+        missingFields: [],
+        lastUpdatedAt: serverTimestamp()
+    };
+
     try {
       await updateDoc(doc(db, 'onboardingSubmissions', submissionId), {
         status: 'submitted',
         submittedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         [`sections.final_submission`]: formData,
-        [`sectionStatuses.final_submission`]: { status: 'complete', lastUpdatedAt: serverTimestamp() },
+        sectionStatuses: finalStatuses,
         exportStatus: 'pending'
       });
 
@@ -404,7 +475,8 @@ export default function OnboardingStepPage() {
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-1">
             {visibleSteps.map((step, idx) => {
-              const status = submission?.sectionStatuses?.[step.key]?.status || 'not_started';
+              const statusInfo = submission?.sectionStatuses?.[step.key];
+              const status = statusInfo?.status || 'not_started';
               const isCurrent = step.key === stepId;
               
               const getIcon = () => {
@@ -417,6 +489,7 @@ export default function OnboardingStepPage() {
                 if (isCurrent) return 'bg-primary/10 text-primary font-bold shadow-sm';
                 if (status === 'complete') return 'text-green-600 hover:bg-green-50';
                 if (status === 'needs_attention') return 'text-orange-600 hover:bg-orange-50';
+                if (status === 'skipped') return 'text-slate-400 hover:bg-slate-50';
                 return 'text-muted-foreground hover:bg-slate-50';
               };
 
@@ -424,6 +497,7 @@ export default function OnboardingStepPage() {
                 if (isCurrent) return 'bg-primary text-white';
                 if (status === 'complete') return 'bg-green-100';
                 if (status === 'needs_attention') return 'bg-orange-100';
+                if (status === 'skipped') return 'bg-slate-100';
                 return 'bg-slate-100';
               };
 
