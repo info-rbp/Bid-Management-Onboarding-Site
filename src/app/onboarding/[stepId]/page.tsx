@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
@@ -310,7 +309,7 @@ export default function OnboardingStepPage() {
     }
   };
 
-  if (loadingSubmissions || !currentStep || !submissionId) {
+  if (loadingSubmissions || !currentStep || !submissionId || !submission) {
     return <div className="h-screen flex flex-col items-center justify-center gap-4"><Loader2 className="animate-spin text-primary w-10 h-10" /><p className="text-sm font-medium text-muted-foreground">Preparing your workspace...</p></div>;
   }
 
