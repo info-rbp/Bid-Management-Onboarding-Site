@@ -34,7 +34,6 @@ import {
   HelpCircle,
   Info,
   AlertTriangle,
-  CloudCheck,
   RefreshCw,
   CloudOff
 } from 'lucide-react';
@@ -385,7 +384,7 @@ export default function OnboardingStepPage() {
       case 'saved':
         return (
           <div className="flex items-center gap-2 text-xs text-green-600">
-            <CloudCheck className="w-3 h-3" />
+            <CheckCircle2 className="w-3 h-3" />
             <span>Saved {lastSavedTime ? `at ${lastSavedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}</span>
           </div>
         );
@@ -399,7 +398,7 @@ export default function OnboardingStepPage() {
       default:
         return lastSavedTime ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <CloudCheck className="w-3 h-3 opacity-50" />
+            <CheckCircle2 className="w-3 h-3 opacity-50" />
             <span>Last saved {lastSavedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
         ) : null;
