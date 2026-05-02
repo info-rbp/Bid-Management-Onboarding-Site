@@ -15,7 +15,8 @@ import {
   CheckCircle2,
   Circle,
   ChevronRight,
-  ArrowRight
+  ArrowRight,
+  AlertTriangle
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useAuth, useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
@@ -62,22 +63,18 @@ export default function DashboardPage() {
     return getVisibleOnboardingSteps(selectedServices);
   }, [selectedServices]);
 
-  // Logic to determine where to send the user when they click "Continue"
   const continueRoute = useMemo(() => {
     if (!submission || !visibleSteps.length) return '/onboarding/welcome_expectations';
 
-    // 1. Check if saved currentStep is valid and visible
     if (submission.currentStep) {
       const isVisible = visibleSteps.some(s => s.key === submission.currentStep);
       if (isVisible) return `/onboarding/${submission.currentStep}`;
     }
 
-    // 2. Find first incomplete step in the visible sequence
     const completedKeys = submission.completedSteps || [];
     const firstIncomplete = visibleSteps.find(s => !completedKeys.includes(s.key));
     if (firstIncomplete) return firstIncomplete.route;
 
-    // 3. Fallback to final submission if all visible steps are done
     return '/onboarding/final_submission';
   }, [submission, visibleSteps]);
 
@@ -170,9 +167,14 @@ export default function DashboardPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-8">
               {visibleSteps.map((step, idx) => {
-                const isCompleted = submission?.completedSteps?.includes(step.key);
+                const stepStatus = submission?.sectionStatuses?.[step.key]?.status || 'pending';
                 const isCurrent = submission?.currentStep === step.key;
-                const status = isCompleted ? 'completed' : isCurrent ? 'in_progress' : 'pending';
+                
+                // Map Firestore status to tile status
+                let status: 'completed' | 'in_progress' | 'pending' | 'needs_attention' = 'pending';
+                if (stepStatus === 'complete') status = 'completed';
+                else if (stepStatus === 'needs_attention') status = 'needs_attention';
+                else if (isCurrent) status = 'in_progress';
                 
                 return (
                   <StepTile 
@@ -204,7 +206,7 @@ function NavItem({ icon, label, active = false }: { icon: React.ReactNode, label
 interface StepTileProps {
   title: string;
   icon: React.ReactNode;
-  status: 'completed' | 'in_progress' | 'pending';
+  status: 'completed' | 'in_progress' | 'pending' | 'needs_attention';
   onClick: () => void;
 }
 
@@ -212,6 +214,7 @@ function StepTile({ title, icon, status, onClick }: StepTileProps) {
   const getStatusIcon = () => {
     switch (status) {
       case 'completed': return <CheckCircle2 className="w-5 h-5 text-green-500" />;
+      case 'needs_attention': return <AlertTriangle className="w-5 h-5 text-orange-500" />;
       case 'in_progress': return <Circle className="w-5 h-5 text-blue-500 fill-blue-50" />;
       default: return <Circle className="w-5 h-5 text-slate-200" />;
     }
@@ -220,8 +223,18 @@ function StepTile({ title, icon, status, onClick }: StepTileProps) {
   const getStatusText = () => {
     switch (status) {
       case 'completed': return 'Completed';
+      case 'needs_attention': return 'Needs Attention';
       case 'in_progress': return 'Continue';
       default: return 'Start';
+    }
+  };
+
+  const getStatusColor = () => {
+    switch (status) {
+      case 'completed': return 'text-green-600';
+      case 'needs_attention': return 'text-orange-600';
+      case 'in_progress': return 'text-blue-600';
+      default: return 'text-slate-400';
     }
   };
 
@@ -232,7 +245,7 @@ function StepTile({ title, icon, status, onClick }: StepTileProps) {
     >
       <CardContent className="p-6 flex flex-col h-full justify-between gap-4 pt-6">
         <div className="flex justify-between items-start">
-          <div className={`p-3 rounded-xl ${status === 'completed' ? 'bg-green-50 text-green-600' : status === 'in_progress' ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-600'} group-hover:scale-110 transition-transform`}>
+          <div className={`p-3 rounded-xl ${status === 'completed' ? 'bg-green-50 text-green-600' : status === 'needs_attention' ? 'bg-orange-50 text-orange-600' : status === 'in_progress' ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-600'} group-hover:scale-110 transition-transform`}>
             {icon}
           </div>
           {getStatusIcon()}
@@ -240,7 +253,7 @@ function StepTile({ title, icon, status, onClick }: StepTileProps) {
         <div className="space-y-2">
           <h3 className="font-bold text-sm leading-tight text-slate-800 line-clamp-2">{title}</h3>
           <div className="flex items-center justify-between pt-2">
-            <span className={`text-[10px] font-bold uppercase tracking-widest ${status === 'completed' ? 'text-green-600' : status === 'in_progress' ? 'text-blue-600' : 'text-slate-400'}`}>
+            <span className={`text-[10px] font-bold uppercase tracking-widest ${getStatusColor()}`}>
               {getStatusText()}
             </span>
             <ChevronRight className="w-4 h-4 text-slate-300 group-hover:translate-x-1 transition-transform" />

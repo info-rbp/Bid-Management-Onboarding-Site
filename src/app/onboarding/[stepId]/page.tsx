@@ -32,7 +32,8 @@ import {
   AlertCircle,
   FileText,
   HelpCircle,
-  Info
+  Info,
+  AlertTriangle
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -50,6 +51,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { getVisibleOnboardingSteps } from '@/lib/onboarding-steps';
 import { AuthGuard } from '@/components/auth/AuthGuard';
+import { validateOnboardingSection } from '@/lib/onboardingValidation';
 
 export default function OnboardingStepPage() {
   const { stepId } = useParams();
@@ -77,7 +79,6 @@ export default function OnboardingStepPage() {
   const currentStep = useMemo(() => visibleSteps.find(s => s.key === stepId), [visibleSteps, stepId]);
   const currentVisibleIndex = useMemo(() => visibleSteps.findIndex(s => s.key === stepId), [visibleSteps, stepId]);
 
-  // Sync currentStep in Firestore when the page is opened
   useEffect(() => {
     if (submissionId && db && stepId && submission && submission.status !== 'submitted') {
       if (submission.currentStep !== stepId) {
@@ -107,14 +108,17 @@ export default function OnboardingStepPage() {
       if (!querySnapshot.empty) {
         setSubmissionId(querySnapshot.docs[0].id);
       } else {
+        const initialVisible = getVisibleOnboardingSteps([]);
         const newDoc = await addDoc(collection(db, 'onboardingSubmissions'), {
           userId: user.uid,
           businessName: user.displayName || 'My Business',
           status: 'in_progress',
           currentStep: stepId,
           completedSteps: [],
+          sectionStatuses: {},
           sections: {},
           enabledModules: {},
+          visibleStepKeys: initialVisible.map(s => s.key),
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           completionPercentage: 0,
@@ -151,7 +155,7 @@ export default function OnboardingStepPage() {
       const updateData: any = { 
         updatedAt: serverTimestamp(), 
         lastSavedAt: serverTimestamp(),
-        currentStep: targetStepKey // Ensure we return to where we navigated to
+        currentStep: targetStepKey 
       };
       updateData[`sections.${stepId}`] = formData;
       updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData).catch((error: any) => {
@@ -172,10 +176,32 @@ export default function OnboardingStepPage() {
       return;
     }
     
+    // VALIDATION
+    if (direction === 'next' && stepId !== 'final_submission') {
+      const validation = validateOnboardingSection(stepId as string, formData, submission);
+      if (!validation.isValid) {
+        const updateData: any = { updatedAt: serverTimestamp() };
+        updateData[`sections.${stepId}`] = formData;
+        updateData[`sectionStatuses.${stepId}`] = {
+          status: 'needs_attention',
+          missingFields: validation.missingFields,
+          lastUpdatedAt: serverTimestamp()
+        };
+        
+        updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
+        
+        toast({
+          variant: "destructive",
+          title: "Incomplete Section",
+          description: "Please fill in all required fields before proceeding."
+        });
+        return;
+      }
+    }
+
     const updateData: any = { updatedAt: serverTimestamp(), lastSavedAt: serverTimestamp() };
     updateData[`sections.${stepId}`] = formData;
 
-    // Default target for currentStep is the same step unless moving
     let targetStepKey = stepId as string;
 
     if (stepId === 'service_selection') {
@@ -196,18 +222,28 @@ export default function OnboardingStepPage() {
       if (!currentCompleted.includes(stepId as string)) {
         updateData.completedSteps = [...currentCompleted, stepId as string];
       }
+      
+      updateData[`sectionStatuses.${stepId}`] = {
+        status: 'complete',
+        missingFields: [],
+        lastUpdatedAt: serverTimestamp()
+      };
+
       const completedCount = updateData.completedSteps?.length || currentCompleted.length;
       updateData.completionPercentage = (completedCount / visibleSteps.length) * 100;
       
-      // Update currentStep to the next visible step
       if (currentVisibleIndex < visibleSteps.length - 1) {
         targetStepKey = visibleSteps[currentVisibleIndex + 1].key;
       }
     } else if (direction === 'prev') {
-      // Update currentStep to the previous visible step
       if (currentVisibleIndex > 0) {
         targetStepKey = visibleSteps[currentVisibleIndex - 1].key;
       }
+    } else {
+      updateData[`sectionStatuses.${stepId}`] = {
+        status: 'in_progress',
+        lastUpdatedAt: serverTimestamp()
+      };
     }
 
     updateData.currentStep = targetStepKey;
@@ -236,6 +272,22 @@ export default function OnboardingStepPage() {
 
   const handleSubmitPack = async () => {
     if (!submissionId || !db || !user) return;
+    
+    // Check if all required visible sections are complete
+    const incompleteRequired = visibleSteps.filter(s => {
+      if (s.key === 'final_submission') return false;
+      const status = submission?.sectionStatuses?.[s.key]?.status;
+      return status !== 'complete';
+    });
+
+    if (incompleteRequired.length > 0) {
+      toast({
+        variant: "destructive",
+        title: "Submission Blocked",
+        description: `Please complete all required sections (${incompleteRequired.length} remaining) before submitting.`
+      });
+      return;
+    }
 
     try {
       await updateDoc(doc(db, 'onboardingSubmissions', submissionId), {
@@ -283,16 +335,37 @@ export default function OnboardingStepPage() {
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-1">
             {visibleSteps.map((step, idx) => {
-              const isCompleted = submission?.completedSteps?.includes(step.key);
+              const status = submission?.sectionStatuses?.[step.key]?.status || 'pending';
               const isCurrent = step.key === stepId;
+              
+              const getIcon = () => {
+                if (status === 'complete') return <CheckCircle2 className="w-3.5 h-3.5" />;
+                if (status === 'needs_attention') return <AlertTriangle className="w-3.5 h-3.5" />;
+                return <step.icon className="w-3.5 h-3.5" />;
+              };
+
+              const getColors = () => {
+                if (isCurrent) return 'bg-primary/10 text-primary font-bold shadow-sm';
+                if (status === 'complete') return 'text-green-600 hover:bg-green-50';
+                if (status === 'needs_attention') return 'text-orange-600 hover:bg-orange-50';
+                return 'text-muted-foreground hover:bg-slate-50';
+              };
+
+              const getDotColor = () => {
+                if (isCurrent) return 'bg-primary text-white';
+                if (status === 'complete') return 'bg-green-100';
+                if (status === 'needs_attention') return 'bg-orange-100';
+                return 'bg-slate-100';
+              };
+
               return (
                 <div 
                   key={step.key}
                   onClick={() => handleNavigate(step.key)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer group ${isCurrent ? 'bg-primary/10 text-primary font-bold shadow-sm' : isCompleted ? 'text-green-600 hover:bg-green-50' : 'text-muted-foreground hover:bg-slate-50'}`}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer group ${getColors()}`}
                 >
-                  <div className={`shrink-0 flex items-center justify-center w-6 h-6 rounded-full ${isCurrent ? 'bg-primary text-white' : isCompleted ? 'bg-green-100' : 'bg-slate-100'}`}>
-                    {isCompleted ? <CheckCircle2 className="w-3.5 h-3.5" /> : <step.icon className="w-3.5 h-3.5" />}
+                  <div className={`shrink-0 flex items-center justify-center w-6 h-6 rounded-full ${getDotColor()}`}>
+                    {getIcon()}
                   </div>
                   <span className="text-xs font-medium truncate">{idx + 1}. {step.shortTitle}</span>
                 </div>
@@ -314,7 +387,7 @@ export default function OnboardingStepPage() {
             </div>
             <div className="flex items-center gap-3">
               {currentVisibleIndex > 0 && (
-                <Button variant="ghost" size="sm" onClick={() => handleSave('prev')} className="gap-2 rounded-lg text-muted-foreground"><ChevronLeft className="w-4 h-4" /> Previous</Button>
+                <Button variant="ghost" size="sm" onClick={() => handleSave('prev')} className="gap-2 rounded-lg text-muted-foreground"><ChevronLeft className="w-4 h-4" /> Previous Step</Button>
               )}
               {submission?.status !== 'submitted' && (
                 <>
@@ -792,8 +865,6 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
 
     case 'direct_outreach_strategy': {
       const CHANNELS = ["Direct proposals", "Email outreach", "LinkedIn outreach", "Referral partner outreach", "Local council supplier registration", "Corporate supplier registration", "Subcontractor positioning", "Industry association opportunities", "Previous client reactivation", "Capability statement campaign", "Other"];
-      const targetCount = parseInt(data.targetCount || "1");
-      const targets = data.targets || Array(5).fill({});
 
       return (
         <div className="space-y-12">
@@ -1005,6 +1076,13 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
               </Card>
             ))}
           </div>
+
+          <Card className="border-none shadow-sm rounded-3xl overflow-hidden bg-primary/5 border border-primary/10">
+            <CardContent className="p-8 flex items-center gap-4">
+              <Checkbox id="lib-ack" checked={data.acknowledged} onCheckedChange={(v) => !isLocked && onChange('acknowledged', !!v)} disabled={isLocked} />
+              <Label htmlFor="lib-ack" className="font-bold text-slate-700">I have uploaded the documents currently available to me, or marked unavailable documents where relevant.</Label>
+            </CardContent>
+          </Card>
         </div>
       );
     }
@@ -1051,7 +1129,10 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
     }
 
     case 'final_submission': {
-      const isComplete = (visibleSteps.length - 1) <= (submission?.completedSteps?.length || 0);
+      const isComplete = visibleSteps.every(s => {
+        if (s.key === 'final_submission') return true;
+        return submission?.sectionStatuses?.[s.key]?.status === 'complete';
+      });
 
       return (
         <div className="space-y-12">
@@ -1070,6 +1151,16 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
             </Card>
           </div>
 
+          {!isComplete && (
+            <div className="p-6 bg-orange-50 border border-orange-100 rounded-3xl flex items-center gap-4 text-orange-800">
+              <AlertTriangle className="w-6 h-6 shrink-0" />
+              <div className="space-y-1">
+                <p className="font-bold">Required Sections Incomplete</p>
+                <p className="text-sm">You must complete all required sections before submitting. Please check the sidebar or dashboard for sections marked with a warning icon.</p>
+              </div>
+            </div>
+          )}
+
           <div className="pt-8">
             <Button 
               size="lg" 
@@ -1079,6 +1170,7 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
             >
               {isLocked ? "Submission Finalised" : "Submit Onboarding Pack"}
             </Button>
+            <p className="text-xs text-center mt-4 text-muted-foreground">After submission, your onboarding pack will be locked unless Bid Manager reopens it for edits.</p>
           </div>
         </div>
       );
