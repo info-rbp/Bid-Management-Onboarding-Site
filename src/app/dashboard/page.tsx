@@ -57,11 +57,11 @@ export default function DashboardPage() {
     }
   };
 
-  const selectedServices = submission?.sections?.service_selection?.selectedServices || [];
-  
+  const enabledModules = submission?.enabledModules;
+
   const visibleSteps = useMemo(() => {
-    return getVisibleOnboardingSteps(selectedServices);
-  }, [selectedServices]);
+    return getVisibleOnboardingSteps(enabledModules);
+  }, [enabledModules]);
 
   const continueRoute = useMemo(() => {
     if (!submission || !visibleSteps.length) return '/onboarding/welcome_expectations';
@@ -79,7 +79,7 @@ export default function DashboardPage() {
   }, [submission, visibleSteps]);
 
   const completedCount = submission?.completedSteps?.length || 0;
-  const progressValue = visibleSteps.length > 0 ? (completedCount / visibleSteps.length) * 100 : 0;
+  const progressValue = submission?.completionPercentage || 0;
 
   const isSubmitted = submission?.status === 'submitted';
 
@@ -155,7 +155,7 @@ export default function DashboardPage() {
                 <div className="flex justify-between items-end">
                   <div className="space-y-1">
                     <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Overall Completion</h2>
-                    <p className="text-4xl font-bold font-headline">{Math.round(progressValue)}%</p>
+                    <p className={font-bold font-headline text-4xl">{Math.round(progressValue)}%</p>
                   </div>
                   <p className="text-sm text-muted-foreground font-medium">
                     {completedCount} of {visibleSteps.length} steps completed
@@ -167,14 +167,14 @@ export default function DashboardPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-8">
               {visibleSteps.map((step, idx) => {
-                const stepStatus = submission?.sectionStatuses?.[step.key]?.status || 'pending';
+                const stepStatus = submission?.sectionStatuses?.[step.key]?.status || 'not_started';
                 const isCurrent = submission?.currentStep === step.key;
                 
-                // Map Firestore status to tile status
                 let status: 'completed' | 'in_progress' | 'pending' | 'needs_attention' = 'pending';
                 if (stepStatus === 'complete') status = 'completed';
                 else if (stepStatus === 'needs_attention') status = 'needs_attention';
                 else if (isCurrent) status = 'in_progress';
+                else if (stepStatus === 'not_started') status = 'pending';
                 
                 return (
                   <StepTile 
