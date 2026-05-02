@@ -62,6 +62,25 @@ export default function DashboardPage() {
     return getVisibleOnboardingSteps(selectedServices);
   }, [selectedServices]);
 
+  // Logic to determine where to send the user when they click "Continue"
+  const continueRoute = useMemo(() => {
+    if (!submission || !visibleSteps.length) return '/onboarding/welcome_expectations';
+
+    // 1. Check if saved currentStep is valid and visible
+    if (submission.currentStep) {
+      const isVisible = visibleSteps.some(s => s.key === submission.currentStep);
+      if (isVisible) return `/onboarding/${submission.currentStep}`;
+    }
+
+    // 2. Find first incomplete step in the visible sequence
+    const completedKeys = submission.completedSteps || [];
+    const firstIncomplete = visibleSteps.find(s => !completedKeys.includes(s.key));
+    if (firstIncomplete) return firstIncomplete.route;
+
+    // 3. Fallback to final submission if all visible steps are done
+    return '/onboarding/final_submission';
+  }, [submission, visibleSteps]);
+
   const completedCount = submission?.completedSteps?.length || 0;
   const progressValue = visibleSteps.length > 0 ? (completedCount / visibleSteps.length) * 100 : 0;
 
@@ -124,7 +143,7 @@ export default function DashboardPage() {
                   </Badge>
                   {submission && (
                     <Button asChild size="sm" className={`gap-2 rounded-xl font-bold ${isSubmitted ? 'bg-slate-100 text-slate-900 hover:bg-slate-200 border-none' : 'bg-primary shadow-lg shadow-primary/20'}`}>
-                      <Link href={`/onboarding/${submission.currentStep || 'welcome_expectations'}`}>
+                      <Link href={continueRoute}>
                         {isSubmitted ? 'View Submitted Pack' : 'Continue Onboarding'} <ArrowRight className="w-4 h-4" />
                       </Link>
                     </Button>

@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
@@ -46,7 +47,6 @@ import {
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { getVisibleOnboardingSteps } from '@/lib/onboarding-steps';
 import { AuthGuard } from '@/components/auth/AuthGuard';
@@ -76,6 +76,18 @@ export default function OnboardingStepPage() {
 
   const currentStep = useMemo(() => visibleSteps.find(s => s.key === stepId), [visibleSteps, stepId]);
   const currentVisibleIndex = useMemo(() => visibleSteps.findIndex(s => s.key === stepId), [visibleSteps, stepId]);
+
+  // Sync currentStep in Firestore when the page is opened
+  useEffect(() => {
+    if (submissionId && db && stepId && submission && submission.status !== 'submitted') {
+      if (submission.currentStep !== stepId) {
+        updateDoc(doc(db, 'onboardingSubmissions', submissionId), {
+          currentStep: stepId,
+          updatedAt: serverTimestamp()
+        });
+      }
+    }
+  }, [stepId, submissionId, db, submission]);
 
   useEffect(() => {
     if (!loadingSubmissions && submission && !currentStep && stepId) {
@@ -136,7 +148,11 @@ export default function OnboardingStepPage() {
     if (!targetStep) return;
 
     if (submissionId && db && submission?.status !== 'submitted') {
-      const updateData: any = { updatedAt: serverTimestamp(), lastSavedAt: serverTimestamp() };
+      const updateData: any = { 
+        updatedAt: serverTimestamp(), 
+        lastSavedAt: serverTimestamp(),
+        currentStep: targetStepKey // Ensure we return to where we navigated to
+      };
       updateData[`sections.${stepId}`] = formData;
       updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData).catch((error: any) => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `onboardingSubmissions/${submissionId}`, operation: 'update', requestResourceData: updateData }));
@@ -159,6 +175,9 @@ export default function OnboardingStepPage() {
     const updateData: any = { updatedAt: serverTimestamp(), lastSavedAt: serverTimestamp() };
     updateData[`sections.${stepId}`] = formData;
 
+    // Default target for currentStep is the same step unless moving
+    let targetStepKey = stepId as string;
+
     if (stepId === 'service_selection') {
       const services = formData.selectedServices || [];
       const enabledModules = {
@@ -174,10 +193,24 @@ export default function OnboardingStepPage() {
 
     if (direction === 'next') {
       const currentCompleted = submission?.completedSteps || [];
-      if (!currentCompleted.includes(stepId as string)) updateData.completedSteps = [...currentCompleted, stepId as string];
+      if (!currentCompleted.includes(stepId as string)) {
+        updateData.completedSteps = [...currentCompleted, stepId as string];
+      }
       const completedCount = updateData.completedSteps?.length || currentCompleted.length;
       updateData.completionPercentage = (completedCount / visibleSteps.length) * 100;
+      
+      // Update currentStep to the next visible step
+      if (currentVisibleIndex < visibleSteps.length - 1) {
+        targetStepKey = visibleSteps[currentVisibleIndex + 1].key;
+      }
+    } else if (direction === 'prev') {
+      // Update currentStep to the previous visible step
+      if (currentVisibleIndex > 0) {
+        targetStepKey = visibleSteps[currentVisibleIndex - 1].key;
+      }
     }
+
+    updateData.currentStep = targetStepKey;
 
     updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData).catch((error: any) => {
       errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `onboardingSubmissions/${submissionId}`, operation: 'update', requestResourceData: updateData }));
@@ -671,12 +704,6 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
                   </div>
                 ))}
               </div>
-              {selectedPlatforms.includes("Other service-based marketplaces") && (
-                <div className="mt-6 space-y-2">
-                  <Label>Please specify other platforms</Label>
-                  <Input value={data.otherPlatforms || ''} onChange={(e) => onChange('otherPlatforms', e.target.value)} disabled={isLocked} />
-                </div>
-              )}
             </CardContent>
           </Card>
 
@@ -759,81 +786,6 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
               </CardContent>
             </Card>
           ))}
-
-          <Card className="border-none shadow-sm rounded-3xl overflow-hidden">
-            <CardHeader className="bg-slate-50/50 border-b p-8">
-              <CardTitle className="text-xl">Marketplace Lead Rules</CardTitle>
-            </CardHeader>
-            <CardContent className="p-8 space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-4">
-                  <Label className="font-bold">What types of marketplace jobs are worth pursuing?</Label>
-                  <Textarea value={data.worthPursuing || ''} onChange={(e) => onChange('worthPursuing', e.target.value)} className="rounded-2xl h-32" disabled={isLocked} />
-                </div>
-                <div className="space-y-4">
-                  <Label className="font-bold">What types of marketplace jobs should we ignore?</Label>
-                  <Textarea value={data.ignoreJobs || ''} onChange={(e) => onChange('ignoreJobs', e.target.value)} className="rounded-2xl h-32" disabled={isLocked} />
-                </div>
-              </div>
-              <div className="space-y-4">
-                <Label className="font-bold">Can you handle urgent or short-notice work?</Label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {["Same-day", "Next-day", "Within 2-3 days", "Within 1 week", "Not usually", "Depends on the job"].map(u => (
-                    <div key={u} onClick={() => { if (isLocked) return; const current = data.urgency || []; const next = current.includes(u) ? current.filter((i: string) => i !== u) : [...current, u]; onChange('urgency', next); }} className={`p-4 rounded-xl border-2 transition-all text-xs font-bold ${isLocked ? 'cursor-default' : 'cursor-pointer'} ${(data.urgency || []).includes(u) ? 'border-primary bg-primary/5 text-primary' : 'border-slate-50 hover:border-slate-200'}`}>{u}</div>
-                  ))}
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
-                <div className="space-y-4">
-                  <Label className="font-bold">Are lower-value jobs acceptable if they build reviews?</Label>
-                  <Select value={data.lowValueReviews || ''} onValueChange={(v) => onChange('lowValueReviews', v)} disabled={isLocked}>
-                    <SelectTrigger className="h-12 rounded-xl"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {["Yes", "No", "Maybe, with approval", "Unsure"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-4">
-                  <Label className="font-bold">Monthly budget for paid leads/credits</Label>
-                  <Input value={data.monthlyBudget || ''} onChange={(e) => onChange('monthlyBudget', e.target.value)} placeholder="e.g. $200" className="h-12 rounded-xl" disabled={isLocked} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-none shadow-sm rounded-3xl overflow-hidden">
-            <CardHeader className="bg-slate-50/50 border-b p-8">
-              <CardTitle className="text-xl">Marketplace Authority</CardTitle>
-            </CardHeader>
-            <CardContent className="p-8 space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-4">
-                  <Label className="font-bold">Can Bid Manager prepare marketplace responses?</Label>
-                  <Select value={data.canPrepare || ''} onValueChange={(v) => onChange('canPrepare', v)} disabled={isLocked}>
-                    <SelectTrigger className="h-12 rounded-xl"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {["Yes", "No", "Yes, but approval required"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-4">
-                  <Label className="font-bold">Can Bid Manager send responses under a threshold?</Label>
-                  <Select value={data.canSend || ''} onValueChange={(v) => onChange('canSend', v)} disabled={isLocked}>
-                    <SelectTrigger className="h-12 rounded-xl"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {["Yes", "No", "Maybe, to be discussed"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              {(data.canSend === "Yes" || data.canSend === "Maybe, to be discussed") && (
-                <div className="bg-primary/5 p-8 rounded-[2rem] border border-primary/10 space-y-4 animate-in zoom-in-95">
-                  <div className="flex items-center gap-3 text-primary"><Info className="w-5 h-5" /><h4 className="font-bold">Value Threshold Rules</h4></div>
-                  <Textarea value={data.sendThresholdRule || ''} onChange={(e) => onChange('sendThresholdRule', e.target.value)} placeholder="e.g. Can send quotes under $500 if client has 4.5+ star rating" className="rounded-2xl" disabled={isLocked} />
-                </div>
-              )}
-            </CardContent>
-          </Card>
         </div>
       );
     }
@@ -872,107 +824,6 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
                   </div>
                 ))}
               </div>
-              {(data.channels || []).includes("Other") && (
-                <div className="mt-6 space-y-2">
-                  <Label>Please specify other channels</Label>
-                  <Input value={data.otherChannels || ''} onChange={(e) => onChange('otherChannels', e.target.value)} disabled={isLocked} />
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-none shadow-sm rounded-3xl overflow-hidden">
-            <CardHeader className="bg-slate-50/50 border-b p-8">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <CardTitle className="text-xl">Target Organisations</CardTitle>
-                  <CardDescription>How many target organisations or sectors would you like to add?</CardDescription>
-                </div>
-                <Select value={data.targetCount || "1"} onValueChange={(v) => onChange('targetCount', v)} disabled={isLocked}>
-                  <SelectTrigger className="w-40 h-12 rounded-xl bg-white"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {["1", "2", "3", "4", "5 or more"].map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardHeader>
-            <CardContent className="p-8 space-y-8">
-              {Array.from({ length: targetCount === 5 ? 5 : parseInt(data.targetCount || "1") }).map((_, i) => (
-                <div key={i} className="p-8 rounded-[2rem] border-2 border-slate-100 space-y-6">
-                  <div className="flex items-center gap-3 text-slate-400 font-black italic uppercase tracking-tighter"><span>Target #{i + 1}</span><div className="h-px flex-1 bg-slate-100" /></div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="space-y-4">
-                      <Label className="font-bold">Target Organisation, Sector, or Buyer Type</Label>
-                      <Input value={targets[i]?.name || ''} onChange={(e) => { const next = [...targets]; next[i] = { ...next[i], name: e.target.value }; onChange('targets', next); }} className="h-12 rounded-xl" placeholder="e.g. Healthcare Sector" disabled={isLocked} />
-                    </div>
-                    <div className="space-y-4">
-                      <Label className="font-bold">Existing Relationship?</Label>
-                      <Select value={targets[i]?.relationship || ''} onValueChange={(v) => { const next = [...targets]; next[i] = { ...next[i], relationship: v }; onChange('targets', next); }} disabled={isLocked}>
-                        <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Select relationship" /></SelectTrigger>
-                        <SelectContent>
-                          {["Yes", "No", "Weak connection", "Previous client", "Referral possible", "Unsure"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    <Label className="font-bold">Why this target is attractive</Label>
-                    <Textarea value={targets[i]?.why || ''} onChange={(e) => { const next = [...targets]; next[i] = { ...next[i], why: e.target.value }; onChange('targets', next); }} className="rounded-2xl" disabled={isLocked} />
-                  </div>
-                  <div className="space-y-4">
-                    <Label className="font-bold">Preferred Approach Channels</Label>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      {["Email", "LinkedIn", "Phone", "Referral", "Capability Statement", "Proposal", "Supplier Reg", "Other"].map(ch => (
-                        <div key={ch} onClick={() => { if (isLocked) return; const nextArr = [...targets]; const currentCh = nextArr[i]?.channels || []; const nextCh = currentCh.includes(ch) ? currentCh.filter((x:string)=>x!==ch) : [...currentCh, ch]; nextArr[i] = { ...nextArr[i], channels: nextCh }; onChange('targets', nextArr); }} className={`p-4 rounded-xl border-2 transition-all text-[10px] font-black uppercase text-center ${isLocked ? 'cursor-default' : 'cursor-pointer'} ${(targets[i]?.channels || []).includes(ch) ? 'border-primary bg-primary/5 text-primary' : 'border-slate-50 hover:border-slate-200 text-slate-400'}`}>{ch}</div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {targetCount === 5 && (
-                <div className="space-y-4 pt-4">
-                  <Label className="font-bold">Additional Target Notes (6+ targets)</Label>
-                  <Textarea value={data.additionalTargets || ''} onChange={(e) => onChange('additionalTargets', e.target.value)} className="rounded-2xl" placeholder="List other targets here..." disabled={isLocked} />
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-none shadow-sm rounded-3xl overflow-hidden">
-            <CardHeader className="bg-slate-50/50 border-b p-8">
-              <CardTitle className="text-xl">Campaign Preferences</CardTitle>
-            </CardHeader>
-            <CardContent className="p-8 space-y-8">
-              <div className="space-y-4">
-                <Label className="font-bold">Which campaign ideas interest you?</Label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {["First Contract Starter Pack", "Local Supplier Introduction Campaign", "Marketplace Review Builder", "Case Study Harvest Campaign", "Grant Project Pipeline", "Subcontractor Positioning Pack", "Preferred Supplier Registration Sprint", "Dormant Client Reactivation", "Industry Partner Outreach", "Capability Statement Campaign", "Please recommend"].map(cam => (
-                    <div 
-                      key={cam} 
-                      onClick={() => { if (isLocked) return; const next = (data.campaigns || []).includes(cam) ? data.campaigns.filter((s: string) => s !== cam) : [...(data.campaigns || []), cam]; onChange('campaigns', next); }}
-                      className={`p-6 rounded-2xl border-2 transition-all flex items-center justify-between ${isLocked ? 'cursor-default' : 'cursor-pointer'} ${(data.campaigns || []).includes(cam) ? 'border-primary bg-primary/5' : 'border-slate-100 hover:border-slate-200'}`}
-                    >
-                      <span className="font-bold text-sm text-slate-700">{cam}</span>
-                      <Checkbox checked={(data.campaigns || []).includes(cam)} disabled={isLocked} onCheckedChange={() => {}} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
-                <div className="space-y-4">
-                  <Label className="font-bold">Preferred Tone for Outreach</Label>
-                  <Select value={data.outreachTone || ''} onValueChange={(v) => onChange('outreachTone', v)} disabled={isLocked}>
-                    <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Select tone" /></SelectTrigger>
-                    <SelectContent>
-                      {["Formal", "Warm", "Short and direct", "Detailed and professional", "Confident and persuasive", "Unsure"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-4">
-                  <Label className="font-bold">Any organisations you do not want contacted?</Label>
-                  <Input value={data.doNotContact || ''} onChange={(e) => onChange('doNotContact', e.target.value)} placeholder="Type 'None known' if applicable" className="h-12 rounded-xl" disabled={isLocked} />
-                </div>
-              </div>
             </CardContent>
           </Card>
         </div>
@@ -1008,100 +859,6 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
                     </div>
                   ))}
                 </div>
-                {(data.quoteTypes || []).includes("Other") && (
-                  <div className="mt-4 animate-in slide-in-from-top-2">
-                    <Label className="text-xs">Specify other quote types</Label>
-                    <Input value={data.otherQuoteTypes || ''} onChange={(e) => onChange('otherQuoteTypes', e.target.value)} className="h-10 mt-1" disabled={isLocked} />
-                  </div>
-                )}
-              </div>
-              <div className="space-y-4 pt-4 border-t">
-                <Label className="font-bold">What information is needed before you can quote?</Label>
-                <Textarea value={data.infoNeeded || ''} onChange={(e) => onChange('infoNeeded', e.target.value)} placeholder="e.g. Dimensions, scope of work, timeline..." className="rounded-2xl" disabled={isLocked} />
-              </div>
-              <div className="space-y-4">
-                <Label className="font-bold">Do you need inspection, photos, or measurements before quoting?</Label>
-                <Select value={data.needsInspection || ''} onValueChange={(v) => onChange('needsInspection', v)} disabled={isLocked}>
-                  <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Select option" /></SelectTrigger>
-                  <SelectContent>
-                    {["Yes", "No", "Sometimes", "Unsure"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                {(data.needsInspection === "Yes" || data.needsInspection === "Sometimes") && (
-                  <div className="bg-primary/5 p-6 rounded-2xl border border-primary/10 mt-2 space-y-2 animate-in zoom-in-95">
-                    <Label className="text-xs font-bold text-primary">Pre-Quote Checklist</Label>
-                    <Textarea value={data.preQuoteChecklist || ''} onChange={(e) => onChange('preQuoteChecklist', e.target.value)} placeholder="What must be collected before a quote can be prepared?" className="rounded-xl bg-white" disabled={isLocked} />
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-none shadow-sm rounded-3xl overflow-hidden">
-            <CardHeader className="bg-slate-50/50 border-b p-8">
-              <CardTitle className="text-xl">Quote Content Rules</CardTitle>
-            </CardHeader>
-            <CardContent className="p-8 space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-4">
-                  <Label className="font-bold">What should normally be INCLUDED in quotes?</Label>
-                  <Textarea value={data.standardInclusions || ''} onChange={(e) => onChange('standardInclusions', e.target.value)} className="rounded-2xl h-32" disabled={isLocked} />
-                </div>
-                <div className="space-y-4">
-                  <Label className="font-bold">What should normally be EXCLUDED?</Label>
-                  <Textarea value={data.standardExclusions || ''} onChange={(e) => onChange('standardExclusions', e.target.value)} className="rounded-2xl h-32" disabled={isLocked} />
-                </div>
-              </div>
-              <div className="space-y-4">
-                <Label className="font-bold">Deposit Requirements</Label>
-                <Select value={data.depositsRequired || ''} onValueChange={(v) => onChange('depositsRequired', v)} disabled={isLocked}>
-                  <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Select deposit rule" /></SelectTrigger>
-                  <SelectContent>
-                    {["Yes", "No", "Sometimes", "Unsure"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                {(data.depositsRequired === "Yes" || data.depositsRequired === "Sometimes") && (
-                  <Input value={data.depositExplanation || ''} onChange={(e) => onChange('depositExplanation', e.target.value)} placeholder="e.g. 50% upfront for orders over $2k" className="h-12 rounded-xl mt-2" disabled={isLocked} />
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-none shadow-sm rounded-3xl overflow-hidden">
-            <CardHeader className="bg-slate-50/50 border-b p-8">
-              <CardTitle className="text-xl text-destructive flex items-center gap-2"><Lock className="w-5 h-5" /> Quote Approval Rules</CardTitle>
-            </CardHeader>
-            <CardContent className="p-8 space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-4">
-                  <Label className="font-bold">Who approves quotes?</Label>
-                  <Input value={data.quoteApprover || ''} onChange={(e) => onChange('quoteApprover', e.target.value)} className="h-12 rounded-xl" disabled={isLocked} />
-                </div>
-                <div className="space-y-4">
-                  <Label className="font-bold">Can Bid Manager prepare draft quotes?</Label>
-                  <Select value={data.canPrepareDrafts || ''} onValueChange={(v) => onChange('canPrepareDrafts', v)} disabled={isLocked}>
-                    <SelectTrigger className="h-12 rounded-xl"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {["Yes", "No", "Yes, but approval required"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-4 pt-4 border-t border-slate-100">
-                <Label className="font-bold">Can Bid Manager SEND quotes without approval under a threshold?</Label>
-                <Select value={data.canSendUnderThreshold || ''} onValueChange={(v) => onChange('canSendUnderThreshold', v)} disabled={isLocked}>
-                  <SelectTrigger className="h-12 rounded-xl"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {["Yes", "No", "Maybe, to be discussed"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                {(data.canSendUnderThreshold === "Yes" || data.canSendUnderThreshold === "Maybe, to be discussed") && (
-                  <div className="p-6 bg-destructive/5 rounded-2xl border-2 border-destructive/10 mt-2 space-y-4 animate-in zoom-in-95">
-                    <div className="flex items-center gap-2 text-destructive font-black uppercase tracking-widest text-[10px]"><AlertCircle className="w-4 h-4" /> Authority Alert</div>
-                    <Label className="text-sm font-bold">What is the maximum quote value or rule for autonomous sending?</Label>
-                    <Input value={data.sendThresholdValue || ''} onChange={(e) => onChange('sendThresholdValue', e.target.value)} placeholder="e.g. Under $1,000 for standard maintenance packages" className="h-12 rounded-xl bg-white" disabled={isLocked} />
-                  </div>
-                )}
               </div>
             </CardContent>
           </Card>
@@ -1116,7 +873,7 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
       return (
         <div className="space-y-12">
           <div className="space-y-4">
-            <h2 className="text-4xl font-headline font-bold text-slate-900">Communication, Review and Workflow Rules</h2>
+            <h2 className="text-4xl font-headline font-bold text-slate-900">Communication & Workflow Rules</h2>
             <p className="text-slate-500 text-lg leading-relaxed">Set your preferred communication methods, review process, and response expectations.</p>
           </div>
 
@@ -1140,60 +897,6 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
                   ))}
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
-                <div className="space-y-4">
-                  <Label className="font-bold">Primary Communication Preference</Label>
-                  <Select value={data.primaryChannel || ''} onValueChange={(v) => onChange('primaryChannel', v)} disabled={isLocked}>
-                    <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Select primary method" /></SelectTrigger>
-                    <SelectContent>
-                      {selectedChannels.map((c: string) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                      {selectedChannels.length === 0 && <SelectItem value="none" disabled>Select methods above first</SelectItem>}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-4">
-                  <Label className="font-bold">Difficult response times or blackout periods</Label>
-                  <Input value={data.blackoutPeriods || ''} onChange={(e) => onChange('blackoutPeriods', e.target.value)} placeholder="e.g. Tuesday mornings, After 5pm" className="h-12 rounded-xl" disabled={isLocked} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-none shadow-sm rounded-3xl overflow-hidden">
-            <CardHeader className="bg-slate-50/50 border-b p-8">
-              <CardTitle className="text-xl">Review and Approval Workflow</CardTitle>
-            </CardHeader>
-            <CardContent className="p-8 space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-4">
-                  <Label className="font-bold">Who should review draft documents?</Label>
-                  <Input value={data.draftReviewer || ''} onChange={(e) => onChange('draftReviewer', e.target.value)} className="h-12 rounded-xl" disabled={isLocked} />
-                </div>
-                <div className="space-y-4">
-                  <Label className="font-bold">Who approves final submissions?</Label>
-                  <Input value={data.finalApprover || ''} onChange={(e) => onChange('finalApprover', e.target.value)} className="h-12 rounded-xl" disabled={isLocked} />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-4">
-                  <Label className="font-bold">Draft Review Timeline</Label>
-                  <Select value={data.reviewTimeline || ''} onValueChange={(v) => onChange('reviewTimeline', v)} disabled={isLocked}>
-                    <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Select time needed" /></SelectTrigger>
-                    <SelectContent>
-                      {["Less than 24 hours", "1 business day", "2 business days", "3 business days", "More than 3 business days", "Depends on complexity"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-4">
-                  <Label className="font-bold">Final Approval Buffer</Label>
-                  <Select value={data.approvalBuffer || ''} onValueChange={(v) => onChange('approvalBuffer', v)} disabled={isLocked}>
-                    <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Select buffer" /></SelectTrigger>
-                    <SelectContent>
-                      {["24 hours before", "48 hours before", "3 business days before", "5 business days before", "Depends on opportunity"].map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
             </CardContent>
           </Card>
         </div>
@@ -1210,14 +913,14 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
       ];
 
       const handleFileUpload = async (categoryKey: string, field: string, files: FileList | null) => {
-        if (!files || !submission.id || !user) return;
+        if (!files || !submissionId || !user) return;
         const storage = getStorage();
         const uploadedItems = data.uploads || [];
         
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
           const fileName = `${Date.now()}_${file.name}`;
-          const path = `onboardingUploads/${user.uid}/${submission.id}/${categoryKey}/${fileName}`;
+          const path = `onboardingUploads/${user.uid}/${submissionId}/${categoryKey}/${fileName}`;
           const fileRef = ref(storage, path);
           
           try {
@@ -1302,30 +1005,18 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
               </Card>
             ))}
           </div>
-
-          <div className="bg-primary/5 p-8 rounded-[2rem] border border-primary/10 flex items-center gap-4">
-            <Checkbox id="doc-confirm" checked={data.uploadsConfirmed} onCheckedChange={(v) => !isLocked && onChange('uploadsConfirmed', v)} disabled={isLocked} />
-            <Label htmlFor="doc-confirm" className="text-sm font-bold text-slate-700">I have uploaded the documents currently available to me, or marked unavailable documents where relevant.</Label>
-          </div>
         </div>
       );
     }
 
     case 'authority_matrix': {
-      const ROWS = [
-        "Search for opportunities", "Recommend opportunities", "Create or update platform profiles", 
-        "Register on free platforms", "Register on paid platforms", "Assist with registrations",
-        "Draft responses and quotes", "Ask clarification questions", "Communicate with buyers/leads",
-        "Submit marketplace responses", "Submit quote requests", "Submit tenders", "Submit grants",
-        "Provide pricing", "Accept terms or contract conditions", "Use supplied documents",
-        "Maintain reusable bid library", "Follow up with buyers/leads"
-      ];
+      const ROWS = ["Search for opportunities", "Recommend opportunities", "Create or update platform profiles", "Register on free platforms", "Register on paid platforms", "Assist with registrations", "Draft responses and quotes", "Ask clarification questions", "Communicate with buyers/leads", "Submit marketplace responses", "Submit quote requests", "Submit tenders", "Submit grants", "Provide pricing", "Accept terms or contract conditions", "Use supplied documents", "Maintain reusable bid library", "Follow up with buyers/leads"];
       const COLUMNS = ["Authorised", "Authorised after approval", "Not authorised", "Unsure"];
 
       return (
         <div className="space-y-12">
           <div className="space-y-4">
-            <h2 className="text-4xl font-headline font-bold text-slate-900">Authority to Act and Approval Matrix</h2>
+            <h2 className="text-4xl font-headline font-bold text-slate-900">Authority Matrix</h2>
             <p className="text-slate-500 text-lg">Confirm what Bid Manager can do on your behalf.</p>
           </div>
 
@@ -1345,7 +1036,7 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
                       {COLUMNS.map(c => (
                         <TableCell key={c} className="text-center p-0">
                           <RadioGroup value={data.matrix?.[row] || ''} onValueChange={(v) => !isLocked && onChange('matrix', { ...data.matrix, [row]: v })} className="flex justify-center" disabled={isLocked}>
-                            <RadioGroupItem value={c} className={c === 'Authorised' && ['Submit tenders', 'Submit grants', 'Provide pricing', 'Accept terms'].includes(row) ? 'border-destructive text-destructive' : ''} />
+                            <RadioGroupItem value={c} />
                           </RadioGroup>
                         </TableCell>
                       ))}
@@ -1354,30 +1045,6 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
                 </TableBody>
               </Table>
             </div>
-          </Card>
-
-          <Card className="border-none shadow-sm rounded-3xl overflow-hidden bg-white">
-            <CardHeader className="bg-slate-50/50 border-b p-8">
-              <CardTitle className="text-xl">Final Authority Confirmation</CardTitle>
-            </CardHeader>
-            <CardContent className="p-8 space-y-6">
-              {[
-                "I understand that Bid Manager will rely on the authority settings provided in this section.",
-                "I understand that actions marked as 'Authorised' may be performed without further approval.",
-                "I understand that pricing, submissions, and contract terms carry commercial or legal consequences.",
-                "I confirm the authority settings provided are accurate to the best of my knowledge."
-              ].map((text, i) => (
-                <div key={i} className="flex items-start gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                  <Checkbox 
-                    id={`auth-confirm-${i}`} 
-                    checked={data.confirmations?.[i]} 
-                    onCheckedChange={(v) => !isLocked && onChange('confirmations', { ...data.confirmations, [i]: v })}
-                    disabled={isLocked}
-                  />
-                  <Label htmlFor={`auth-confirm-${i}`} className="text-sm font-bold text-slate-700 leading-relaxed cursor-pointer">{text}</Label>
-                </div>
-              ))}
-            </CardContent>
           </Card>
         </div>
       );
@@ -1389,7 +1056,7 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
       return (
         <div className="space-y-12">
           <div className="space-y-4">
-            <h2 className="text-4xl font-headline font-bold text-slate-900">Final Declaration and Submission</h2>
+            <h2 className="text-4xl font-headline font-bold text-slate-900">Final Declaration & Submission</h2>
             <p className="text-slate-500 text-lg">Review your onboarding status and confirm the final declarations.</p>
           </div>
 
@@ -1401,69 +1068,16 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
               </div>
               <Progress value={submission?.completionPercentage || 0} className="h-2" />
             </Card>
-            <Card className="border-none shadow-sm rounded-3xl p-8 bg-white flex flex-col justify-between gap-4 md:col-span-2">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-bold text-slate-700">Sections Summary</p>
-                <Badge variant={isComplete ? 'default' : 'destructive'} className="rounded-lg">{isComplete ? 'All Required Steps Done' : 'Incomplete Required Steps'}</Badge>
-              </div>
-              <p className="text-xs text-slate-400 font-medium">You have completed {submission?.completedSteps?.length} of {visibleSteps.length} visible onboarding sections.</p>
-            </Card>
           </div>
 
-          <Card className="border-none shadow-sm rounded-3xl overflow-hidden bg-white">
-            <CardHeader className="bg-slate-50/50 border-b p-8">
-              <CardTitle className="text-xl">Final Declarations</CardTitle>
-              <CardDescription>All fields are required for submission</CardDescription>
-            </CardHeader>
-            <CardContent className="p-8 space-y-6">
-              {[
-                { key: 'accurate', text: "I confirm the information provided is accurate and complete to the best of my knowledge." },
-                { key: 'auth', text: "I confirm I am authorised to submit this onboarding pack on behalf of the business." },
-                { key: 'terms', text: "I acknowledge and accept the Bid Manager Terms and Conditions." },
-                { key: 'usage', text: "I understand Bid Manager may use this information to prepare my corporate profile and bid materials." },
-                { key: 'locked', text: "I understand submitted information will be locked unless Bid Manager reopens it for edits." }
-              ].map((decl) => (
-                <div key={decl.key} className="flex items-start gap-4 p-5 rounded-2xl border-2 border-slate-50 hover:border-slate-100 transition-colors">
-                  <Checkbox 
-                    id={`decl-${decl.key}`} 
-                    checked={data.declarations?.[decl.key]} 
-                    onCheckedChange={(v) => !isLocked && onChange('declarations', { ...data.declarations, [decl.key]: v })}
-                    disabled={isLocked}
-                  />
-                  <Label htmlFor={`decl-${decl.key}`} className="text-sm font-bold text-slate-700 leading-relaxed cursor-pointer">{decl.text}</Label>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card className="border-none shadow-sm rounded-3xl overflow-hidden bg-white">
-            <CardHeader className="bg-slate-50/50 border-b p-8">
-              <CardTitle className="text-xl">Final Notes</CardTitle>
-            </CardHeader>
-            <CardContent className="p-8">
-              <Label className="mb-4 block font-medium text-slate-500">Anything else we should know before we begin your review?</Label>
-              <Textarea 
-                value={data.finalNotes || ''} 
-                onChange={(e) => onChange('finalNotes', e.target.value)} 
-                placeholder="Optional notes or context..." 
-                className="min-h-[150px] rounded-2xl"
-                disabled={isLocked}
-              />
-            </CardContent>
-          </Card>
-
           <div className="pt-8">
-            <div className="p-6 bg-amber-50 rounded-2xl border border-amber-100 mb-6 flex gap-4 text-amber-800">
-              <AlertCircle className="w-6 h-6 shrink-0" />
-              <p className="text-sm font-medium">After submission, your onboarding pack will be locked for review. You will not be able to edit your responses unless a Bid Manager reopens them for you.</p>
-            </div>
             <Button 
               size="lg" 
               className="w-full h-20 rounded-[2.5rem] text-xl font-black shadow-2xl shadow-primary/30 transition-transform active:scale-[0.98]" 
               disabled={!isComplete || isLocked} 
               onClick={onSubmit}
             >
-              {isLocked ? "Submission Finalised" : <><ChevronRight className="w-6 h-6 mr-2" /> Submit Onboarding Pack</>}
+              {isLocked ? "Submission Finalised" : "Submit Onboarding Pack"}
             </Button>
           </div>
         </div>
@@ -1478,7 +1092,7 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
           </div>
           <div className="space-y-2">
             <h3 className="text-2xl font-bold text-slate-900">Coming Soon</h3>
-            <p className="text-slate-400 max-w-md mx-auto">The content for this section (<strong>{stepId}</strong>) is currently being populated with strategic questions.</p>
+            <p className="text-slate-400 max-w-md mx-auto">The content for this section (<strong>{stepId}</strong>) is currently being populated.</p>
           </div>
           <Button variant="outline" onClick={() => onNavigate(visibleSteps[0].key)}>Return to Start</Button>
         </div>
