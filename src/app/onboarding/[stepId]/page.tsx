@@ -1,10 +1,11 @@
+
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Logo } from '@/components/brand/Logo';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, addDoc } from 'firebase/firestore';
@@ -14,13 +15,11 @@ import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { 
   ChevronRight, 
+  ChevronLeft,
   LayoutDashboard,
   CheckCircle2,
   Building2,
   ShieldCheck,
-  DollarSign,
-  Users,
-  Briefcase,
   Plus,
   Trash2,
   UploadCloud,
@@ -28,10 +27,8 @@ import {
   Lock,
   Files,
   Loader2,
-  AlertTriangle,
-  AlertCircle,
-  FileStack,
-  Gift
+  Briefcase,
+  Clock
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -44,7 +41,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -146,7 +142,7 @@ export default function OnboardingStepPage() {
     router.push(targetStep.route);
   };
 
-  const handleSave = (next: boolean = false) => {
+  const handleSave = (direction: 'next' | 'prev' | 'stay' = 'stay') => {
     if (!submissionId || !db || !currentStep || submission?.status === 'submitted') return;
     
     const updateData: any = { updatedAt: serverTimestamp(), lastSavedAt: serverTimestamp() };
@@ -165,7 +161,7 @@ export default function OnboardingStepPage() {
       updateData.visibleStepKeys = getVisibleOnboardingSteps(services).map(s => s.key);
     }
 
-    if (next) {
+    if (direction === 'next') {
       const currentCompleted = submission?.completedSteps || [];
       if (!currentCompleted.includes(stepId as string)) updateData.completedSteps = [...currentCompleted, stepId as string];
       const completedCount = updateData.completedSteps?.length || currentCompleted.length;
@@ -176,12 +172,18 @@ export default function OnboardingStepPage() {
       errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `onboardingSubmissions/${submissionId}`, operation: 'update', requestResourceData: updateData }));
     });
 
-    if (next) {
+    if (direction === 'next') {
       const isLastStep = currentVisibleIndex === visibleSteps.length - 1;
       if (!isLastStep) {
         const nextVisibleStep = visibleSteps[currentVisibleIndex + 1];
         router.push(nextVisibleStep.route);
         initialSyncDone.current[nextVisibleStep.key] = false;
+      }
+    } else if (direction === 'prev') {
+      if (currentVisibleIndex > 0) {
+        const prevVisibleStep = visibleSteps[currentVisibleIndex - 1];
+        router.push(prevVisibleStep.route);
+        initialSyncDone.current[prevVisibleStep.key] = false;
       }
     } else {
       toast({ title: "Draft Saved", description: "Your progress has been saved." });
@@ -277,8 +279,11 @@ export default function OnboardingStepPage() {
           </div>
           {submission.status !== 'submitted' && (
             <div className="flex items-center gap-3">
-              <Button variant="outline" size="sm" onClick={() => handleSave(false)} className="gap-2 rounded-lg border-2">Save Draft</Button>
-              <Button size="sm" onClick={() => handleSave(true)} className="gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20" disabled={currentVisibleIndex === visibleSteps.length - 1}>Next Step <ChevronRight className="w-4 h-4" /></Button>
+              {currentVisibleIndex > 0 && (
+                <Button variant="ghost" size="sm" onClick={() => handleSave('prev')} className="gap-2 rounded-lg text-muted-foreground"><ChevronLeft className="w-4 h-4" /> Previous</Button>
+              )}
+              <Button variant="outline" size="sm" onClick={() => handleSave('stay')} className="gap-2 rounded-lg border-2">Save Draft</Button>
+              <Button size="sm" onClick={() => handleSave('next')} className="gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20" disabled={currentVisibleIndex === visibleSteps.length - 1}>Next Step <ChevronRight className="w-4 h-4" /></Button>
             </div>
           )}
         </header>
@@ -746,7 +751,7 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
             </div>
             <Progress value={submission?.completionPercentage || 0} className="h-3" />
           </Card>
-          <Button size="lg" className="w-full h-20 rounded-[2rem] text-xl font-black" disabled={!isComplete} onClick={onSubmit}><Send className="w-6 h-6 mr-2" /> Submit Onboarding Pack</Button>
+          <Button size="lg" className="w-full h-20 rounded-[2rem] text-xl font-black" disabled={!isComplete} onClick={onSubmit}><ChevronRight className="w-6 h-6 mr-2" /> Submit Onboarding Pack</Button>
         </div>
       );
     }
@@ -754,8 +759,4 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
     default:
       return null;
   }
-}
-
-function Send({ className }: { className?: string }) {
-  return <ChevronRight className={className} />;
 }
