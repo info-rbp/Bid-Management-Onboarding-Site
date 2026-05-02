@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Logo } from '@/components/brand/Logo';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, addDoc } from 'firebase/firestore';
@@ -46,7 +46,12 @@ import {
   Briefcase,
   TrendingUp,
   ShieldAlert,
-  Plus
+  Plus,
+  ArrowLeft,
+  Check,
+  Lock,
+  ExternalLink,
+  ChevronLeft
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -59,11 +64,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
+import Link from 'next/link';
 
 const ALL_STEPS = [
   { key: "welcome_expectations", title: "1. Welcome & Expectations", shortTitle: "Welcome & Expectations", icon: Zap, required: true, conditional: false },
@@ -83,7 +89,7 @@ const ALL_STEPS = [
     title: "13. Tender Readiness",
     shortTitle: "Tender Readiness",
     icon: FileBadge,
-    required: false,
+    required: true,
     conditional: true,
     isEnabled: (selectedServices: string[]) =>
       selectedServices.includes("Government Tenders") ||
@@ -96,7 +102,7 @@ const ALL_STEPS = [
     title: "14. Grants",
     shortTitle: "Grants",
     icon: Gift,
-    required: false,
+    required: true,
     conditional: true,
     isEnabled: (selectedServices: string[]) =>
       selectedServices.includes("Grants") ||
@@ -107,7 +113,7 @@ const ALL_STEPS = [
     title: "15. Marketplace Strategy",
     shortTitle: "Marketplace Strategy",
     icon: BarChart3,
-    required: false,
+    required: true,
     conditional: true,
     isEnabled: (selectedServices: string[]) =>
       selectedServices.includes("Marketplace Leads") ||
@@ -118,7 +124,7 @@ const ALL_STEPS = [
     title: "16. Outreach Strategy",
     shortTitle: "Outreach Strategy",
     icon: Send,
-    required: false,
+    required: true,
     conditional: true,
     isEnabled: (selectedServices: string[]) =>
       selectedServices.includes("Direct Proposals") ||
@@ -129,7 +135,7 @@ const ALL_STEPS = [
     title: "17. Quote Support",
     shortTitle: "Quote Support",
     icon: MessageSquare,
-    required: false,
+    required: true,
     conditional: true,
     isEnabled: (selectedServices: string[]) =>
       selectedServices.includes("Quote Requests") ||
@@ -141,29 +147,6 @@ const ALL_STEPS = [
   { key: "document_upload_library", title: "19. Document Upload Library", shortTitle: "Document Upload Library", icon: Library, required: true, conditional: false },
   { key: "authority_matrix", title: "20. Authority Matrix", shortTitle: "Authority Matrix", icon: Scale, required: true, conditional: false },
   { key: "final_submission", title: "21. Final Submission", shortTitle: "Final Submission", icon: Flag, required: true, conditional: false }
-];
-
-const AUTHORITY_ROWS = [
-  "Search for opportunities", "Recommend opportunities", "Create or update platform profiles",
-  "Register on free platforms", "Register on paid platforms", "Assist with supplier, tender, or grant registrations",
-  "Draft responses, quotes, and applications", "Ask clarification questions", "Communicate with buyers, funders, or leads",
-  "Prepare marketplace responses", "Submit marketplace responses", "Submit quote requests", "Submit tenders",
-  "Submit grants", "Provide pricing", "Accept terms or contract conditions", "Use supplied documents in submissions",
-  "Maintain a reusable bid library", "Follow up with buyers, funders, or leads"
-];
-
-const AUTHORITY_LEVELS = ["Authorised", "Authorised after approval", "Not authorised", "Unsure"];
-const HIGH_RISK_AUTHORITY_ITEMS = ["Submit tenders", "Submit grants", "Provide pricing", "Accept terms or contract conditions", "Register on paid platforms"];
-
-const DOCUMENT_CATEGORIES = [
-  { id: 'business', title: '1. Business Profile and Brand', icon: Building2, fields: [{ id: 'capabilityStatement', label: 'Capability statement' }, { id: 'businessProfile', label: 'Business profile or brochure' }, { id: 'logoFiles', label: 'Logo files' }, { id: 'brandAssets', label: 'Brand assets' }, { id: 'styleGuide', label: 'Style guide' }, { id: 'marketingCopy', label: 'Website or marketing copy' }] },
-  { id: 'compliance', title: '2. Compliance and Insurance', icon: ShieldCheck, fields: [{ id: 'publicLiability', label: 'Public liability insurance' }, { id: 'professionalIndemnity', label: 'Professional indemnity insurance' }, { id: 'workersComp', label: 'Workers compensation insurance' }, { id: 'cyberInsurance', label: 'Cyber insurance' }, { id: 'motorVehicle', label: 'Motor vehicle insurance' }, { id: 'licences', label: 'Licences' }, { id: 'certifications', label: 'Certifications' }, { id: 'staffChecks', label: 'Staff checks (Police, WWCC, etc)' }, { id: 'policiesProcedures', label: 'Policies and procedures' }] },
-  { id: 'team', title: '3. Team and Capability', icon: Users, fields: [{ id: 'staffCvs', label: 'Staff CVs' }, { id: 'staffBios', label: 'Staff bios' }, { id: 'qualifications', label: 'Qualifications' }, { id: 'tickets', label: 'Tickets' }, { id: 'trainingCertificates', label: 'Training certificates' }, { id: 'orgChart', label: 'Organisational chart' }] },
-  { id: 'proof', title: '4. Case Studies and Proof', icon: CheckCircle2, fields: [{ id: 'projectExamples', label: 'Project examples' }, { id: 'caseStudies', label: 'Case studies' }, { id: 'photos', label: 'Photos' }, { id: 'beforeAfter', label: 'Before and after images' }, { id: 'testimonials', label: 'Testimonials' }, { id: 'reviews', label: 'Reviews' }, { id: 'referenceLetters', label: 'Reference letters' }, { id: 'completionCertificates', label: 'Completion certificates' }, { id: 'reports', label: 'Reports' }] },
-  { id: 'submissions', title: '5. Previous Submissions and Feedback', icon: FileStack, fields: [{ id: 'previousTenders', label: 'Previous tenders' }, { id: 'previousGrants', label: 'Previous grants' }, { id: 'previousProposals', label: 'Previous proposals' }, { id: 'previousQuotes', label: 'Previous quotes' }, { id: 'supplierRegistrations', label: 'Supplier registrations' }, { id: 'buyerFeedback', label: 'Buyer feedback' }, { id: 'grantFeedback', label: 'Grant feedback' }, { id: 'debriefNotes', label: 'Debrief notes' }] },
-  { id: 'pricing', title: '6. Pricing and Commercial', icon: DollarSign, fields: [{ id: 'pricingSchedules', label: 'Pricing schedules' }, { id: 'rateCards', label: 'Rate cards' }, { id: 'packageLists', label: 'Package lists' }, { id: 'quoteTemplates', label: 'Quote templates' }, { id: 'termsConditions', label: 'Terms and conditions' }, { id: 'budgetTemplates', label: 'Budget templates' }, { id: 'grantBudgetDocs', label: 'Grant budget documents' }] },
-  { id: 'grantDocs', title: '7. Grant Project Documents', icon: Gift, fields: [{ id: 'supplierQuotes', label: 'Supplier quotes' }, { id: 'projectBudgets', label: 'Project budgets' }, { id: 'supportLetters', label: 'Letters of support' }, { id: 'projectPlans', label: 'Project plans' }, { id: 'evidenceNeed', label: 'Evidence of need' }, { id: 'partnerDocuments', label: 'Partner documents' }] },
-  { id: 'other', title: '8. Other Relevant Documents', icon: Files, fields: [{ id: 'otherDocuments', label: 'Other documents' }] }
 ];
 
 export default function OnboardingStepPage() {
@@ -250,7 +233,7 @@ export default function OnboardingStepPage() {
 
   const handleNavigate = (targetStepKey: string) => {
     if (targetStepKey === stepId) return;
-    if (submissionId && db) {
+    if (submissionId && db && submission?.status !== 'submitted') {
       const updateData: any = { updatedAt: serverTimestamp(), lastSavedAt: serverTimestamp() };
       updateData[`sections.${stepId}`] = formData;
       updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData).catch((error: any) => {
@@ -262,7 +245,7 @@ export default function OnboardingStepPage() {
   };
 
   const handleSave = (next: boolean = false) => {
-    if (!submissionId || !db || !currentStep) return;
+    if (!submissionId || !db || !currentStep || submission?.status === 'submitted') return;
     
     const updateData: any = { updatedAt: serverTimestamp(), lastSavedAt: serverTimestamp() };
     updateData[`sections.${stepId}`] = formData;
@@ -281,8 +264,6 @@ export default function OnboardingStepPage() {
     }
 
     if (next) {
-      const nextVisibleStep = visibleSteps[currentVisibleIndex + 1];
-      if (nextVisibleStep) updateData.currentStep = nextVisibleStep.key;
       const currentCompleted = submission?.completedSteps || [];
       if (!currentCompleted.includes(stepId as string)) updateData.completedSteps = [...currentCompleted, stepId as string];
       const completedCount = updateData.completedSteps?.length || currentCompleted.length;
@@ -299,18 +280,54 @@ export default function OnboardingStepPage() {
         const nextVisibleStep = visibleSteps[currentVisibleIndex + 1];
         router.push(`/onboarding/${nextVisibleStep.key}`);
         initialSyncDone.current[nextVisibleStep.key] = false;
-      } else {
-        updateDoc(doc(db, 'onboardingSubmissions', submissionId), { status: 'submitted', submittedAt: serverTimestamp() });
-        toast({ title: "Onboarding Complete", description: "All steps have been submitted successfully." });
-        router.push('/dashboard');
       }
     } else {
       toast({ title: "Draft Saved", description: "Your progress has been saved." });
     }
   };
 
+  const handleSubmitPack = async () => {
+    if (!submissionId || !db || !user) return;
+
+    try {
+      // 1. Update submission status and lock
+      await updateDoc(doc(db, 'onboardingSubmissions', submissionId), {
+        status: 'submitted',
+        submittedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        [`sections.final_submission`]: formData
+      });
+
+      // 2. Update user status
+      await updateDoc(doc(db, 'users', user.uid), {
+        onboardingStatus: 'submitted',
+        updatedAt: serverTimestamp()
+      });
+
+      toast({ title: "Submission Successful", description: "Your onboarding pack has been locked and sent to our team." });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Submission Failed", description: error.message });
+    }
+  };
+
   if (loadingSubmissions || !currentStep || !submissionId) {
     return <div className="h-screen flex flex-col items-center justify-center gap-4"><Loader2 className="animate-spin text-primary w-10 h-10" /><p className="text-sm font-medium text-muted-foreground">Preparing your workspace...</p></div>;
+  }
+
+  // If already submitted and NOT on final_submission step, show lock message or redirect
+  if (submission.status === 'submitted' && stepId !== 'final_submission') {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center p-8 text-center space-y-6">
+        <div className="w-20 h-20 rounded-full bg-slate-100 flex items-center justify-center">
+          <Lock className="w-10 h-10 text-slate-400" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold">Onboarding Locked</h2>
+          <p className="text-muted-foreground max-w-md mx-auto">This onboarding pack has been submitted and is currently being reviewed. Edits are disabled until re-opened by an administrator.</p>
+        </div>
+        <Button onClick={() => router.push('/dashboard')}>Return to Dashboard</Button>
+      </div>
+    );
   }
 
   return (
@@ -357,17 +374,27 @@ export default function OnboardingStepPage() {
               <h1 className="text-sm font-bold text-slate-900">{currentVisibleIndex + 1}. {currentStep.title}</h1>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" onClick={() => handleSave(false)} className="gap-2 rounded-lg border-2">Save Draft</Button>
-            <Button size="sm" onClick={() => handleSave(true)} className="gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20">{currentVisibleIndex === visibleSteps.length - 1 ? 'Finish Onboarding' : 'Next Step'} <ChevronRight className="w-4 h-4" /></Button>
-          </div>
+          {submission.status !== 'submitted' && (
+            <div className="flex items-center gap-3">
+              <Button variant="outline" size="sm" onClick={() => handleSave(false)} className="gap-2 rounded-lg border-2">Save Draft</Button>
+              <Button size="sm" onClick={() => handleSave(true)} className="gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20" disabled={currentVisibleIndex === visibleSteps.length - 1}>Next Step <ChevronRight className="w-4 h-4" /></Button>
+            </div>
+          )}
         </header>
 
         <div className="flex-1 overflow-y-auto bg-slate-50/30">
           <div className="max-w-4xl mx-auto p-8 lg:p-12">
             <Card className="border-none shadow-xl shadow-slate-200/50 rounded-[2.5rem] overflow-hidden bg-white">
               <CardContent className="p-10 lg:p-14">
-                <StepContent stepId={stepId as string} data={formData} onChange={handleFieldChange} submissionId={submissionId} uid={user?.uid} lastSynced={submission?.lastSavedAt} />
+                <StepContent 
+                  stepId={stepId as string} 
+                  data={formData} 
+                  onChange={handleFieldChange} 
+                  submission={submission}
+                  onNavigate={handleNavigate}
+                  onSubmit={handleSubmitPack}
+                  visibleSteps={visibleSteps}
+                />
               </CardContent>
             </Card>
           </div>
@@ -377,9 +404,59 @@ export default function OnboardingStepPage() {
   );
 }
 
-function StepContent({ stepId, data, onChange, submissionId, uid, lastSynced }: { stepId: string, data: any, onChange: (field: string, value: any) => void, submissionId?: string | null, uid?: string, lastSynced?: any }) {
-  const { toast } = useToast();
+function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit, visibleSteps }: { stepId: string, data: any, onChange: (field: string, value: any) => void, submission: any, onNavigate: (key: string) => void, onSubmit: () => void, visibleSteps: any[] }) {
   
+  // Submitted state UI
+  if (submission.status === 'submitted' && stepId === 'final_submission') {
+    return (
+      <div className="space-y-10 text-center py-6">
+        <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-green-100 text-green-600 mb-2">
+          <Check className="w-12 h-12" strokeWidth={3} />
+        </div>
+        <div className="space-y-4">
+          <h2 className="text-4xl font-headline font-bold text-slate-900">Onboarding Submitted</h2>
+          <p className="text-slate-500 text-lg max-w-2xl mx-auto leading-relaxed">
+            Thank you for submitting your Bid Manager onboarding pack. We will review your responses and supporting documents. Your information will be used to prepare your client profile, proposal-ready content, opportunity preferences, compliance checklist, platform setup recommendations, approval workflow, and action plan.
+          </p>
+        </div>
+
+        <Card className="border-none bg-slate-50 rounded-3xl p-8 max-w-lg mx-auto text-left space-y-6">
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <p className="text-slate-400 uppercase font-bold text-[10px] tracking-widest">Submission Status</p>
+              <Badge className="mt-1 bg-green-500 text-white hover:bg-green-500">Submitted</Badge>
+            </div>
+            <div>
+              <p className="text-slate-400 uppercase font-bold text-[10px] tracking-widest">Submitted At</p>
+              <p className="font-bold text-slate-700 mt-1">
+                {submission.submittedAt?.toDate ? submission.submittedAt.toDate().toLocaleString() : 'Just now'}
+              </p>
+            </div>
+          </div>
+          <div className="pt-4 border-t border-slate-200">
+            <h4 className="font-bold text-slate-900 flex items-center gap-2 mb-2">
+              <Briefcase className="w-4 h-4 text-primary" /> What's happening now?
+            </h4>
+            <ul className="space-y-2 text-xs text-slate-600">
+              <li className="flex gap-2"><span>•</span> Our team is reviewing your digital bid library.</li>
+              <li className="flex gap-2"><span>•</span> Your shared Google Drive workspace is being provisioned.</li>
+              <li className="flex gap-2"><span>•</span> A Bid Manager will contact you to schedule your strategy session.</li>
+            </ul>
+          </div>
+        </Card>
+
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <Button variant="outline" size="lg" className="h-14 px-8 rounded-2xl border-2 gap-2" onClick={() => onNavigate('welcome_expectations')}>
+            <Files className="w-5 h-5" /> View Submitted Responses
+          </Button>
+          <Button size="lg" className="h-14 px-10 rounded-2xl gap-2 bg-primary shadow-lg shadow-primary/20" onClick={() => window.location.href = '/dashboard'}>
+            <LayoutDashboard className="w-5 h-5" /> Return to Dashboard
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   switch (stepId) {
     case 'welcome_expectations': {
       return (
@@ -723,13 +800,13 @@ function StepContent({ stepId, data, onChange, submissionId, uid, lastSynced }: 
 
     case 'document_upload_library': {
       const handleFileUpload = async (fieldId: string, categoryId: string, files: FileList | null) => {
-        if (!files || !submissionId || !uid) return;
+        if (!files || !submission.id || !submission.userId) return;
         const storage = getStorage();
         const uploadedFiles = [...(data.documents?.[fieldId]?.files || [])];
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
           const fileName = `${Date.now()}_${file.name}`;
-          const storagePath = `onboardingUploads/${uid}/${submissionId}/${fieldId}/${fileName}`;
+          const storagePath = `onboardingUploads/${submission.userId}/${submission.id}/${fieldId}/${fileName}`;
           const fileRef = ref(storage, storagePath);
           try {
             const snapshot = await uploadBytes(fileRef, file);
@@ -792,18 +869,103 @@ function StepContent({ stepId, data, onChange, submissionId, uid, lastSynced }: 
     }
 
     case 'final_submission': {
+      const isComplete = (visibleSteps.length - 1) === (submission?.completedSteps?.length || 0);
+      const incompleteSteps = visibleSteps.filter(s => s.key !== 'final_submission' && !submission?.completedSteps?.includes(s.key));
+      const hasDeclarations = data.declarations?.accurateAndComplete && data.declarations?.authorisedToSubmit && data.declarations?.termsAccepted;
+      const canSubmit = isComplete && hasDeclarations;
+
       return (
-        <div className="text-center space-y-8 py-12">
-          <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-green-100"><CheckCircle2 className="w-12 h-12 text-green-600" /></div>
-          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Ready to Submit?</h2><p className="text-slate-500 text-lg max-w-2xl mx-auto">You've completed all visible sections of your onboarding pack. Once you submit, our team will review your intelligence and schedule your kick-off session.</p></div>
-          <div className="p-8 bg-slate-50 rounded-[2.5rem] max-w-lg mx-auto border space-y-4 text-left">
-            <h4 className="font-bold flex items-center gap-2"><Briefcase className="w-5 h-5 text-primary" /> Next Steps:</h4>
-            <ul className="space-y-2 text-sm text-slate-600">
-              <li className="flex gap-2"><span>1.</span><span>Our team reviews your "Bid Library".</span></li>
-              <li className="flex gap-2"><span>2.</span><span>We provision your shared Google Drive workspace.</span></li>
-              <li className="flex gap-2"><span>3.</span><span>A dedicated Bid Manager reaches out for your strategy session.</span></li>
-            </ul>
+        <div className="space-y-12">
+          <div className="space-y-4">
+            <h2 className="text-4xl font-headline font-bold text-slate-900">Final Declaration and Submission</h2>
+            <p className="text-slate-500 text-lg">Review your onboarding status and confirm the final declarations to lock your submission.</p>
           </div>
+
+          <Card className="border-none shadow-sm rounded-3xl bg-white border border-slate-100">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xl">Onboarding Completion Summary</CardTitle>
+              <CardDescription>Review the status of your requirements.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-end justify-between">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Progress</span>
+                  <p className="text-3xl font-black text-primary">{Math.round(submission?.completionPercentage || 0)}%</p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Status</span>
+                  <p className="font-bold text-slate-700">{isComplete ? 'Ready to Submit' : 'Incomplete'}</p>
+                </div>
+              </div>
+              <Progress value={submission?.completionPercentage || 0} className="h-3" />
+              
+              {!isComplete && (
+                <Alert variant="destructive" className="bg-red-50 border-red-100 rounded-2xl">
+                  <AlertTriangle className="w-4 h-4" />
+                  <AlertTitle className="font-bold">Required sections incomplete</AlertTitle>
+                  <AlertDescription>
+                    <p className="mb-3">You must complete the following sections before submitting:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {incompleteSteps.map(s => (
+                        <Button key={s.key} variant="outline" size="sm" className="h-7 text-[10px] rounded-full border-red-200 bg-white" onClick={() => onNavigate(s.key)}>
+                          {s.shortTitle}
+                        </Button>
+                      ))}
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-none shadow-sm rounded-3xl bg-white border border-slate-100">
+            <CardHeader>
+              <CardTitle className="text-xl">Final Declarations</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {[
+                { id: 'accurateAndComplete', label: 'I confirm the information provided is accurate and complete to the best of my knowledge.' },
+                { id: 'authorisedToSubmit', label: 'I confirm I am authorised to submit this onboarding pack on behalf of the business.' },
+                { id: 'termsAccepted', label: 'I acknowledge and accept the Bid Manager Terms and Conditions.' },
+                { id: 'informationUseAcknowledged', label: 'I understand Bid Manager may use the information provided to prepare proposal content, recommendations, and applications.' },
+                { id: 'approvalResponsibilityAcknowledged', label: 'I understand final commitments may require approval depending on my authority settings.' },
+                { id: 'noPasswordsAcknowledged', label: 'I understand I must not provide platform passwords or MFA codes through this portal.' },
+                { id: 'submissionLockAcknowledged', label: 'I understand submitted onboarding information will be locked unless Bid Manager reopens it.' }
+              ].map(decl => (
+                <div key={decl.id} className="flex items-start gap-4 p-4 border rounded-2xl hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => onChange('declarations', { ...data.declarations, [decl.id]: !data.declarations?.[decl.id] })}>
+                  <Checkbox checked={data.declarations?.[decl.id]} onCheckedChange={() => {}} className="mt-1" />
+                  <Label className="text-sm font-medium leading-relaxed cursor-pointer">{decl.label}</Label>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <div className="space-y-4">
+            <Label className="text-lg font-bold">Final Notes (Optional)</Label>
+            <Textarea 
+              placeholder="Is there anything else we should know before reviewing your onboarding pack?"
+              className="min-h-[150px] rounded-3xl p-6"
+              value={data.finalNotes || ''}
+              onChange={(e) => onChange('finalNotes', e.target.value)}
+            />
+          </div>
+
+          <div className="p-8 bg-amber-50 border border-amber-200 rounded-[2rem] flex gap-4">
+            <AlertCircle className="w-6 h-6 text-amber-600 shrink-0" />
+            <div className="space-y-1">
+              <p className="font-bold text-amber-900">Submission Lock Warning</p>
+              <p className="text-sm text-amber-700">After submission, your onboarding pack will be locked unless Bid Manager reopens it for edits. Humanity has enough half-submitted paperwork already—please ensure your answers are final.</p>
+            </div>
+          </div>
+
+          <Button 
+            size="lg" 
+            className="w-full h-20 rounded-[2rem] text-xl font-black bg-primary hover:bg-primary/90 shadow-2xl shadow-primary/30 gap-4"
+            disabled={!canSubmit}
+            onClick={onSubmit}
+          >
+            <Send className="w-6 h-6" /> Submit Onboarding Pack
+          </Button>
         </div>
       );
     }
@@ -817,3 +979,26 @@ function StepContent({ stepId, data, onChange, submissionId, uid, lastSynced }: 
       );
   }
 }
+
+const AUTHORITY_ROWS = [
+  "Search for opportunities", "Recommend opportunities", "Create or update platform profiles",
+  "Register on free platforms", "Register on paid platforms", "Assist with supplier, tender, or grant registrations",
+  "Draft responses, quotes, and applications", "Ask clarification questions", "Communicate with buyers, funders, or leads",
+  "Prepare marketplace responses", "Submit marketplace responses", "Submit quote requests", "Submit tenders",
+  "Submit grants", "Provide pricing", "Accept terms or contract conditions", "Use supplied documents in submissions",
+  "Maintain a reusable bid library", "Follow up with buyers, funders, or leads"
+];
+
+const AUTHORITY_LEVELS = ["Authorised", "Authorised after approval", "Not authorised", "Unsure"];
+const HIGH_RISK_AUTHORITY_ITEMS = ["Submit tenders", "Submit grants", "Provide pricing", "Accept terms or contract conditions", "Register on paid platforms"];
+
+const DOCUMENT_CATEGORIES = [
+  { id: 'business', title: '1. Business Profile and Brand', icon: Building2, fields: [{ id: 'capabilityStatement', label: 'Capability statement' }, { id: 'businessProfile', label: 'Business profile or brochure' }, { id: 'logoFiles', label: 'Logo files' }, { id: 'brandAssets', label: 'Brand assets' }, { id: 'styleGuide', label: 'Style guide' }, { id: 'marketingCopy', label: 'Website or marketing copy' }] },
+  { id: 'compliance', title: '2. Compliance and Insurance', icon: ShieldCheck, fields: [{ id: 'publicLiability', label: 'Public liability insurance' }, { id: 'professionalIndemnity', label: 'Professional indemnity insurance' }, { id: 'workersComp', label: 'Workers compensation insurance' }, { id: 'cyberInsurance', label: 'Cyber insurance' }, { id: 'motorVehicle', label: 'Motor vehicle insurance' }, { id: 'licences', label: 'Licences' }, { id: 'certifications', label: 'Certifications' }, { id: 'staffChecks', label: 'Staff checks (Police, WWCC, etc)' }, { id: 'policiesProcedures', label: 'Policies and procedures' }] },
+  { id: 'team', title: '3. Team and Capability', icon: Users, fields: [{ id: 'staffCvs', label: 'Staff CVs' }, { id: 'staffBios', label: 'Staff bios' }, { id: 'qualifications', label: 'Qualifications' }, { id: 'tickets', label: 'Tickets' }, { id: 'trainingCertificates', label: 'Training certificates' }, { id: 'orgChart', label: 'Organisational chart' }] },
+  { id: 'proof', title: '4. Case Studies and Proof', icon: CheckCircle2, fields: [{ id: 'projectExamples', label: 'Project examples' }, { id: 'caseStudies', label: 'Case studies' }, { id: 'photos', label: 'Photos' }, { id: 'beforeAfter', label: 'Before and after images' }, { id: 'testimonials', label: 'Testimonials' }, { id: 'reviews', label: 'Reviews' }, { id: 'referenceLetters', label: 'Reference letters' }, { id: 'completionCertificates', label: 'Completion certificates' }, { id: 'reports', label: 'Reports' }] },
+  { id: 'submissions', title: '5. Previous Submissions and Feedback', icon: FileStack, fields: [{ id: 'previousTenders', label: 'Previous tenders' }, { id: 'previousGrants', label: 'Previous grants' }, { id: 'previousProposals', label: 'Previous proposals' }, { id: 'previousQuotes', label: 'Previous quotes' }, { id: 'supplierRegistrations', label: 'Supplier registrations' }, { id: 'buyerFeedback', label: 'Buyer feedback' }, { id: 'grantFeedback', label: 'Grant feedback' }, { id: 'debriefNotes', label: 'Debrief notes' }] },
+  { id: 'pricing', title: '6. Pricing and Commercial', icon: DollarSign, fields: [{ id: 'pricingSchedules', label: 'Pricing schedules' }, { id: 'rateCards', label: 'Rate cards' }, { id: 'packageLists', label: 'Package lists' }, { id: 'quoteTemplates', label: 'Quote templates' }, { id: 'termsConditions', label: 'Terms and conditions' }, { id: 'budgetTemplates', label: 'Budget templates' }, { id: 'grantBudgetDocs', label: 'Grant budget documents' }] },
+  { id: 'grantDocs', title: '7. Grant Project Documents', icon: Gift, fields: [{ id: 'supplierQuotes', label: 'Supplier quotes' }, { id: 'projectBudgets', label: 'Project budgets' }, { id: 'supportLetters', label: 'Letters of support' }, { id: 'projectPlans', label: 'Project plans' }, { id: 'evidenceNeed', label: 'Evidence of need' }, { id: 'partnerDocuments', label: 'Partner documents' }] },
+  { id: 'other', title: '8. Other Relevant Documents', icon: Files, fields: [{ id: 'otherDocuments', label: 'Other documents' }] }
+];
