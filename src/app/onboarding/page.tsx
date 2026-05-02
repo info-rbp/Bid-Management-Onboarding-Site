@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -92,7 +91,7 @@ export default function OnboardingPage() {
         fullName: formData.fullName,
         businessName: formData.businessName,
         role: 'client',
-        subscriptionStatus: 'active', // Assuming payment succeeded in previous step
+        subscriptionStatus: 'inactive', // Changed to inactive - requires real payment check later
         onboardingStatus: 'not_started',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -153,7 +152,7 @@ export default function OnboardingPage() {
               ))}
             </RadioGroup>
             <Button onClick={handleNext} className="w-full h-12 rounded-xl bg-primary text-lg font-semibold">
-              Continue to Payment
+              Continue to Registration
             </Button>
           </div>
         );
@@ -162,35 +161,23 @@ export default function OnboardingPage() {
         return (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
             <div className="space-y-2">
-              <h2 className="text-2xl font-headline font-bold">Secure Payment</h2>
-              <p className="text-muted-foreground">Complete your subscription setup via Stripe.</p>
+              <h2 className="text-2xl font-headline font-bold">Registration Preparation</h2>
+              <p className="text-muted-foreground">You have selected the <span className="font-bold text-primary capitalize">{formData.plan}</span> plan. Next, we'll set up your account credentials.</p>
             </div>
-            <div className="bg-muted/50 p-6 rounded-2xl border space-y-6">
-              <div className="flex justify-between items-center pb-4 border-b">
-                <span className="font-medium">Plan: <span className="capitalize font-bold text-primary">{formData.plan}</span></span>
-                <span className="font-bold">{formData.plan === 'professional' ? '$999.00' : formData.plan === 'essential' ? '$499.00' : 'TBD'}</span>
+            <div className="bg-muted/50 p-6 rounded-2xl border space-y-4">
+              <div className="flex justify-between items-center pb-2 border-b">
+                <span className="font-medium">Selected Tier:</span>
+                <span className="font-bold text-primary uppercase">{formData.plan}</span>
               </div>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Card Details</Label>
-                  <div className="relative">
-                    <Input placeholder="0000 0000 0000 0000" className="pl-10 h-12" />
-                    <CreditCard className="absolute left-3 top-3.5 w-5 h-5 text-muted-foreground" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <Input placeholder="MM/YY" className="h-12" />
-                  <Input placeholder="CVC" className="h-12" />
-                </div>
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
+                <p className="text-xs text-slate-500">Payments are securely gated behind your account. You will complete payment after setup.</p>
               </div>
-              <p className="text-[10px] text-muted-foreground text-center">
-                Securely processed by Stripe. No card details are stored on our servers.
-              </p>
             </div>
             <div className="flex gap-4">
               <Button variant="outline" onClick={handleBack} className="flex-1 h-12 rounded-xl">Back</Button>
-              <Button onClick={handleNext} className="flex-[2] h-12 rounded-xl bg-accent text-white font-bold">
-                Pay and Setup Account
+              <Button onClick={handleNext} className="flex-[2] h-12 rounded-xl bg-primary text-white font-bold">
+                Continue to Account Setup
               </Button>
             </div>
           </div>
@@ -268,22 +255,22 @@ export default function OnboardingPage() {
       case 'complete':
         return (
           <div className="space-y-6 text-center animate-in zoom-in-95 duration-500">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-100 mb-4">
-              <CheckCircle2 className="w-10 h-10 text-green-600" />
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-blue-100 mb-4">
+              <CheckCircle2 className="w-10 h-10 text-primary" />
             </div>
-            <h2 className="text-3xl font-headline font-bold">Registration Complete!</h2>
-            <p className="text-muted-foreground text-lg">Your account is active and your workspace is being prepared.</p>
+            <h2 className="text-3xl font-headline font-bold">Registration Success</h2>
+            <p className="text-muted-foreground text-lg">Your account has been created. Next, complete your subscription to unlock the portal.</p>
             <Card className="bg-secondary/20 border-none p-6 text-left">
               <h4 className="font-bold mb-2">Welcome aboard, {formData.fullName}!</h4>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                You now have access to the Bid Manager dashboard. You can start your onboarding pack immediately to help us understand your business requirements.
+                You're one step away from starting your strategic onboarding. Complete payment to activate your dashboard.
               </p>
             </Card>
             <Button 
-              onClick={() => router.push('/dashboard')} 
+              onClick={() => router.push('/payment')} 
               className="w-full h-14 rounded-xl text-lg font-semibold bg-primary group shadow-lg shadow-primary/20"
             >
-              Go to Dashboard <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              Go to Payment <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Button>
           </div>
         );
@@ -300,7 +287,7 @@ export default function OnboardingPage() {
         <div className="w-full max-w-xl">
           <div className="mb-8 space-y-2">
             <div className="flex justify-between text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2">
-              <span>Step {stepsOrder.indexOf(currentStep) + 1} of {stepsOrder.length}</span>
+              <span>Setup Progress</span>
               <span className="text-primary">{Math.round(progress)}%</span>
             </div>
             <Progress value={progress} className="h-2" />

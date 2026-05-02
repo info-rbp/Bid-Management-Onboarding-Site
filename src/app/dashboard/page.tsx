@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useMemo } from 'react';
@@ -23,6 +22,7 @@ import { useRouter } from 'next/navigation';
 import { doc, query, collection, where } from 'firebase/firestore';
 import Link from 'next/link';
 import { getVisibleOnboardingSteps } from '@/lib/onboarding-steps';
+import { AuthGuard } from '@/components/auth/AuthGuard';
 
 export default function DashboardPage() {
   const auth = useAuth();
@@ -64,97 +64,99 @@ export default function DashboardPage() {
   const progressValue = visibleSteps.length > 0 ? (completedCount / visibleSteps.length) * 100 : 0;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex font-body">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r hidden lg:flex flex-col">
-        <div className="p-6">
-          <Logo />
-        </div>
-        <nav className="flex-1 px-4 space-y-1">
-          <Link href="/dashboard" className="block">
-            <NavItem icon={<LayoutDashboard className="w-5 h-5" />} label="Dashboard" active />
-          </Link>
-          <Link href="/settings" className="block">
-            <NavItem icon={<SettingsIcon className="w-5 h-5" />} label="Settings" />
-          </Link>
-        </nav>
-        
-        <div className="p-4 px-6 border-t">
-          <Button 
-            variant="ghost" 
-            className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-xl transition-colors"
-            onClick={handleLogout}
-          >
-            <LogOut className="w-5 h-5" />
-            <span className="text-sm font-medium">Log Out</span>
-          </Button>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        <header className="h-16 bg-white border-b flex items-center justify-between px-8 shrink-0">
-          <div className="relative w-96">
-            <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Search onboarding steps..." className="pl-10 bg-[#F1F5F9] border-none" />
+    <AuthGuard>
+      <div className="min-h-screen bg-[#F8FAFC] flex font-body">
+        {/* Sidebar */}
+        <aside className="w-64 bg-white border-r hidden lg:flex flex-col">
+          <div className="p-6">
+            <Logo />
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex flex-col items-end mr-2">
-              <span className="text-xs font-bold text-slate-900 leading-none">{userData?.fullName}</span>
-              <span className="text-[10px] text-muted-foreground">{userData?.businessName}</span>
-            </div>
-            <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold shadow-sm">
-              {userData?.fullName?.substring(0, 2).toUpperCase() || 'JD'}
-            </div>
+          <nav className="flex-1 px-4 space-y-1">
+            <Link href="/dashboard" className="block">
+              <NavItem icon={<LayoutDashboard className="w-5 h-5" />} label="Dashboard" active />
+            </Link>
+            <Link href="/settings" className="block">
+              <NavItem icon={<SettingsIcon className="w-5 h-5" />} label="Settings" />
+            </Link>
+          </nav>
+          
+          <div className="p-4 px-6 border-t">
+            <Button 
+              variant="ghost" 
+              className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-xl transition-colors"
+              onClick={handleLogout}
+            >
+              <LogOut className="w-5 h-5" />
+              <span className="text-sm font-medium">Log Out</span>
+            </Button>
           </div>
-        </header>
+        </aside>
 
-        <div className="flex-1 overflow-y-auto p-8 space-y-8">
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <h1 className="text-3xl font-headline font-bold text-slate-900">Onboarding Dashboard</h1>
-              <Badge variant="secondary" className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-                {submission?.status?.replace('_', ' ') || 'In Progress'}
-              </Badge>
+        {/* Main Content */}
+        <main className="flex-1 flex flex-col h-screen overflow-hidden">
+          <header className="h-16 bg-white border-b flex items-center justify-between px-8 shrink-0">
+            <div className="relative w-96">
+              <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
+              <Input placeholder="Search onboarding steps..." className="pl-10 bg-[#F1F5F9] border-none" />
             </div>
-            <p className="text-slate-500">Complete the {visibleSteps.length} sections below to set up your profile.</p>
-          </div>
-
-          <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden">
-            <CardContent className="p-8 space-y-4">
-              <div className="flex justify-between items-end">
-                <div className="space-y-1">
-                  <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Overall Completion</h2>
-                  <p className="text-4xl font-bold font-headline">{Math.round(progressValue)}%</p>
-                </div>
-                <p className="text-sm text-muted-foreground font-medium">
-                  {completedCount} of {visibleSteps.length} steps completed
-                </p>
+            <div className="flex items-center gap-4">
+              <div className="flex flex-col items-end mr-2">
+                <span className="text-xs font-bold text-slate-900 leading-none">{userData?.fullName}</span>
+                <span className="text-[10px] text-muted-foreground">{userData?.businessName}</span>
               </div>
-              <Progress value={progressValue} className="h-3 bg-slate-100" />
-            </CardContent>
-          </Card>
+              <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold shadow-sm">
+                {userData?.fullName?.substring(0, 2).toUpperCase() || 'JD'}
+              </div>
+            </div>
+          </header>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-8">
-            {visibleSteps.map((step, idx) => {
-              const isCompleted = submission?.completedSteps?.includes(step.key);
-              const isCurrent = submission?.currentStep === step.key;
-              const status = isCompleted ? 'completed' : isCurrent ? 'in_progress' : 'pending';
-              
-              return (
-                <StepTile 
-                  key={step.key} 
-                  title={`${idx + 1}. ${step.shortTitle}`} 
-                  icon={<step.icon className="w-5 h-5" />} 
-                  status={status}
-                  onClick={() => router.push(step.route)}
-                />
-              );
-            })}
+          <div className="flex-1 overflow-y-auto p-8 space-y-8">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <h1 className="text-3xl font-headline font-bold text-slate-900">Onboarding Dashboard</h1>
+                <Badge variant="secondary" className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+                  {submission?.status?.replace('_', ' ') || 'In Progress'}
+                </Badge>
+              </div>
+              <p className="text-slate-500">Complete the {visibleSteps.length} sections below to set up your profile.</p>
+            </div>
+
+            <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden">
+              <CardContent className="p-8 space-y-4">
+                <div className="flex justify-between items-end">
+                  <div className="space-y-1">
+                    <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Overall Completion</h2>
+                    <p className="text-4xl font-bold font-headline">{Math.round(progressValue)}%</p>
+                  </div>
+                  <p className="text-sm text-muted-foreground font-medium">
+                    {completedCount} of {visibleSteps.length} steps completed
+                  </p>
+                </div>
+                <Progress value={progressValue} className="h-3 bg-slate-100" />
+              </CardContent>
+            </Card>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-8">
+              {visibleSteps.map((step, idx) => {
+                const isCompleted = submission?.completedSteps?.includes(step.key);
+                const isCurrent = submission?.currentStep === step.key;
+                const status = isCompleted ? 'completed' : isCurrent ? 'in_progress' : 'pending';
+                
+                return (
+                  <StepTile 
+                    key={step.key} 
+                    title={`${idx + 1}. ${step.shortTitle}`} 
+                    icon={<step.icon className="w-5 h-5" />} 
+                    status={status}
+                    onClick={() => router.push(step.route)}
+                  />
+                );
+              })}
+            </div>
           </div>
-        </div>
-      </main>
-    </div>
+        </main>
+      </div>
+    </AuthGuard>
   );
 }
 
