@@ -1,22 +1,20 @@
 
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Logo } from '@/components/brand/Logo';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { useAuth, useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { 
-  ChevronLeft, 
   ChevronRight, 
-  Save, 
   LayoutDashboard,
   CheckCircle2,
   Zap,
@@ -42,17 +40,12 @@ import {
   AlertTriangle,
   UploadCloud,
   ShieldAlert,
-  Clock,
   Trash2,
-  X,
   Files,
   FileStack,
-  Flag,
   UserCheck,
-  ShieldQuestion,
-  FileSearch,
-  Handshake,
-  Star
+  Flag,
+  Clock
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -71,51 +64,195 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 
-const STEPS = [
-  { id: 'welcome', title: '1. Welcome & Expectations', icon: Zap },
-  { id: 'snapshot', title: '2. Business Snapshot', icon: Building2 },
-  { id: 'triage', title: '3. Opportunity Triage', icon: AlertCircle },
-  { id: 'selection', title: '4. Service Selection', icon: FileText },
-  { id: 'profile', title: '5. Business Profile', icon: Award },
-  { id: 'menu', title: '6. Offer Menu', icon: ShoppingCart },
-  { id: 'capacity', title: '7. Team & Capacity', icon: Users },
-  { id: 'proof', title: '8. Proof & Evidence', icon: CheckCircle2 },
-  { id: 'goals', title: '9. Goals & Strategy', icon: Target },
-  { id: 'commercial', title: '10. Pricing & Commercial', icon: DollarSign },
-  { id: 'platform', title: '11. Platform Setup', icon: Globe },
-  { id: 'compliance', title: '12. Compliance & Insurance', icon: ShieldCheck },
-  { id: 'readiness', title: '13. Tender Readiness', icon: FileBadge, conditional: 'tenderSupplier' },
-  { id: 'grants', title: '14. Grants', icon: Gift, conditional: 'grants' },
-  { id: 'marketplace', title: '15. Marketplace Strategy', icon: BarChart3, conditional: 'marketplace' },
-  { id: 'outreach', title: '16. Outreach Strategy', icon: Send, conditional: 'directProposal' },
-  { id: 'quote', title: '17. Quote Support', icon: MessageSquare, conditional: 'quoteRequests' },
-  { id: 'workflow', title: '18. Workflow Rules', icon: MessageSquare },
-  { id: 'library', title: '19. Document Upload Library', icon: Library },
-  { id: 'authority', title: '20. Authority Matrix', icon: Scale },
+const ALL_STEPS = [
+  {
+    key: "welcome_expectations",
+    title: "1. Welcome & Expectations",
+    shortTitle: "Welcome & Expectations",
+    icon: Zap,
+    required: true,
+    conditional: false
+  },
+  {
+    key: "business_snapshot",
+    title: "2. Business Snapshot",
+    shortTitle: "Business Snapshot",
+    icon: Building2,
+    required: true,
+    conditional: false
+  },
+  {
+    key: "opportunity_triage",
+    title: "3. Opportunity Triage",
+    shortTitle: "Opportunity Triage",
+    icon: AlertCircle,
+    required: true,
+    conditional: false
+  },
+  {
+    key: "service_selection",
+    title: "4. Service Selection",
+    shortTitle: "Service Selection",
+    icon: FileText,
+    required: true,
+    conditional: false
+  },
+  {
+    key: "business_profile",
+    title: "5. Business Profile",
+    shortTitle: "Business Profile",
+    icon: Award,
+    required: true,
+    conditional: false
+  },
+  {
+    key: "offer_menu",
+    title: "6. Offer Menu",
+    shortTitle: "Offer Menu",
+    icon: ShoppingCart,
+    required: true,
+    conditional: false
+  },
+  {
+    key: "team_capacity",
+    title: "7. Team & Capacity",
+    shortTitle: "Team & Capacity",
+    icon: Users,
+    required: true,
+    conditional: false
+  },
+  {
+    key: "proof_evidence",
+    title: "8. Proof & Evidence",
+    shortTitle: "Proof & Evidence",
+    icon: CheckCircle2,
+    required: true,
+    conditional: false
+  },
+  {
+    key: "goals_strategy",
+    title: "9. Goals & Strategy",
+    shortTitle: "Goals & Strategy",
+    icon: Target,
+    required: true,
+    conditional: false
+  },
+  {
+    key: "pricing_commercial",
+    title: "10. Pricing & Commercial",
+    shortTitle: "Pricing & Commercial",
+    icon: DollarSign,
+    required: true,
+    conditional: false
+  },
+  {
+    key: "platform_setup",
+    title: "11. Platform Setup",
+    shortTitle: "Platform Setup",
+    icon: Globe,
+    required: true,
+    conditional: false
+  },
+  {
+    key: "compliance_insurance",
+    title: "12. Compliance & Insurance",
+    shortTitle: "Compliance & Insurance",
+    icon: ShieldCheck,
+    required: true,
+    conditional: false
+  },
+  {
+    key: "tender_readiness",
+    title: "13. Tender Readiness",
+    shortTitle: "Tender Readiness",
+    icon: FileBadge,
+    required: false,
+    conditional: true,
+    isEnabled: (selectedServices: string[]) =>
+      selectedServices.includes("Government Tenders") ||
+      selectedServices.includes("Private Tenders") ||
+      selectedServices.includes("Panel or Supplier Registrations") ||
+      selectedServices.includes("Unsure, please recommend")
+  },
+  {
+    key: "grants",
+    title: "14. Grants",
+    shortTitle: "Grants",
+    icon: Gift,
+    required: false,
+    conditional: true,
+    isEnabled: (selectedServices: string[]) =>
+      selectedServices.includes("Grants") ||
+      selectedServices.includes("Unsure, please recommend")
+  },
+  {
+    key: "marketplace_strategy",
+    title: "15. Marketplace Strategy",
+    shortTitle: "Marketplace Strategy",
+    icon: BarChart3,
+    required: false,
+    conditional: true,
+    isEnabled: (selectedServices: string[]) =>
+      selectedServices.includes("Marketplace Leads") ||
+      selectedServices.includes("Unsure, please recommend")
+  },
+  {
+    key: "direct_outreach_strategy",
+    title: "16. Outreach Strategy",
+    shortTitle: "Outreach Strategy",
+    icon: Send,
+    required: false,
+    conditional: true,
+    isEnabled: (selectedServices: string[]) =>
+      selectedServices.includes("Direct Proposals") ||
+      selectedServices.includes("Unsure, please recommend")
+  },
+  {
+    key: "quote_support",
+    title: "17. Quote Support",
+    shortTitle: "Quote Support",
+    icon: MessageSquare,
+    required: false,
+    conditional: true,
+    isEnabled: (selectedServices: string[]) =>
+      selectedServices.includes("Quote Requests") ||
+      selectedServices.includes("Marketplace Leads") ||
+      selectedServices.includes("Direct Proposals") ||
+      selectedServices.includes("Unsure, please recommend")
+  },
+  {
+    key: "workflow_rules",
+    title: "18. Workflow Rules",
+    shortTitle: "Workflow Rules",
+    icon: Clock,
+    required: true,
+    conditional: false
+  },
+  {
+    key: "document_upload_library",
+    title: "19. Document Upload Library",
+    shortTitle: "Document Upload Library",
+    icon: Library,
+    required: true,
+    conditional: false
+  },
+  {
+    key: "authority_matrix",
+    title: "20. Authority Matrix",
+    shortTitle: "Authority Matrix",
+    icon: Scale,
+    required: true,
+    conditional: false
+  },
+  {
+    key: "final_submission",
+    title: "21. Final Submission",
+    shortTitle: "Final Submission",
+    icon: Flag,
+    required: true,
+    conditional: false
+  }
 ];
-
-const SECTION_KEY_MAP: Record<string, string> = {
-  welcome: 'welcome',
-  snapshot: 'business_snapshot',
-  triage: 'opportunity_triage',
-  selection: 'service_selection',
-  profile: 'business_profile',
-  menu: 'offer_menu',
-  capacity: 'team_capacity',
-  proof: 'proof_evidence',
-  goals: 'goals_strategy',
-  commercial: 'pricing_commercial',
-  platform: 'platform_setup',
-  compliance: 'compliance_insurance',
-  readiness: 'tender_supplier_readiness',
-  grants: 'grants',
-  marketplace: 'marketplace_strategy',
-  outreach: 'direct_outreach_strategy',
-  quote: 'quote_request_support',
-  workflow: 'communication_workflow',
-  library: 'document_upload_library',
-  authority: 'authority_matrix',
-};
 
 const AUTHORITY_ROWS = [
   "Search for opportunities",
@@ -285,16 +422,38 @@ export default function OnboardingStepPage() {
   const [formData, setFormData] = useState<any>({});
   const initialSyncDone = useRef<Record<string, boolean>>({});
 
-  const currentStepIndex = STEPS.findIndex(s => s.id === stepId);
-  const currentStep = STEPS[currentStepIndex];
-  const sectionKey = SECTION_KEY_MAP[stepId as string] || stepId as string;
-
   const submissionRef = useMemoFirebase(() => {
     if (!submissionId || !db) return null;
     return doc(db, 'onboardingSubmissions', submissionId);
   }, [submissionId, db]);
 
   const { data: submission, isLoading: loadingSubmissions } = useDoc(submissionRef);
+
+  const selectedServices = submission?.sections?.service_selection?.selectedServices || [];
+
+  const visibleSteps = useMemo(() => {
+    return ALL_STEPS.filter(step => {
+      if (!step.conditional) return true;
+      return step.isEnabled?.(selectedServices);
+    });
+  }, [selectedServices]);
+
+  const currentStep = useMemo(() => visibleSteps.find(s => s.key === stepId), [visibleSteps, stepId]);
+  const currentVisibleIndex = useMemo(() => visibleSteps.findIndex(s => s.key === stepId), [visibleSteps, stepId]);
+
+  // Handle Redirect if step is disabled
+  useEffect(() => {
+    if (!loadingSubmissions && submission && !currentStep && stepId) {
+      const firstValidStep = visibleSteps[0];
+      if (firstValidStep) {
+        toast({
+          title: "Section Hidden",
+          description: "This section is no longer in your scope based on your service selections."
+        });
+        router.push(`/onboarding/${firstValidStep.key}`);
+      }
+    }
+  }, [currentStep, loadingSubmissions, submission, visibleSteps, stepId, router, toast]);
 
   useEffect(() => {
     async function initSubmission() {
@@ -327,19 +486,19 @@ export default function OnboardingStepPage() {
   useEffect(() => {
     const sid = stepId as string;
     if (submission && !initialSyncDone.current[sid]) {
-      const savedData = submission.sections?.[sectionKey];
+      const savedData = submission.sections?.[sid];
       if (savedData) {
         setFormData(savedData);
       } else {
         // Defaults
-        if (sid === 'authority') {
+        if (sid === 'authority_matrix') {
           setFormData({
             matrix: {},
             acks: {},
             quoteThresholdAuthority: 'No',
             marketplaceAuthority: 'No'
           });
-        } else if (sid === 'library') {
+        } else if (sid === 'document_upload_library') {
           setFormData({
             documents: {},
             acks: { docsConfirmed: false }
@@ -350,21 +509,21 @@ export default function OnboardingStepPage() {
       }
       initialSyncDone.current[sid] = true;
     }
-  }, [submission, stepId, sectionKey]);
+  }, [submission, stepId]);
 
   const handleFieldChange = (field: string, value: any) => {
     setFormData((prev: any) => ({ ...prev, [field]: value }));
   };
 
-  const handleNavigate = (targetStepId: string) => {
-    if (targetStepId === stepId) return;
+  const handleNavigate = (targetStepKey: string) => {
+    if (targetStepKey === stepId) return;
 
     if (submissionId && db) {
       const updateData: any = {
         updatedAt: serverTimestamp(),
         lastSavedAt: serverTimestamp(),
       };
-      updateData[`sections.${sectionKey}`] = formData;
+      updateData[`sections.${stepId}`] = formData;
       
       updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData)
         .catch((error: any) => {
@@ -377,12 +536,12 @@ export default function OnboardingStepPage() {
         });
     }
 
-    initialSyncDone.current[targetStepId] = false;
-    router.push(`/onboarding/${targetStepId}`);
+    initialSyncDone.current[targetStepKey] = false;
+    router.push(`/onboarding/${targetStepKey}`);
   };
 
   const validateStep = (sid: string, data: any) => {
-    if (sid === 'authority') {
+    if (sid === 'authority_matrix') {
       const matrix = data.matrix || {};
       const allRowsAnswered = AUTHORITY_ROWS.every(row => matrix[row]);
       if (!allRowsAnswered) return "Please select an authority level for every action in the matrix.";
@@ -390,27 +549,21 @@ export default function OnboardingStepPage() {
       if (!data.pricingApprover) return "Please specify who provides final approval for pricing.";
       if (!data.contractApprover) return "Please specify who provides final approval for contract terms.";
       if (!data.paidPlatformApprover) return "Please specify who provides final approval for paid platforms.";
-      if (!data.neverActions) return "Please specify actions Bid Manager must never take (write 'None known' if applicable).";
+      if (!data.neverActions) return "Please specify actions Bid Manager must never take.";
       
       const acks = data.acks || {};
       const allAcks = ['relied', 'auto', 'consequence', 'accurate'].every(id => acks[id]);
-      if (!allAcks) return "Please confirm all acknowledgments in the final authority section.";
-
-      if ((data.quoteThresholdAuthority === 'Yes' || data.quoteThresholdAuthority === 'Maybe, to be discussed') && !data.quoteThresholdValue) {
-        return "Please specify a maximum value threshold for quotes.";
-      }
-    } else if (sid === 'library') {
+      if (!allAcks) return "Please confirm all acknowledgments.";
+    } else if (sid === 'document_upload_library') {
       if (!data.acks?.docsConfirmed) {
-        return "Please confirm that you have uploaded available documents or marked them unavailable.";
+        return "Please confirm your upload status.";
       }
     }
     return null;
   };
 
   const handleSave = (next: boolean = false) => {
-    if (!submissionId || !db) return;
-    const isLastStep = currentStepIndex === STEPS.length - 1;
-    const nextStepId = next && !isLastStep ? STEPS[currentStepIndex + 1].id : stepId;
+    if (!submissionId || !db || !currentStep) return;
     
     if (next) {
       const error = validateStep(stepId as string, formData);
@@ -421,14 +574,33 @@ export default function OnboardingStepPage() {
     }
 
     const updateData: any = { updatedAt: serverTimestamp(), lastSavedAt: serverTimestamp() };
-    updateData[`sections.${sectionKey}`] = formData;
+    updateData[`sections.${stepId}`] = formData;
+
+    if (stepId === 'service_selection') {
+      const enabledModules = {
+        tenderReadiness: ALL_STEPS.find(s => s.key === 'tender_readiness')?.isEnabled?.(formData.selectedServices || []),
+        grants: ALL_STEPS.find(s => s.key === 'grants')?.isEnabled?.(formData.selectedServices || []),
+        marketplaceStrategy: ALL_STEPS.find(s => s.key === 'marketplace_strategy')?.isEnabled?.(formData.selectedServices || []),
+        directOutreachStrategy: ALL_STEPS.find(s => s.key === 'direct_outreach_strategy')?.isEnabled?.(formData.selectedServices || []),
+        quoteSupport: ALL_STEPS.find(s => s.key === 'quote_support')?.isEnabled?.(formData.selectedServices || []),
+      };
+      const newVisibleSteps = ALL_STEPS.filter(s => !s.conditional || s.isEnabled?.(formData.selectedServices || []));
+      updateData.enabledModules = enabledModules;
+      updateData.visibleStepKeys = newVisibleSteps.map(s => s.key);
+    }
 
     if (next) {
-      updateData.currentStep = nextStepId;
+      const nextVisibleStep = visibleSteps[currentVisibleIndex + 1];
+      if (nextVisibleStep) {
+        updateData.currentStep = nextVisibleStep.key;
+      }
+      
       const currentCompleted = submission?.completedSteps || [];
-      if (!currentCompleted.includes(stepId as string)) updateData.completedSteps = [...currentCompleted, stepId as string];
+      if (!currentCompleted.includes(stepId as string)) {
+        updateData.completedSteps = [...currentCompleted, stepId as string];
+      }
       const completedCount = updateData.completedSteps?.length || currentCompleted.length;
-      updateData.completionPercentage = (completedCount / STEPS.length) * 100;
+      updateData.completionPercentage = (completedCount / visibleSteps.length) * 100;
     }
 
     updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData)
@@ -442,16 +614,18 @@ export default function OnboardingStepPage() {
       });
 
     if (next) {
+      const isLastStep = currentVisibleIndex === visibleSteps.length - 1;
       if (!isLastStep) {
-        router.push(`/onboarding/${nextStepId}`);
-        initialSyncDone.current[nextStepId] = false;
+        const nextVisibleStep = visibleSteps[currentVisibleIndex + 1];
+        router.push(`/onboarding/${nextVisibleStep.key}`);
+        initialSyncDone.current[nextVisibleStep.key] = false;
       } else {
         updateDoc(doc(db, 'onboardingSubmissions', submissionId), { status: 'submitted', submittedAt: serverTimestamp() });
-        toast({ title: "Onboarding Complete", description: "All steps have been submitted successfully. Welcome to Bid Manager!" });
+        toast({ title: "Onboarding Complete", description: "All steps have been submitted successfully." });
         router.push('/dashboard');
       }
     } else {
-      toast({ title: "Draft Saved", description: "Your progress for this section has been saved." });
+      toast({ title: "Draft Saved", description: "Your progress has been saved." });
     }
   };
 
@@ -463,14 +637,6 @@ export default function OnboardingStepPage() {
       </div>
     );
   }
-
-  const visibleSteps = STEPS.filter(s => {
-    if (!s.conditional) return true;
-    const selection = submission?.sections?.service_selection?.selectedServices || [];
-    const enabled = submission?.enabledModules?.[s.conditional];
-    const unsureSelected = selection.includes('Unsure, please recommend');
-    return enabled || unsureSelected;
-  });
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-body">
@@ -486,13 +652,13 @@ export default function OnboardingStepPage() {
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-1">
-          {visibleSteps.map((step) => {
-            const isCompleted = submission?.completedSteps?.includes(step.id);
-            const isCurrent = step.id === stepId;
+          {visibleSteps.map((step, idx) => {
+            const isCompleted = submission?.completedSteps?.includes(step.key);
+            const isCurrent = step.key === stepId;
             return (
               <div 
-                key={step.id}
-                onClick={() => handleNavigate(step.id)}
+                key={step.key}
+                onClick={() => handleNavigate(step.key)}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer group ${
                   isCurrent ? 'bg-primary/10 text-primary font-bold shadow-sm' : isCompleted ? 'text-green-600 hover:bg-green-50' : 'text-muted-foreground hover:bg-slate-50'
                 }`}
@@ -500,7 +666,9 @@ export default function OnboardingStepPage() {
                 <div className={`shrink-0 flex items-center justify-center w-6 h-6 rounded-full ${isCurrent ? 'bg-primary text-white' : isCompleted ? 'bg-green-100' : 'bg-slate-100'}`}>
                   {isCompleted ? <CheckCircle2 className="w-3.5 h-3.5" /> : <step.icon className="w-3.5 h-3.5" />}
                 </div>
-                <span className="text-xs font-medium truncate">{step.title}</span>
+                <span className="text-xs font-medium truncate">
+                  {idx + 1}. {step.shortTitle}
+                </span>
               </div>
             );
           })}
@@ -522,12 +690,12 @@ export default function OnboardingStepPage() {
               <span className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center">
                 <currentStep.icon className="w-3.5 h-3.5 text-primary" />
               </span>
-              <h1 className="text-sm font-bold text-slate-900">{currentStep.title}</h1>
+              <h1 className="text-sm font-bold text-slate-900">{currentVisibleIndex + 1}. {currentStep.title}</h1>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <Button variant="outline" size="sm" onClick={() => handleSave(false)} className="gap-2 rounded-lg border-2">Save Draft</Button>
-            <Button size="sm" onClick={() => handleSave(true)} className="gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20">{currentStepIndex === STEPS.length - 1 ? 'Finish Onboarding' : 'Next Step'} <ChevronRight className="w-4 h-4" /></Button>
+            <Button size="sm" onClick={() => handleSave(true)} className="gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20">{currentVisibleIndex === visibleSteps.length - 1 ? 'Finish Onboarding' : 'Next Step'} <ChevronRight className="w-4 h-4" /></Button>
           </div>
         </header>
 
@@ -538,13 +706,6 @@ export default function OnboardingStepPage() {
                 <StepContent stepId={stepId as string} data={formData} onChange={handleFieldChange} submissionId={submissionId} uid={user?.uid} lastSynced={submission?.lastSavedAt} />
               </CardContent>
             </Card>
-            <div className="mt-10 flex justify-between items-center text-[11px] font-medium text-slate-400 px-6">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                <p>Progress is synced with your account.</p>
-              </div>
-              {submission?.lastSavedAt && <p>Last synced: {new Date(submission.lastSavedAt.seconds * 1000).toLocaleTimeString()}</p>}
-            </div>
           </div>
         </div>
       </main>
@@ -556,529 +717,200 @@ function StepContent({ stepId, data, onChange, submissionId, uid, lastSynced }: 
   const { toast } = useToast();
   
   switch (stepId) {
-    case 'authority': {
+    case 'service_selection': {
+      const SERVICES = [
+        "Government Tenders",
+        "Private Tenders",
+        "Panel or Supplier Registrations",
+        "Grants",
+        "Marketplace Leads",
+        "Direct Proposals",
+        "Quote Requests",
+        "Unsure, please recommend"
+      ];
+      const selected = data.selectedServices || [];
       return (
-        <div className="space-y-12">
+        <div className="space-y-8">
           <div className="space-y-4">
-            <h2 className="text-4xl font-headline font-bold text-slate-900">Authority to Act and Approval Matrix</h2>
-            <p className="text-slate-500 text-lg leading-relaxed">Confirm what Bid Manager is authorised to do on your behalf, what requires approval, and what actions are not authorised.</p>
+            <h2 className="text-4xl font-headline font-bold text-slate-900">Service Selection</h2>
+            <p className="text-slate-500 text-lg">Select the services you want Bid Manager to support you with.</p>
           </div>
-
-          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl"><Scale className="w-5 h-5 text-primary" /></div>
-              <h3 className="text-xl font-bold text-slate-900">Authority Matrix</h3>
-            </div>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-50 hover:bg-slate-50">
-                      <TableHead className="w-[40%] pl-8">Action</TableHead>
-                      {AUTHORITY_LEVELS.map(level => (
-                        <TableHead key={level} className="text-center px-2 text-[10px] uppercase tracking-wider">{level}</TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {AUTHORITY_ROWS.map((row) => {
-                      const currentVal = data.matrix?.[row];
-                      const isHighRisk = HIGH_RISK_AUTHORITY_ITEMS.includes(row) && currentVal === 'Authorised';
-                      return (
-                        <React.Fragment key={row}>
-                          <TableRow className={isHighRisk ? 'bg-amber-50/50 border-amber-100' : 'hover:bg-slate-50/50'}>
-                            <TableCell className="font-medium pl-8 py-4">
-                              <div className="flex flex-col gap-1">
-                                <span className="text-sm text-slate-700">{row}</span>
-                                {isHighRisk && (
-                                  <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1 uppercase tracking-wider animate-pulse">
-                                    <AlertTriangle className="w-3 h-3" /> High Risk Item
-                                  </span>
-                                )}
-                              </div>
-                            </TableCell>
-                            {AUTHORITY_LEVELS.map(level => (
-                              <TableCell key={level} className="text-center p-0">
-                                <label className="flex items-center justify-center w-full h-full cursor-pointer py-4 group">
-                                  <RadioGroup
-                                    value={currentVal}
-                                    onValueChange={(v) => {
-                                      const newMatrix = { ...(data.matrix || {}), [row]: v };
-                                      onChange('matrix', newMatrix);
-                                    }}
-                                    className="flex items-center justify-center"
-                                  >
-                                    <div className="relative">
-                                      <RadioGroupItem value={level} id={`${row}-${level}`} className="sr-only peer" />
-                                      <div className="w-5 h-5 rounded-full border-2 border-slate-200 peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary flex items-center justify-center transition-all group-hover:border-slate-300">
-                                        <div className="w-2 h-2 rounded-full bg-white scale-0 peer-data-[state=checked]:scale-100 transition-transform" />
-                                      </div>
-                                    </div>
-                                  </RadioGroup>
-                                </label>
-                              </TableCell>
-                            ))}
-                          </TableRow>
-                          {isHighRisk && (
-                            <TableRow className="bg-amber-50/30 border-none no-hover">
-                              <TableCell colSpan={5} className="py-2 px-8">
-                                <Alert className="bg-amber-100/50 border-amber-200 text-amber-900 py-3 rounded-2xl flex items-center gap-3">
-                                  <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
-                                  <AlertDescription className="text-[11px] font-bold">
-                                    This action may create commercial, legal, or financial commitments. Please confirm this authority carefully.
-                                  </AlertDescription>
-                                </Alert>
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {SERVICES.map(service => (
+              <div 
+                key={service} 
+                onClick={() => {
+                  const current = data.selectedServices || [];
+                  const next = current.includes(service) ? current.filter((s: string) => s !== service) : [...current, service];
+                  onChange('selectedServices', next);
+                }}
+                className={`p-6 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between ${selected.includes(service) ? 'border-primary bg-primary/5' : 'border-slate-100 hover:border-slate-200'}`}
+              >
+                <span className="font-bold text-slate-700">{service}</span>
+                <Checkbox checked={selected.includes(service)} onCheckedChange={() => {}} />
               </div>
-            </CardContent>
-          </Card>
-
-          {Object.entries(data.matrix || {}).some(([_, v]) => v === 'Unsure') && (
-            <div className="animate-in fade-in zoom-in-95 duration-500">
-              <Card className="bg-slate-900 border-none text-white rounded-[2.5rem] p-10 shadow-2xl overflow-hidden relative">
-                <div className="absolute top-0 right-0 p-8 opacity-10">
-                  <Scale className="w-32 h-32" />
-                </div>
-                <div className="relative flex flex-col md:flex-row gap-10 items-start">
-                  <div className="p-4 bg-white/10 rounded-[2rem]"><HelpCircle className="w-10 h-10 text-accent" /></div>
-                  <div className="space-y-6">
-                    <div className="space-y-2">
-                      <h3 className="text-2xl font-bold">Authority items to clarify</h3>
-                      <p className="text-slate-400">We will discuss these items during your strategy kick-off call to ensure we have clear boundaries.</p>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {Object.entries(data.matrix || {})
-                        .filter(([_, v]) => v === 'Unsure')
-                        .map(([row]) => (
-                          <div key={row} className="flex items-center gap-2 text-sm font-medium text-slate-300 bg-white/5 py-2 px-4 rounded-xl">
-                            <div className="w-1.5 h-1.5 rounded-full bg-accent" />
-                            {row}
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            </div>
-          )}
-
-          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl"><UserCheck className="w-5 h-5 text-primary" /></div>
-              <h3 className="text-xl font-bold text-slate-900">Approval Rules</h3>
-            </div>
-            <CardContent className="p-8 space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 <div className="space-y-2">
-                   <Label className="font-bold">Who provides final approval for submissions? *</Label>
-                   <Input value={data.submissionApprover || ''} onChange={(e) => onChange('submissionApprover', e.target.value)} className="h-12 rounded-xl" placeholder="Full name or role" />
-                 </div>
-                 <div className="space-y-2">
-                   <Label className="font-bold">Who provides final approval for pricing? *</Label>
-                   <Input value={data.pricingApprover || ''} onChange={(e) => onChange('pricingApprover', e.target.value)} className="h-12 rounded-xl" placeholder="Full name or role" />
-                 </div>
-                 <div className="space-y-2">
-                   <Label className="font-bold">Who provides final approval for contract terms? *</Label>
-                   <Input value={data.contractApprover || ''} onChange={(e) => onChange('contractApprover', e.target.value)} className="h-12 rounded-xl" placeholder="Full name or role" />
-                 </div>
-                 <div className="space-y-2">
-                   <Label className="font-bold">Who provides final approval for paid platforms or subscriptions? *</Label>
-                   <Input value={data.paidPlatformApprover || ''} onChange={(e) => onChange('paidPlatformApprover', e.target.value)} className="h-12 rounded-xl" placeholder="Full name or role" />
-                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="font-bold">Are there any actions Bid Manager must NEVER take without written approval? *</Label>
-                <Textarea 
-                  value={data.neverActions || ''} 
-                  onChange={(e) => onChange('neverActions', e.target.value)} 
-                  placeholder="If none, write 'None known'."
-                  className="min-h-[100px] rounded-2xl" 
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="font-bold">Are there any specific words, claims, guarantees, prices, or commitments we should not make?</Label>
-                <Textarea 
-                  value={data.forbiddenClaims || ''} 
-                  onChange={(e) => onChange('forbiddenClaims', e.target.value)} 
-                  placeholder="e.g. Never guarantee delivery date before final scope..."
-                  className="min-h-[100px] rounded-2xl" 
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl"><DollarSign className="w-5 h-5 text-primary" /></div>
-              <h3 className="text-xl font-bold text-slate-900">Threshold Authority</h3>
-            </div>
-            <CardContent className="p-8 space-y-10">
-              <div className="space-y-4">
-                <Label className="font-bold">Can Bid Manager submit quotes or responses under an agreed value threshold?</Label>
-                <RadioGroup value={data.quoteThresholdAuthority} onValueChange={(v) => onChange('quoteThresholdAuthority', v)} className="flex flex-wrap gap-4">
-                  {['Yes', 'No', 'Maybe, to be discussed'].map(opt => (
-                    <div key={opt} className={`flex items-center space-x-2 bg-white border-2 p-3 px-5 rounded-2xl hover:bg-slate-50 transition-all cursor-pointer ${data.quoteThresholdAuthority === opt ? 'border-primary bg-primary/5' : 'border-slate-100'}`}>
-                      <RadioGroupItem value={opt} id={`qthresh-${opt}`} />
-                      <Label htmlFor={`qthresh-${opt}`} className="cursor-pointer font-bold">{opt}</Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-                {(data.quoteThresholdAuthority === 'Yes' || data.quoteThresholdAuthority === 'Maybe, to be discussed') && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 p-6 bg-slate-50 rounded-2xl animate-in slide-in-from-top-4 duration-500">
-                    <div className="space-y-2">
-                      <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Maximum value threshold</Label>
-                      <Input value={data.quoteThresholdValue || ''} onChange={(e) => onChange('quoteThresholdValue', e.target.value)} placeholder="e.g. $500" className="h-12 rounded-xl bg-white" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Applicable service types / Restrictions</Label>
-                      <Input value={data.quoteThresholdRestrictions || ''} onChange={(e) => onChange('quoteThresholdRestrictions', e.target.value)} placeholder="e.g. Only repeat maintenance" className="h-12 rounded-xl bg-white" />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-4 pt-10 border-t">
-                <Label className="font-bold">Can Bid Manager respond to marketplace leads without approval under agreed rules?</Label>
-                <RadioGroup value={data.marketplaceAuthority} onValueChange={(v) => onChange('marketplaceAuthority', v)} className="flex flex-wrap gap-4">
-                  {['Yes', 'No', 'Maybe'].map(opt => (
-                    <div key={opt} className={`flex items-center space-x-2 bg-white border-2 p-3 px-5 rounded-2xl hover:bg-slate-50 transition-all cursor-pointer ${data.marketplaceAuthority === opt ? 'border-primary bg-primary/5' : 'border-slate-100'}`}>
-                      <RadioGroupItem value={opt} id={`mthresh-${opt}`} />
-                      <Label htmlFor={`mthresh-${opt}`} className="cursor-pointer font-bold">{opt}</Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-                {(data.marketplaceAuthority === 'Yes' || data.marketplaceAuthority === 'Maybe') && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 p-6 bg-slate-50 rounded-2xl animate-in slide-in-from-top-4 duration-500">
-                    <div className="space-y-2">
-                      <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Marketplace response rules / Max lead value</Label>
-                      <Input value={data.marketplaceThresholdValue || ''} onChange={(e) => onChange('marketplaceThresholdValue', e.target.value)} placeholder="e.g. $1000 max" className="h-12 rounded-xl bg-white" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Platforms covered</Label>
-                      <Input value={data.marketplacePlatforms || ''} onChange={(e) => onChange('marketplacePlatforms', e.target.value)} placeholder="e.g. Airtasker, Bark" className="h-12 rounded-xl bg-white" />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-[3px] border-slate-900 rounded-[2.5rem] shadow-2xl overflow-hidden bg-white">
-            <div className="p-10 border-b bg-slate-900 text-white flex items-center gap-4">
-              <div className="p-3 bg-white/10 rounded-2xl"><ShieldCheck className="w-8 h-8 text-accent" /></div>
-              <div className="space-y-1">
-                <h3 className="text-2xl font-bold">Final Authority Confirmation</h3>
-                <p className="text-slate-400 text-sm">Please review and acknowledge the following statements to protect your business.</p>
-              </div>
-            </div>
-            <CardContent className="p-10 space-y-4">
-              {[
-                { id: 'relied', label: 'I understand that Bid Manager will rely on the authority settings provided in this section.' },
-                { id: 'auto', label: 'I understand that actions marked as “Authorised” may be performed without further approval unless otherwise stated.' },
-                { id: 'consequence', label: 'I understand that pricing, submissions, paid platforms, and contract terms may carry commercial or legal consequences.' },
-                { id: 'accurate', label: 'I confirm the authority settings provided are accurate to the best of my knowledge.' },
-              ].map((ack) => (
-                <div 
-                  key={ack.id} 
-                  className={`flex items-start space-x-6 p-6 rounded-[2rem] border-2 transition-all cursor-pointer group ${data.acks?.[ack.id] ? 'border-primary bg-primary/5 shadow-inner' : 'border-slate-50 hover:border-slate-200'}`}
-                  onClick={() => {
-                    const current = data.acks || {};
-                    onChange('acks', { ...current, [ack.id]: !current[ack.id] });
-                  }}
-                >
-                  <Checkbox checked={data.acks?.[ack.id]} onCheckedChange={() => {}} className="mt-1 w-6 h-6 rounded-lg" />
-                  <Label className="text-sm font-bold leading-snug cursor-pointer flex-1 text-slate-700 group-hover:text-slate-900">{ack.label} *</Label>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+            ))}
+          </div>
         </div>
       );
     }
-    case 'library': {
-      const allFiles = Object.values(data.documents || {}).flatMap((doc: any) => doc.files || []);
-      const uploadedCount = allFiles.length;
-      const criticalCount = allFiles.filter((f: any) => CRITICAL_DOC_FIELDS.includes(f.field)).length;
-      const categoriesAnswered = Object.keys(data.documents || {}).length;
-      const lastFile = allFiles.length > 0 ? allFiles[allFiles.length - 1] : null;
+    case 'authority_matrix': {
+      return (
+        <div className="space-y-12">
+          <div className="space-y-4">
+            <h2 className="text-4xl font-headline font-bold text-slate-900">Authority Matrix</h2>
+            <p className="text-slate-500 text-lg">Confirm what actions Bid Manager is authorised to take.</p>
+          </div>
+          <Card className="border border-slate-200 rounded-3xl overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[40%] pl-8">Action</TableHead>
+                  {AUTHORITY_LEVELS.map(level => (
+                    <TableHead key={level} className="text-center text-[10px] uppercase">{level}</TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {AUTHORITY_ROWS.map((row) => {
+                  const currentVal = data.matrix?.[row];
+                  const isHighRisk = HIGH_RISK_AUTHORITY_ITEMS.includes(row) && currentVal === 'Authorised';
+                  return (
+                    <React.Fragment key={row}>
+                      <TableRow className={isHighRisk ? 'bg-amber-50/50' : ''}>
+                        <TableCell className="font-medium pl-8 py-4">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-sm">{row}</span>
+                            {isHighRisk && <span className="text-[10px] font-bold text-amber-600 uppercase">High Risk Item</span>}
+                          </div>
+                        </TableCell>
+                        {AUTHORITY_LEVELS.map(level => (
+                          <TableCell key={level} className="text-center p-0">
+                            <RadioGroup value={currentVal} onValueChange={(v) => onChange('matrix', { ...data.matrix, [row]: v })}>
+                              <div className="flex justify-center"><RadioGroupItem value={level} /></div>
+                            </RadioGroup>
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    </React.Fragment>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </Card>
+          
+          <div className="space-y-6">
+            <h3 className="text-xl font-bold">Approval Rules</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label className="font-bold">Final submission approval contact *</Label>
+                <Input value={data.submissionApprover || ''} onChange={(e) => onChange('submissionApprover', e.target.value)} placeholder="Full name or role" />
+              </div>
+              <div className="space-y-2">
+                <Label className="font-bold">Pricing approval contact *</Label>
+                <Input value={data.pricingApprover || ''} onChange={(e) => onChange('pricingApprover', e.target.value)} placeholder="Full name or role" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="font-bold">Actions Bid Manager must NEVER take *</Label>
+              <Textarea value={data.neverActions || ''} onChange={(e) => onChange('neverActions', e.target.value)} placeholder="If none, write 'None known'." />
+            </div>
+          </div>
 
+          <div className="space-y-6 pt-10 border-t">
+            <h3 className="text-xl font-bold">Final Acknowledgements</h3>
+            {[
+              { id: 'relied', label: 'I understand that Bid Manager will rely on these authority settings.' },
+              { id: 'auto', label: 'Actions marked as “Authorised” may be performed without further approval.' },
+              { id: 'consequence', label: 'I understand that pricing and contract terms carry commercial consequences.' },
+              { id: 'accurate', label: 'I confirm these settings are accurate to the best of my knowledge.' },
+            ].map((ack) => (
+              <div key={ack.id} className="flex items-start space-x-4 p-4 border rounded-xl">
+                <Checkbox checked={data.acks?.[ack.id]} onCheckedChange={() => onChange('acks', { ...data.acks, [ack.id]: !data.acks?.[ack.id] })} />
+                <Label className="text-sm font-medium">{ack.label} *</Label>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    case 'document_upload_library': {
       const handleFileUpload = async (fieldId: string, categoryId: string, files: FileList | null) => {
         if (!files || !submissionId || !uid) return;
-        
         const storage = getStorage();
         const uploadedFiles = [...(data.documents?.[fieldId]?.files || [])];
-
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
           const fileName = `${Date.now()}_${file.name}`;
           const storagePath = `onboardingUploads/${uid}/${submissionId}/${fieldId}/${fileName}`;
           const fileRef = ref(storage, storagePath);
-
           try {
             const snapshot = await uploadBytes(fileRef, file);
-            const downloadUrl = await getDownloadURL(snapshot.ref);
-            
-            uploadedFiles.push({
-              id: fileName,
-              name: file.name,
-              size: file.size,
-              type: file.type,
-              url: downloadUrl,
-              path: storagePath,
-              category: categoryId,
-              field: fieldId,
-              uploadedAt: new Date().toISOString(),
-              notes: ''
-            });
-          } catch (error) {
-            console.error("Upload failed", error);
-            toast({ variant: "destructive", title: "Upload Failed", description: `Could not upload ${file.name}` });
-          }
+            const url = await getDownloadURL(snapshot.ref);
+            uploadedFiles.push({ id: fileName, name: file.name, size: file.size, url, path: storagePath, uploadedAt: new Date().toISOString() });
+          } catch (e) { toast({ variant: "destructive", title: "Upload Failed" }); }
         }
-
-        const newDocs = { 
-          ...(data.documents || {}), 
-          [fieldId]: { 
-            ...(data.documents?.[fieldId] || {}), 
-            files: uploadedFiles,
-            status: 'available'
-          } 
-        };
-        onChange('documents', newDocs);
-      };
-
-      const handleFileDelete = async (fieldId: string, fileId: string) => {
-        const fileToDelete = data.documents?.[fieldId]?.files?.find((f: any) => f.id === fileId);
-        if (!fileToDelete) return;
-
-        const storage = getStorage();
-        const fileRef = ref(storage, fileToDelete.path);
-
-        try {
-          await deleteObject(fileRef);
-          const newFiles = data.documents?.[fieldId]?.files?.filter((f: any) => f.id !== fileId);
-          const newDocs = { 
-            ...(data.documents || {}), 
-            [fieldId]: { 
-              ...(data.documents?.[fieldId] || {}), 
-              files: newFiles 
-            } 
-          };
-          onChange('documents', newDocs);
-          toast({ title: "File deleted" });
-        } catch (error) {
-          console.error("Delete failed", error);
-          toast({ variant: "destructive", title: "Delete Failed" });
-        }
-      };
-
-      const handleFileNoteChange = (fieldId: string, fileId: string, note: string) => {
-        const newFiles = data.documents?.[fieldId]?.files?.map((f: any) => 
-          f.id === fileId ? { ...f, notes: note } : f
-        );
-        const newDocs = { 
-          ...(data.documents || {}), 
-          [fieldId]: { 
-            ...(data.documents?.[fieldId] || {}), 
-            files: newFiles 
-          } 
-        };
-        onChange('documents', newDocs);
-      };
-
-      const handleStatusChange = (fieldId: string, status: string) => {
-        const newDocs = { 
-          ...(data.documents || {}), 
-          [fieldId]: { 
-            ...(data.documents?.[fieldId] || {}), 
-            status 
-          } 
-        };
-        onChange('documents', newDocs);
+        onChange('documents', { ...data.documents, [fieldId]: { ...data.documents?.[fieldId], files: uploadedFiles, status: 'available' } });
       };
 
       return (
         <div className="space-y-12">
           <div className="space-y-4">
             <h2 className="text-4xl font-headline font-bold text-slate-900">Document Upload Library</h2>
-            <p className="text-slate-500 text-lg leading-relaxed">
-              Upload the documents we may need to build your profile, compliance checklist, and opportunity support library.
-            </p>
+            <p className="text-slate-500 text-lg">Central library for all supporting corporate documentation.</p>
           </div>
-
-          <Card className="border border-slate-200 rounded-[2rem] shadow-sm overflow-hidden bg-slate-50/50">
-             <div className="p-8 border-b bg-white flex items-center gap-3">
-               <div className="p-2 bg-primary/10 rounded-xl"><Files className="w-5 h-5 text-primary" /></div>
-               <h3 className="text-lg font-bold">Upload Summary</h3>
-             </div>
-             <CardContent className="p-8">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <div className="bg-white p-6 rounded-2xl border shadow-sm space-y-1">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Files</p>
-                    <p className="text-2xl font-bold text-primary">{uploadedCount}</p>
-                  </div>
-                  <div className="bg-white p-6 rounded-2xl border shadow-sm space-y-1">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Critical Docs</p>
-                    <p className="text-2xl font-bold text-amber-600">{criticalCount}</p>
-                  </div>
-                  <div className="bg-white p-6 rounded-2xl border shadow-sm space-y-1">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Missing Categories</p>
-                    <p className="text-2xl font-bold text-slate-700">{DOCUMENT_CATEGORIES.length - categoriesAnswered}</p>
-                  </div>
-                  <div className="bg-white p-6 rounded-2xl border shadow-sm space-y-1">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Last Activity</p>
-                    <p className="text-xs font-bold text-slate-600">{lastSynced ? new Date(lastSynced.seconds * 1000).toLocaleTimeString() : 'No activity'}</p>
-                  </div>
-                </div>
-                {lastFile && (
-                  <div className="mt-6 p-4 bg-primary/5 rounded-xl border border-primary/10 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-sm"><FileText className="w-4 h-4 text-primary" /></div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-slate-700 truncate">Latest: {lastFile.name}</p>
-                      <p className="text-[10px] text-slate-500 uppercase">{new Date(lastFile.uploadedAt).toLocaleDateString()}</p>
-                    </div>
-                  </div>
-                )}
-             </CardContent>
-          </Card>
-
           <Accordion type="single" collapsible className="space-y-6">
             {DOCUMENT_CATEGORIES.map((cat) => (
               <AccordionItem key={cat.id} value={cat.id} className="border-none">
-                <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                  <AccordionTrigger className="hover:no-underline px-8 py-6 bg-white data-[state=open]:bg-slate-50/50">
+                <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+                  <AccordionTrigger className="px-8 py-6">
                     <div className="flex items-center gap-4">
-                      <div className="p-2.5 bg-slate-100 text-slate-600 rounded-xl group-data-[state=open]:bg-primary/10 group-data-[state=open]:text-primary transition-colors">
-                        <cat.icon className="w-5 h-5" />
-                      </div>
-                      <span className="text-lg font-bold text-slate-900">{cat.title}</span>
+                      <cat.icon className="w-5 h-5 text-primary" />
+                      <span className="text-lg font-bold">{cat.title}</span>
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="px-8 pb-8 pt-4 space-y-10">
-                    {cat.fields.map((field) => {
-                      const fieldData = data.documents?.[field.id] || { files: [], status: 'pending' };
-                      const isCritical = CRITICAL_DOC_FIELDS.includes(field.id);
-                      return (
-                        <div key={field.id} className="space-y-4 border-b border-slate-100 last:border-0 pb-8 last:pb-0 pt-4 first:pt-0">
-                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                <Label className="text-base font-bold text-slate-800">{field.label}</Label>
-                                {isCritical && <Badge variant="destructive" className="text-[9px] h-4 font-bold uppercase py-0 px-1.5 rounded-sm">Critical</Badge>}
-                              </div>
-                              {fieldData.files.length === 0 && fieldData.status === 'pending' && (
-                                <p className="text-xs text-amber-600 flex items-center gap-1 font-medium">
-                                  <AlertCircle className="w-3 h-3" /> recommended upload
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <Select value={fieldData.status} onValueChange={(v) => handleStatusChange(field.id, v)}>
-                                <SelectTrigger className="w-44 h-10 rounded-xl text-xs font-medium border-slate-200">
-                                  <SelectValue placeholder="Status" />
-                                </SelectTrigger>
-                                <SelectContent className="rounded-xl">
-                                  <SelectItem value="pending">Upload Pending</SelectItem>
-                                  <SelectItem value="available">Available & Current</SelectItem>
-                                  <SelectItem value="not_available">Not available yet</SelectItem>
-                                  <SelectItem value="needs_updating">Needs updating</SelectItem>
-                                  <SelectItem value="na">Not applicable</SelectItem>
-                                  <SelectItem value="unsure">Unsure</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <div className="relative">
-                                <input 
-                                  type="file" 
-                                  id={`upload-${field.id}`} 
-                                  className="sr-only" 
-                                  multiple 
-                                  onChange={(e) => handleFileUpload(field.id, cat.id, e.target.files)} 
-                                />
-                                <Button asChild variant="outline" size="sm" className="h-10 px-5 rounded-xl border-2 hover:bg-slate-50 cursor-pointer">
-                                  <label htmlFor={`upload-${field.id}`} className="cursor-pointer gap-2">
-                                    <UploadCloud className="w-4 h-4" /> Upload
-                                  </label>
-                                </Button>
-                              </div>
-                            </div>
+                  <AccordionContent className="px-8 pb-8 space-y-8">
+                    {cat.fields.map((field) => (
+                      <div key={field.id} className="space-y-4 pt-4 first:pt-0">
+                        <div className="flex items-center justify-between">
+                          <Label className="font-bold">{field.label}</Label>
+                          <div className="flex items-center gap-3">
+                            <input type="file" id={`up-${field.id}`} className="sr-only" multiple onChange={(e) => handleFileUpload(field.id, cat.id, e.target.files)} />
+                            <Button asChild variant="outline" size="sm" className="rounded-xl border-2">
+                              <label htmlFor={`up-${field.id}`} className="cursor-pointer gap-2"><UploadCloud className="w-4 h-4" /> Upload</label>
+                            </Button>
                           </div>
-
-                          {fieldData.files.length > 0 && (
-                            <div className="grid grid-cols-1 gap-3 pt-2">
-                              {fieldData.files.map((file: any) => (
-                                <div key={file.id} className="flex flex-col gap-2 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                      <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-100">
-                                        <FileText className="w-4 h-4 text-primary" />
-                                      </div>
-                                      <div>
-                                        <p className="text-sm font-bold truncate max-w-[200px]">{file.name}</p>
-                                        <p className="text-[10px] text-slate-500 uppercase font-medium">
-                                          {Math.round(file.size / 1024)} KB • {new Date(file.uploadedAt).toLocaleDateString()}
-                                        </p>
-                                      </div>
-                                    </div>
-                                    <Button variant="ghost" size="icon" onClick={() => handleFileDelete(field.id, file.id)} className="h-8 w-8 text-slate-400 hover:text-destructive rounded-lg">
-                                      <Trash2 className="w-4 h-4" />
-                                    </Button>
-                                  </div>
-                                  <Input 
-                                    value={file.notes || ''} 
-                                    onChange={(e) => handleFileNoteChange(field.id, file.id, e.target.value)}
-                                    placeholder="Add notes to this file..." 
-                                    className="h-8 text-[11px] rounded-lg bg-white border-slate-200"
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                          )}
                         </div>
-                      );
-                    })}
+                        <div className="grid gap-2">
+                          {(data.documents?.[field.id]?.files || []).map((file: any) => (
+                            <div key={file.id} className="p-3 bg-slate-50 rounded-xl border flex items-center justify-between">
+                              <span className="text-xs font-bold truncate max-w-[300px]">{file.name}</span>
+                              <Button variant="ghost" size="icon" onClick={() => {}} className="text-slate-400 hover:text-destructive"><Trash2 className="w-4 h-4" /></Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </AccordionContent>
                 </Card>
               </AccordionItem>
             ))}
           </Accordion>
-
-          <Card className="border-[3px] border-slate-900 rounded-[2.5rem] shadow-2xl overflow-hidden bg-white mt-12">
-            <div className="p-10 border-b bg-slate-900 text-white flex items-center gap-4">
-              <div className="p-3 bg-white/10 rounded-2xl"><ShieldCheck className="w-8 h-8 text-accent" /></div>
-              <div className="space-y-1">
-                <h3 className="text-2xl font-bold">Document Confirmation</h3>
-                <p className="text-slate-400 text-sm">Please confirm your upload status before proceeding.</p>
-              </div>
+          <div className="pt-10 border-t">
+            <div className="flex items-start space-x-4 p-6 border-2 rounded-3xl bg-primary/5 border-primary">
+              <Checkbox checked={data.acks?.docsConfirmed} onCheckedChange={() => onChange('acks', { ...data.acks, docsConfirmed: !data.acks?.docsConfirmed })} />
+              <Label className="text-sm font-bold">I have uploaded the documents currently available to me, or marked unavailable documents where relevant. *</Label>
             </div>
-            <CardContent className="p-10">
-              <div 
-                className={`flex items-start space-x-6 p-8 rounded-[2rem] border-2 transition-all cursor-pointer group ${data.acks?.docsConfirmed ? 'border-primary bg-primary/5 shadow-inner' : 'border-slate-100 hover:border-slate-200'}`}
-                onClick={() => {
-                  const currentAcks = data.acks || {};
-                  onChange('acks', { ...currentAcks, docsConfirmed: !currentAcks.docsConfirmed });
-                }}
-              >
-                <Checkbox checked={data.acks?.docsConfirmed} onCheckedChange={() => {}} className="mt-1 w-6 h-6 rounded-lg" />
-                <Label className="text-sm font-bold leading-snug cursor-pointer flex-1 text-slate-700 group-hover:text-slate-900">
-                  I have uploaded the documents currently available to me, or marked unavailable documents where relevant. *
-                </Label>
-              </div>
-            </CardContent>
-          </Card>
+          </div>
         </div>
       );
     }
     default:
-      return <div className="py-24 text-center space-y-4">
-        <AlertTriangle className="w-12 h-12 text-slate-200 mx-auto" />
-        <p className="text-slate-400 font-medium">This section ({stepId}) is currently being developed.</p>
-      </div>;
+      return (
+        <div className="py-24 text-center space-y-4">
+          <AlertTriangle className="w-12 h-12 text-slate-200 mx-auto" />
+          <p className="text-slate-400 font-medium">This section ({stepId}) is currently being developed.</p>
+        </div>
+      );
   }
 }

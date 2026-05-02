@@ -1,7 +1,7 @@
 
 "use client";
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Logo } from '@/components/brand/Logo';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,24 +16,26 @@ import {
   Circle,
   Lock,
   ChevronRight,
+  Zap,
   Building2,
   AlertCircle,
-  Target,
-  Users,
+  FileText,
   Award,
-  BarChart3,
+  ShoppingCart,
+  Users,
+  Target,
   DollarSign,
   Globe,
   ShieldCheck,
   FileBadge,
   Gift,
-  ShoppingCart,
+  BarChart3,
   Send,
   MessageSquare,
   Library,
   Scale,
-  Zap,
-  FileText
+  Clock,
+  Flag
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useAuth, useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
@@ -42,27 +44,58 @@ import { useRouter } from 'next/navigation';
 import { doc, query, collection, where } from 'firebase/firestore';
 import Link from 'next/link';
 
-const ONBOARDING_STEPS = [
-  { id: 'welcome', title: '1. Welcome, Terms and Onboarding Expectations', icon: Zap },
-  { id: 'snapshot', title: '2. Business Snapshot and Contact Details', icon: Building2 },
-  { id: 'triage', title: '3. Immediate Need and Live Opportunity Triage', icon: AlertCircle },
-  { id: 'selection', title: '4. Service Selection and Engagement Scope', icon: FileText },
-  { id: 'profile', title: '5. Business Profile, Positioning and Value Proposition', icon: Award },
-  { id: 'menu', title: '6. Services, Products and Offer Menu', icon: ShoppingCart },
-  { id: 'capacity', title: '7. Team, Capacity and Delivery Model', icon: Users },
-  { id: 'proof', title: '8. Proof, Case Studies, Reviews and Evidence', icon: CheckCircle2 },
-  { id: 'goals', title: '9. Goals, Opportunity Strategy and Bid/No-Bid Rules', icon: Target },
-  { id: 'commercial', title: '10. Pricing, Quoting and Commercial Rules', icon: DollarSign },
-  { id: 'platform', title: '11. Platform and Channel Setup', icon: Globe },
-  { id: 'compliance', title: '12. Compliance, Insurance and Readiness', icon: ShieldCheck },
-  { id: 'readiness', title: '13. Tender and Supplier Registration Readiness', icon: FileBadge },
-  { id: 'grants', title: '14. Grants', icon: Gift },
-  { id: 'marketplace', title: '15. Marketplace Lead Strategy', icon: BarChart3 },
-  { id: 'outreach', title: '16. Direct Proposal and Outreach Strategy', icon: Send },
-  { id: 'quote', title: '17. Quote Request Support', icon: MessageSquare },
-  { id: 'workflow', title: '18. Communication, Review and Workflow Rules', icon: MessageSquare },
-  { id: 'library', title: '19. Document Upload Library', icon: Library },
-  { id: 'authority', title: '20. Authority to Act and Approval Matrix', icon: Scale },
+const ALL_STEPS = [
+  { key: "welcome_expectations", shortTitle: "Welcome & Expectations", icon: Zap, conditional: false },
+  { key: "business_snapshot", shortTitle: "Business Snapshot", icon: Building2, conditional: false },
+  { key: "opportunity_triage", shortTitle: "Opportunity Triage", icon: AlertCircle, conditional: false },
+  { key: "service_selection", shortTitle: "Service Selection", icon: FileText, conditional: false },
+  { key: "business_profile", shortTitle: "Business Profile", icon: Award, conditional: false },
+  { key: "offer_menu", shortTitle: "Offer Menu", icon: ShoppingCart, conditional: false },
+  { key: "team_capacity", shortTitle: "Team & Capacity", icon: Users, conditional: false },
+  { key: "proof_evidence", shortTitle: "Proof & Evidence", icon: CheckCircle2, conditional: false },
+  { key: "goals_strategy", shortTitle: "Goals & Strategy", icon: Target, conditional: false },
+  { key: "pricing_commercial", shortTitle: "Pricing & Commercial", icon: DollarSign, conditional: false },
+  { key: "platform_setup", shortTitle: "Platform Setup", icon: Globe, conditional: false },
+  { key: "compliance_insurance", shortTitle: "Compliance & Insurance", icon: ShieldCheck, conditional: false },
+  { 
+    key: "tender_readiness", 
+    shortTitle: "Tender Readiness", 
+    icon: FileBadge, 
+    conditional: true,
+    isEnabled: (services: string[]) => services.includes("Government Tenders") || services.includes("Private Tenders") || services.includes("Panel or Supplier Registrations") || services.includes("Unsure, please recommend")
+  },
+  { 
+    key: "grants", 
+    shortTitle: "Grants", 
+    icon: Gift, 
+    conditional: true,
+    isEnabled: (services: string[]) => services.includes("Grants") || services.includes("Unsure, please recommend")
+  },
+  { 
+    key: "marketplace_strategy", 
+    shortTitle: "Marketplace Strategy", 
+    icon: BarChart3, 
+    conditional: true,
+    isEnabled: (services: string[]) => services.includes("Marketplace Leads") || services.includes("Unsure, please recommend")
+  },
+  { 
+    key: "direct_outreach_strategy", 
+    shortTitle: "Outreach Strategy", 
+    icon: Send, 
+    conditional: true,
+    isEnabled: (services: string[]) => services.includes("Direct Proposals") || services.includes("Unsure, please recommend")
+  },
+  { 
+    key: "quote_support", 
+    shortTitle: "Quote Support", 
+    icon: MessageSquare, 
+    conditional: true,
+    isEnabled: (services: string[]) => services.includes("Quote Requests") || services.includes("Marketplace Leads") || services.includes("Direct Proposals") || services.includes("Unsure, please recommend")
+  },
+  { key: "workflow_rules", shortTitle: "Workflow Rules", icon: Clock, conditional: false },
+  { key: "document_upload_library", shortTitle: "Document Upload Library", icon: Library, conditional: false },
+  { key: "authority_matrix", shortTitle: "Authority Matrix", icon: Scale, conditional: false },
+  { key: "final_submission", shortTitle: "Final Submission", icon: Flag, conditional: false }
 ];
 
 export default function DashboardPage() {
@@ -95,19 +128,14 @@ export default function DashboardPage() {
     }
   };
 
-  // Map steps to real-time status from Firestore
-  const stepsWithStatus = ONBOARDING_STEPS.map(step => {
-    let status: 'completed' | 'in_progress' | 'pending' | 'locked' = 'pending';
-    if (submission?.completedSteps?.includes(step.id)) {
-      status = 'completed';
-    } else if (submission?.currentStep === step.id) {
-      status = 'in_progress';
-    }
-    return { ...step, status };
-  });
+  const selectedServices = submission?.sections?.service_selection?.selectedServices || [];
+  
+  const visibleSteps = useMemo(() => {
+    return ALL_STEPS.filter(step => !step.conditional || step.isEnabled?.(selectedServices));
+  }, [selectedServices]);
 
   const completedCount = submission?.completedSteps?.length || 0;
-  const progressValue = (completedCount / ONBOARDING_STEPS.length) * 100;
+  const progressValue = (completedCount / visibleSteps.length) * 100;
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-body">
@@ -163,10 +191,9 @@ export default function DashboardPage() {
                 {submission?.status?.replace('_', ' ') || 'In Progress'}
               </Badge>
             </div>
-            <p className="text-slate-500">Complete the sections below to set up your bid management profile.</p>
+            <p className="text-slate-500">Complete the {visibleSteps.length} sections below to set up your profile.</p>
           </div>
 
-          {/* Progress Section */}
           <Card className="border-none shadow-sm rounded-2xl bg-white overflow-hidden">
             <CardContent className="p-8 space-y-4">
               <div className="flex justify-between items-end">
@@ -175,24 +202,29 @@ export default function DashboardPage() {
                   <p className="text-4xl font-bold font-headline">{Math.round(progressValue)}%</p>
                 </div>
                 <p className="text-sm text-muted-foreground font-medium">
-                  {completedCount} of {ONBOARDING_STEPS.length} steps completed
+                  {completedCount} of {visibleSteps.length} steps completed
                 </p>
               </div>
               <Progress value={progressValue} className="h-3 bg-slate-100" />
             </CardContent>
           </Card>
 
-          {/* Steps Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-8">
-            {stepsWithStatus.map((step) => (
-              <StepTile 
-                key={step.id} 
-                title={step.title} 
-                icon={<step.icon className="w-5 h-5" />} 
-                status={step.status as any}
-                onClick={() => router.push(`/onboarding/${step.id}`)}
-              />
-            ))}
+            {visibleSteps.map((step, idx) => {
+              const isCompleted = submission?.completedSteps?.includes(step.key);
+              const isCurrent = submission?.currentStep === step.key;
+              const status = isCompleted ? 'completed' : isCurrent ? 'in_progress' : 'pending';
+              
+              return (
+                <StepTile 
+                  key={step.key} 
+                  title={`${idx + 1}. ${step.shortTitle}`} 
+                  icon={<step.icon className="w-5 h-5" />} 
+                  status={status}
+                  onClick={() => router.push(`/onboarding/${step.key}`)}
+                />
+              );
+            })}
           </div>
         </div>
       </main>
@@ -212,7 +244,7 @@ function NavItem({ icon, label, active = false }: { icon: React.ReactNode, label
 interface StepTileProps {
   title: string;
   icon: React.ReactNode;
-  status: 'completed' | 'in_progress' | 'pending' | 'locked';
+  status: 'completed' | 'in_progress' | 'pending';
   onClick: () => void;
 }
 
@@ -221,7 +253,6 @@ function StepTile({ title, icon, status, onClick }: StepTileProps) {
     switch (status) {
       case 'completed': return <CheckCircle2 className="w-5 h-5 text-green-500" />;
       case 'in_progress': return <Circle className="w-5 h-5 text-blue-500 fill-blue-50" />;
-      case 'locked': return <Lock className="w-5 h-5 text-slate-300" />;
       default: return <Circle className="w-5 h-5 text-slate-200" />;
     }
   };
@@ -230,15 +261,14 @@ function StepTile({ title, icon, status, onClick }: StepTileProps) {
     switch (status) {
       case 'completed': return 'Completed';
       case 'in_progress': return 'Continue';
-      case 'locked': return 'Locked';
       default: return 'Start';
     }
   };
 
   return (
     <Card 
-      className={`group border-none shadow-sm rounded-2xl transition-all duration-300 hover:shadow-md cursor-pointer ${status === 'locked' ? 'opacity-60 grayscale cursor-not-allowed' : 'hover:-translate-y-1'}`}
-      onClick={status !== 'locked' ? onClick : undefined}
+      className="group border-none shadow-sm rounded-2xl transition-all duration-300 hover:shadow-md cursor-pointer hover:-translate-y-1"
+      onClick={onClick}
     >
       <CardContent className="p-6 flex flex-col h-full justify-between gap-4 pt-6">
         <div className="flex justify-between items-start">
@@ -253,7 +283,7 @@ function StepTile({ title, icon, status, onClick }: StepTileProps) {
             <span className={`text-[10px] font-bold uppercase tracking-widest ${status === 'completed' ? 'text-green-600' : status === 'in_progress' ? 'text-blue-600' : 'text-slate-400'}`}>
               {getStatusText()}
             </span>
-            {status !== 'locked' && <ChevronRight className="w-4 h-4 text-slate-300 group-hover:translate-x-1 transition-transform" />}
+            <ChevronRight className="w-4 h-4 text-slate-300 group-hover:translate-x-1 transition-transform" />
           </div>
         </div>
       </CardContent>
