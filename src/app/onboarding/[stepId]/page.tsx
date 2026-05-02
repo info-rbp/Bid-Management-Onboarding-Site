@@ -33,7 +33,10 @@ import {
   FileText,
   HelpCircle,
   Info,
-  AlertTriangle
+  AlertTriangle,
+  CloudCheck,
+  RefreshCw,
+  CloudOff
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -61,7 +64,11 @@ export default function OnboardingStepPage() {
   const { toast } = useToast();
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [formData, setFormData] = useState<any>({});
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
+  
   const initialSyncDone = useRef<Record<string, boolean>>({});
+  const lastSavedDataRef = useRef<string>("");
 
   const submissionRef = useMemoFirebase(() => {
     if (!submissionId || !db) return null;
@@ -79,8 +86,26 @@ export default function OnboardingStepPage() {
   const currentStep = useMemo(() => visibleSteps.find(s => s.key === stepId), [visibleSteps, stepId]);
   const currentVisibleIndex = useMemo(() => visibleSteps.findIndex(s => s.key === stepId), [visibleSteps, stepId]);
 
+  const isLocked = submission?.status === 'submitted' && !submission?.adminReopened;
+
+  // Initial Data Sync
   useEffect(() => {
-    if (submissionId && db && stepId && submission && submission.status !== 'submitted') {
+    const sid = stepId as string;
+    if (submission && !initialSyncDone.current[sid]) {
+      const savedData = submission.sections?.[sid] || {};
+      setFormData(savedData);
+      lastSavedDataRef.current = JSON.stringify(savedData);
+      initialSyncDone.current[sid] = true;
+      
+      if (submission.lastSavedAt?.toDate) {
+        setLastSavedTime(submission.lastSavedAt.toDate());
+      }
+    }
+  }, [submission, stepId]);
+
+  // Update current step in DB on mount
+  useEffect(() => {
+    if (submissionId && db && stepId && submission && !isLocked) {
       if (submission.currentStep !== stepId) {
         updateDoc(doc(db, 'onboardingSubmissions', submissionId), {
           currentStep: stepId,
@@ -88,7 +113,41 @@ export default function OnboardingStepPage() {
         });
       }
     }
-  }, [stepId, submissionId, db, submission]);
+  }, [stepId, submissionId, db, submission, isLocked]);
+
+  // Autosave Logic
+  useEffect(() => {
+    const sid = stepId as string;
+    // Don't autosave if locked, not loaded, or on final step
+    if (isLocked || !submissionId || !db || !initialSyncDone.current[sid] || sid === 'final_submission') return;
+
+    const dataString = JSON.stringify(formData);
+    if (dataString === lastSavedDataRef.current) return;
+
+    setSaveStatus('saving');
+
+    const timeout = setTimeout(async () => {
+      try {
+        const updateData: any = {
+          updatedAt: serverTimestamp(),
+          lastSavedAt: serverTimestamp(),
+          currentStep: sid
+        };
+        updateData[`sections.${sid}`] = formData;
+
+        await updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
+        
+        lastSavedDataRef.current = dataString;
+        setSaveStatus('saved');
+        setLastSavedTime(new Date());
+      } catch (error) {
+        console.error("Autosave failed", error);
+        setSaveStatus('error');
+      }
+    }, 1500);
+
+    return () => clearTimeout(timeout);
+  }, [formData, stepId, submissionId, db, isLocked]);
 
   useEffect(() => {
     if (!loadingSubmissions && submission && !currentStep && stepId) {
@@ -129,19 +188,6 @@ export default function OnboardingStepPage() {
     initSubmission();
   }, [user, db, submissionId, stepId]);
 
-  useEffect(() => {
-    const sid = stepId as string;
-    if (submission && !initialSyncDone.current[sid]) {
-      const savedData = submission.sections?.[sid];
-      if (savedData) {
-        setFormData(savedData);
-      } else {
-        setFormData({});
-      }
-      initialSyncDone.current[sid] = true;
-    }
-  }, [submission, stepId]);
-
   const handleFieldChange = (field: string, value: any) => {
     setFormData((prev: any) => ({ ...prev, [field]: value }));
   };
@@ -151,7 +197,7 @@ export default function OnboardingStepPage() {
     const targetStep = visibleSteps.find(s => s.key === targetStepKey);
     if (!targetStep) return;
 
-    if (submissionId && db && submission?.status !== 'submitted') {
+    if (submissionId && db && !isLocked) {
       const updateData: any = { 
         updatedAt: serverTimestamp(), 
         lastSavedAt: serverTimestamp(),
@@ -167,7 +213,7 @@ export default function OnboardingStepPage() {
   };
 
   const handleSave = (direction: 'next' | 'prev' | 'stay' = 'stay') => {
-    if (!submissionId || !db || !currentStep || submission?.status === 'submitted') {
+    if (!submissionId || !db || !currentStep || isLocked) {
       if (direction === 'next' && currentVisibleIndex < visibleSteps.length - 1) {
         router.push(visibleSteps[currentVisibleIndex + 1].route);
       } else if (direction === 'prev' && currentVisibleIndex > 0) {
@@ -248,7 +294,13 @@ export default function OnboardingStepPage() {
 
     updateData.currentStep = targetStepKey;
 
-    updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData).catch((error: any) => {
+    setSaveStatus('saving');
+    updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData).then(() => {
+      setSaveStatus('saved');
+      setLastSavedTime(new Date());
+      lastSavedDataRef.current = JSON.stringify(formData);
+    }).catch((error: any) => {
+      setSaveStatus('error');
       errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `onboardingSubmissions/${submissionId}`, operation: 'update', requestResourceData: updateData }));
     });
 
@@ -319,6 +371,41 @@ export default function OnboardingStepPage() {
 
   if (!currentStep) return null;
 
+  const renderSaveStatus = () => {
+    if (isLocked) return null;
+    
+    switch (saveStatus) {
+      case 'saving':
+        return (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground animate-pulse">
+            <RefreshCw className="w-3 h-3 animate-spin" />
+            <span>Saving draft...</span>
+          </div>
+        );
+      case 'saved':
+        return (
+          <div className="flex items-center gap-2 text-xs text-green-600">
+            <CloudCheck className="w-3 h-3" />
+            <span>Saved {lastSavedTime ? `at ${lastSavedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}</span>
+          </div>
+        );
+      case 'error':
+        return (
+          <div className="flex items-center gap-2 text-xs text-destructive">
+            <CloudOff className="w-3 h-3" />
+            <span>Save failed</span>
+          </div>
+        );
+      default:
+        return lastSavedTime ? (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <CloudCheck className="w-3 h-3 opacity-50" />
+            <span>Last saved {lastSavedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+          </div>
+        ) : null;
+    }
+  };
+
   return (
     <AuthGuard>
       <div className="min-h-screen bg-[#F8FAFC] flex font-body">
@@ -378,32 +465,36 @@ export default function OnboardingStepPage() {
         <main className="flex-1 flex flex-col h-screen overflow-hidden">
           <header className="h-16 bg-white border-b flex items-center justify-between px-8 shrink-0 z-10 shadow-sm">
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard')} className="gap-2 rounded-lg text-muted-foreground"><LayoutDashboard className="w-4 h-4" /> Back to Dashboard</Button>
+              <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard')} className="gap-2 rounded-lg text-muted-foreground"><LayoutDashboard className="w-4 h-4" /> Dashboard</Button>
               <div className="h-4 w-px bg-slate-200" />
               <div className="flex items-center gap-2">
                 <span className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center"><currentStep.icon className="w-3.5 h-3.5 text-primary" /></span>
                 <h1 className="text-sm font-bold text-slate-900">{currentVisibleIndex + 1}. {currentStep.title}</h1>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              {currentVisibleIndex > 0 && (
-                <Button variant="ghost" size="sm" onClick={() => handleSave('prev')} className="gap-2 rounded-lg text-muted-foreground"><ChevronLeft className="w-4 h-4" /> Previous Step</Button>
-              )}
-              {submission?.status !== 'submitted' && (
-                <>
-                  <Button variant="outline" size="sm" onClick={() => handleSave('stay')} className="gap-2 rounded-lg border-2">Save Draft</Button>
-                  <Button size="sm" onClick={() => handleSave('next')} className="gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20" disabled={currentVisibleIndex === visibleSteps.length - 1}>Next Step <ChevronRight className="w-4 h-4" /></Button>
-                </>
-              )}
-              {submission?.status === 'submitted' && currentVisibleIndex < visibleSteps.length - 1 && (
-                <Button size="sm" onClick={() => handleSave('next')} className="gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20">Next Step <ChevronRight className="w-4 h-4" /></Button>
-              )}
+            
+            <div className="flex items-center gap-6">
+              {renderSaveStatus()}
+              <div className="flex items-center gap-3">
+                {currentVisibleIndex > 0 && (
+                  <Button variant="ghost" size="sm" onClick={() => handleSave('prev')} className="gap-2 rounded-lg text-muted-foreground"><ChevronLeft className="w-4 h-4" /> Previous</Button>
+                )}
+                {!isLocked && (
+                  <>
+                    <Button variant="outline" size="sm" onClick={() => handleSave('stay')} className="gap-2 rounded-lg border-2">Save Draft</Button>
+                    <Button size="sm" onClick={() => handleSave('next')} className="gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20" disabled={currentVisibleIndex === visibleSteps.length - 1}>Next Step <ChevronRight className="w-4 h-4" /></Button>
+                  </>
+                )}
+                {isLocked && currentVisibleIndex < visibleSteps.length - 1 && (
+                  <Button size="sm" onClick={() => handleSave('next')} className="gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20">Next Step <ChevronRight className="w-4 h-4" /></Button>
+                )}
+              </div>
             </div>
           </header>
 
           <div className="flex-1 overflow-y-auto bg-slate-50/30">
             <div className="max-w-4xl mx-auto p-8 lg:p-12">
-              {submission.status === 'submitted' && stepId !== 'final_submission' && (
+              {isLocked && stepId !== 'final_submission' && (
                 <div className="mb-8 p-4 bg-blue-50 border border-blue-100 rounded-2xl flex gap-3 text-blue-800 animate-in fade-in slide-in-from-top-2">
                   <Lock className="w-5 h-5 shrink-0" />
                   <div className="space-y-1">
@@ -487,7 +578,7 @@ function StepContent({ stepId, data, onChange, submission, onNavigate, onSubmit,
     );
   }
 
-  const isLocked = submission.status === 'submitted';
+  const isLocked = submission.status === 'submitted' && !submission.adminReopened;
 
   switch (stepId) {
     case 'welcome_expectations': {
