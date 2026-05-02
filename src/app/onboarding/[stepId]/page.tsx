@@ -60,7 +60,11 @@ import {
   Image as ImageIcon,
   Flag,
   TrendingUp,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Banknote,
+  Scale as ScaleIcon,
+  History,
+  FileWarning
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -232,6 +236,13 @@ export default function OnboardingStepPage() {
             targetAvoidRules: {},
             factorRanking: {}
           });
+        } else if (sid === 'commercial') {
+          setFormData({
+            pricingMethod: { methods: [] },
+            commercialRules: { paymentTerms: [] },
+            quoteRules: {},
+            pricingApproval: {}
+          });
         } else {
           setFormData({});
         }
@@ -380,6 +391,21 @@ export default function OnboardingStepPage() {
       if (!data.targetAvoidRules?.automaticNo) return "Automatic no-go criteria is required.";
       const rankedFactors = Object.keys(data.factorRanking || {});
       if (rankedFactors.length < RANKING_FACTORS.length) return "Please rank all opportunity factors.";
+    }
+
+    if (sid === 'commercial') {
+      const pricing = data.pricingMethod || {};
+      const rules = data.commercialRules || {};
+      const approval = data.pricingApproval || {};
+      const quote = data.quoteRules || {};
+
+      if (!pricing.methods?.length) return "Please select at least one pricing method.";
+      if (!pricing.guidance) return "Please provide standard rates or pricing guidance.";
+      if (!rules.paymentTerms?.length) return "Please select required payment terms.";
+      if (!approval.approverName) return "Please nominate who must approve pricing.";
+      if (!approval.draftAuthority) return "Please specify if Bid Manager can prepare draft pricing.";
+      if (approval.thresholdAuthority === 'Yes' && !approval.thresholdAmount) return "Please specify the maximum quote value for threshold authority.";
+      if (!quote.assumptions || !quote.exclusions) return "Please provide standard quote assumptions and exclusions.";
     }
 
     return null;
@@ -1043,6 +1069,182 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
                   ))}
                 </TableBody>
               </Table>
+            </CardContent>
+          </Card>
+        </div>
+      );
+
+    case 'commercial':
+      const pricing = data.pricingMethod || { methods: [] };
+      const commRules = data.commercialRules || { paymentTerms: [] };
+      const quoteRules = data.quoteRules || {};
+      const approvalRules = data.pricingApproval || {};
+
+      const handlePricingMethodToggle = (m: string) => {
+        const next = pricing.methods.includes(m) ? pricing.methods.filter((i: string) => i !== m) : [...pricing.methods, m];
+        onChange('pricingMethod', { ...pricing, methods: next });
+      };
+
+      const handlePaymentTermToggle = (t: string) => {
+        const next = commRules.paymentTerms.includes(t) ? commRules.paymentTerms.filter((i: string) => i !== t) : [...commRules.paymentTerms, t];
+        onChange('commercialRules', { ...commRules, paymentTerms: next });
+      };
+
+      return (
+        <div className="space-y-12">
+          <div className="space-y-4">
+            <h2 className="text-4xl font-headline font-bold text-slate-900">Pricing, Quoting and Commercial Rules</h2>
+            <p className="text-slate-500 text-lg leading-relaxed">Provide your pricing and commercial rules so Bid Manager can prepare draft pricing, quote content, and approval workflows.</p>
+          </div>
+
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><Banknote className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Pricing Method</h3>
+            </div>
+            <CardContent className="p-8 space-y-8">
+              <div className="space-y-4">
+                <Label className="text-lg font-bold">How do you usually price your work? *</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {[
+                    "Hourly rate", "Daily rate", "Fixed fee", "Package pricing", "Schedule of rates", 
+                    "Quote after inspection", "Project-based pricing", "Subscription or retainer", 
+                    "Cost-plus", "Grant budget", "Other"
+                  ].map(m => (
+                    <div key={m} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${pricing.methods?.includes(m) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handlePricingMethodToggle(m)}>
+                      <Checkbox id={`m-${m}`} checked={pricing.methods?.includes(m)} onCheckedChange={() => {}} />
+                      <Label htmlFor={`m-${m}`} className="text-xs font-medium cursor-pointer">{m}</Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {pricing.methods?.includes('Other') && (
+                <div className="space-y-2"><Label className="font-bold">Please describe your other pricing method</Label><Input value={pricing.otherMethod || ''} onChange={(e) => onChange('pricingMethod', { ...pricing, otherMethod: e.target.value })} className="h-12 rounded-xl" /></div>
+              )}
+              <div className="space-y-2"><Label className="font-bold">Standard rates, packages, or pricing guidance *</Label><Textarea value={pricing.guidance || ''} onChange={(e) => onChange('pricingMethod', { ...pricing, guidance: e.target.value })} placeholder="e.g. Lead Developer: $150/hr, Standard Support Package: $2,500/mo" className="min-h-[120px] rounded-2xl" /></div>
+              <div className="space-y-4 pt-2">
+                <Label className="font-bold text-lg">Do you have a minimum charge?</Label>
+                <RadioGroup value={pricing.hasMinCharge} onValueChange={(v) => onChange('pricingMethod', { ...pricing, hasMinCharge: v })} className="flex gap-6">
+                  {["Yes", "No", "Depends", "Unsure"].map(opt => (
+                    <div key={opt} className="flex items-center space-x-2">
+                      <RadioGroupItem value={opt} id={`min-${opt}`} />
+                      <Label htmlFor={`min-${opt}`}>{opt}</Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+                {(pricing.hasMinCharge === 'Yes' || pricing.hasMinCharge === 'Depends') && (
+                  <div className="pt-2 animate-in fade-in slide-in-from-top-2"><Label className="font-bold">Explain your minimum charge rules</Label><Input value={pricing.minChargeRules || ''} onChange={(e) => onChange('pricingMethod', { ...pricing, minChargeRules: e.target.value })} className="h-12 rounded-xl" /></div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><TrendingUp className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Commercial Rules</h3>
+            </div>
+            <CardContent className="p-8 space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-2"><Label className="font-bold">Minimum Required Profit Margin</Label><Input value={commRules.minProfitMargin || ''} onChange={(e) => onChange('commercialRules', { ...commRules, minProfitMargin: e.target.value })} placeholder="e.g. 25%" className="h-12 rounded-xl" /></div>
+                <div className="space-y-4">
+                  <Label className="font-bold">Can discounts be offered?</Label>
+                  <RadioGroup value={commRules.canOfferDiscounts} onValueChange={(v) => onChange('commercialRules', { ...commRules, canOfferDiscounts: v })} className="flex flex-wrap gap-4">
+                    {["Yes", "No", "Only with approval", "Depends"].map(opt => (
+                      <div key={opt} className="flex items-center space-x-2">
+                        <RadioGroupItem value={opt} id={`disc-${opt}`} />
+                        <Label htmlFor={`disc-${opt}`}>{opt}</Label>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                </div>
+              </div>
+              {commRules.canOfferDiscounts && commRules.canOfferDiscounts !== 'No' && (
+                <div className="animate-in fade-in slide-in-from-top-2"><Label className="font-bold">What discount rules or limits apply?</Label><Input value={commRules.discountRules || ''} onChange={(e) => onChange('commercialRules', { ...commRules, discountRules: e.target.value })} className="h-12 rounded-xl" /></div>
+              )}
+              <div className="space-y-2"><Label className="font-bold">Travel, call-out, mobilisation, or admin fees</Label><Textarea value={commRules.additionalFees || ''} onChange={(e) => onChange('commercialRules', { ...commRules, additionalFees: e.target.value })} className="min-h-[80px] rounded-2xl" /></div>
+              <div className="space-y-4">
+                <Label className="font-bold text-lg">What payment terms do you require? *</Label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {["Upfront deposit", "On completion", "7 days", "14 days", "30 days", "Milestone payments", "Retainer", "Other"].map(t => (
+                    <div key={t} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${commRules.paymentTerms?.includes(t) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handlePaymentTermToggle(t)}>
+                      <Checkbox id={`term-${t}`} checked={commRules.paymentTerms?.includes(t)} onCheckedChange={() => {}} />
+                      <Label htmlFor={`term-${t}`} className="text-xs font-medium cursor-pointer">{t}</Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><History className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Quote Rules</h3>
+            </div>
+            <CardContent className="p-8 space-y-8">
+              <div className="space-y-2"><Label className="font-bold">What information do you need before you can quote accurately?</Label><Textarea value={quoteRules.preQuoteInfo || ''} onChange={(e) => onChange('quoteRules', { ...quoteRules, preQuoteInfo: e.target.value })} className="min-h-[80px] rounded-2xl" /></div>
+              <div className="space-y-4">
+                <Label className="font-bold">Do quotes require inspection or client documents first?</Label>
+                <RadioGroup value={quoteRules.needsInspection} onValueChange={(v) => onChange('quoteRules', { ...quoteRules, needsInspection: v })} className="flex gap-6">
+                  {["Yes", "No", "Sometimes", "Unsure"].map(opt => (
+                    <div key={opt} className="flex items-center space-x-2">
+                      <RadioGroupItem value={opt} id={`insp-${opt}`} />
+                      <Label htmlFor={`insp-${opt}`}>{opt}</Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                <div className="space-y-2"><Label className="font-bold">Standard quote validity period</Label><Input value={quoteRules.validityPeriod || ''} onChange={(e) => onChange('quoteRules', { ...quoteRules, validityPeriod: e.target.value })} placeholder="e.g. 30 days" className="h-12 rounded-xl" /></div>
+                <div className="space-y-2"><Label className="font-bold">Mandatory terms and conditions</Label><Input value={quoteRules.mandatoryTerms || ''} onChange={(e) => onChange('quoteRules', { ...quoteRules, mandatoryTerms: e.target.value })} placeholder="Link or brief summary" className="h-12 rounded-xl" /></div>
+              </div>
+              <div className="space-y-2"><Label className="font-bold">Standard Quote Assumptions *</Label><Textarea value={quoteRules.assumptions || ''} onChange={(e) => onChange('quoteRules', { ...quoteRules, assumptions: e.target.value })} className="min-h-[100px] rounded-2xl" /></div>
+              <div className="space-y-2"><Label className="font-bold">Standard Quote Exclusions *</Label><Textarea value={quoteRules.exclusions || ''} onChange={(e) => onChange('quoteRules', { ...quoteRules, exclusions: e.target.value })} className="min-h-[100px] rounded-2xl" /></div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><ScaleIcon className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Pricing Approval</h3>
+            </div>
+            <CardContent className="p-8 space-y-8">
+              <div className="space-y-2"><Label className="font-bold">Who must approve pricing before submission? *</Label><Input value={approvalRules.approverName || ''} onChange={(e) => onChange('pricingApproval', { ...approvalRules, approverName: e.target.value })} placeholder="Name or Role" className="h-12 rounded-xl" /></div>
+              <div className="space-y-4">
+                <Label className="font-bold">Can Bid Manager prepare draft pricing using your guidance? *</Label>
+                <RadioGroup value={approvalRules.draftAuthority} onValueChange={(v) => onChange('pricingApproval', { ...approvalRules, draftAuthority: v })} className="space-y-2">
+                  {[
+                    { val: 'Yes', lbl: 'Yes' },
+                    { val: 'No', lbl: 'No' },
+                    { val: 'ApprovedOnly', lbl: 'Yes, but all pricing must be approved before submission' }
+                  ].map(opt => (
+                    <div key={opt.val} className="flex items-center space-x-2">
+                      <RadioGroupItem value={opt.val} id={`draft-${opt.val}`} />
+                      <Label htmlFor={`draft-${opt.val}`}>{opt.lbl}</Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+              <div className="space-y-4">
+                <Label className="font-bold">Can Bid Manager submit pricing without approval under a threshold?</Label>
+                <RadioGroup value={approvalRules.thresholdAuthority} onValueChange={(v) => onChange('pricingApproval', { ...approvalRules, thresholdAuthority: v })} className="flex gap-6">
+                  {["Yes", "No", "Maybe"].map(opt => (
+                    <div key={opt} className="flex items-center space-x-2">
+                      <RadioGroupItem value={opt} id={`thresh-${opt}`} />
+                      <Label htmlFor={`thresh-${opt}`}>{opt}</Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+              {approvalRules.thresholdAuthority === 'Yes' && (
+                <div className="animate-in fade-in slide-in-from-top-2"><Label className="font-bold">Maximum quote value for non-approval submission *</Label><Input value={approvalRules.thresholdAmount || ''} onChange={(e) => onChange('pricingApproval', { ...approvalRules, thresholdAmount: e.target.value })} placeholder="e.g. $2,000" className="h-12 rounded-xl" /></div>
+              )}
+              <div className="space-y-2"><Label className="font-bold">Actions Bid Manager must NEVER take without written approval</Label><Textarea value={approvalRules.restrictedActions || ''} onChange={(e) => onChange('pricingApproval', { ...approvalRules, restrictedActions: e.target.value })} className="min-h-[80px] rounded-2xl" /></div>
+              <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 flex gap-4 items-start">
+                <FileWarning className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-800 leading-relaxed font-medium">Important: Bid Manager will strictly adhere to these commercial boundaries. Clear guidance ensures we can respond rapidly while keeping you in full financial control.</p>
+              </div>
             </CardContent>
           </Card>
         </div>
