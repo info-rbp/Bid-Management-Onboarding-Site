@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useMemo } from 'react';
@@ -14,6 +15,7 @@ import {
   CheckCircle2,
   Circle,
   ChevronRight,
+  ArrowRight
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useAuth, useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
@@ -62,6 +64,8 @@ export default function DashboardPage() {
 
   const completedCount = submission?.completedSteps?.length || 0;
   const progressValue = visibleSteps.length > 0 ? (completedCount / visibleSteps.length) * 100 : 0;
+
+  const isSubmitted = submission?.status === 'submitted';
 
   return (
     <AuthGuard>
@@ -114,9 +118,18 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <h1 className="text-3xl font-headline font-bold text-slate-900">Onboarding Dashboard</h1>
-                <Badge variant="secondary" className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-                  {submission?.status?.replace('_', ' ') || 'In Progress'}
-                </Badge>
+                <div className="flex items-center gap-3">
+                  <Badge variant={isSubmitted ? "default" : "secondary"} className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${isSubmitted ? 'bg-green-500 hover:bg-green-600' : ''}`}>
+                    {submission?.status?.replace('_', ' ') || 'In Progress'}
+                  </Badge>
+                  {submission && (
+                    <Button asChild size="sm" className={`gap-2 rounded-xl font-bold ${isSubmitted ? 'bg-slate-100 text-slate-900 hover:bg-slate-200 border-none' : 'bg-primary shadow-lg shadow-primary/20'}`}>
+                      <Link href={`/onboarding/${submission.currentStep || 'welcome_expectations'}`}>
+                        {isSubmitted ? 'View Submitted Pack' : 'Continue Onboarding'} <ArrowRight className="w-4 h-4" />
+                      </Link>
+                    </Button>
+                  )}
+                </div>
               </div>
               <p className="text-slate-500">Complete the {visibleSteps.length} sections below to set up your profile.</p>
             </div>

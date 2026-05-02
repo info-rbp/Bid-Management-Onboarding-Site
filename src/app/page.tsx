@@ -1,12 +1,13 @@
-import Link from 'next/link';
-import Image from 'next/image';
-import { Button } from '@/components/ui/button';
+
 import { Logo } from '@/components/brand/Logo';
 import { 
   Zap, 
   ArrowRight
 } from 'lucide-react';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
+import Image from 'next/image';
+import Link from 'next/link';
+import { StartOnboardingButton } from '@/components/home/StartOnboardingButton';
 
 export default function Home() {
   const heroImage = PlaceHolderImages.find(img => img.id === 'hero-image');
@@ -24,7 +25,7 @@ export default function Home() {
           <Link href="/next-steps" className="text-sm font-semibold text-muted-foreground hover:text-primary transition-colors whitespace-nowrap">Next Steps</Link>
         </nav>
         <div className="flex-1 hidden md:flex justify-end">
-          {/* Empty div to balance the justify-between layout */}
+          <Link href="/auth" className="text-sm font-bold text-slate-600 hover:text-primary transition-colors">Client Login</Link>
         </div>
       </header>
 
@@ -43,11 +44,7 @@ export default function Home() {
               We have automated our onboarding process to make life easier. The process will take approximately 45 minutes so make sure you have plenty of time to complete this
             </p>
             <div className="flex flex-col sm:row gap-4">
-              <Button asChild size="lg" className="bg-primary text-white h-14 px-10 rounded-xl text-lg group shadow-lg shadow-primary/20">
-                <Link href="/onboarding">
-                  Start Your Onboarding <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </Link>
-              </Button>
+              <StartOnboardingButton />
             </div>
           </div>
           <div className="relative">
