@@ -62,12 +62,7 @@ import {
   Search,
   UserPlus,
   Megaphone,
-  AlertOctagon,
-  Coins,
-  Phone,
-  Mail,
-  MessageCircle,
-  Stethoscope
+  AlertOctagon
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -108,34 +103,41 @@ const STEPS = [
   { id: 'authority', title: '20. Authority to Act and Approval Matrix', icon: Scale },
 ];
 
-const QUOTE_TYPES = [
-  "Fixed-price quotes", "Hourly rate quotes", "Project quotes", "Service packages", 
-  "Maintenance quotes", "Emergency work quotes", "Inspection-based quotes", 
-  "Marketplace responses", "Supplier quote requests", "Other"
+const AUTHORITY_ROWS = [
+  "Search for opportunities",
+  "Recommend opportunities",
+  "Create or update platform profiles",
+  "Register on free platforms",
+  "Register on paid platforms",
+  "Assist with supplier, tender, or grant registrations",
+  "Draft responses, quotes, and applications",
+  "Ask clarification questions",
+  "Communicate with buyers, funders, or leads",
+  "Prepare marketplace responses",
+  "Submit marketplace responses",
+  "Submit quote requests",
+  "Submit tenders",
+  "Submit grants",
+  "Provide pricing",
+  "Accept terms or contract conditions",
+  "Use supplied documents in submissions",
+  "Maintain a reusable bid library",
+  "Follow up with buyers, funders, or leads"
 ];
 
-const COMMUNICATION_METHODS = [
-  "Email", "Phone", "SMS", "Microsoft Teams", "Google Meet", "Zoom", "WhatsApp", "Shared Google Drive", "Project management tool", "Other"
+const AUTHORITY_LEVELS = [
+  "Authorised",
+  "Authorised after approval",
+  "Not authorised",
+  "Unsure"
 ];
 
-const RESPONSE_TIMES = [
-  "Same day", "Within 24 hours", "Within 48 hours", "2-3 business days", "Depends on the request"
-];
-
-const REVIEW_TIMES = [
-  "Less than 24 hours", "1 business day", "2 business days", "3 business days", "More than 3 business days", "Depends on complexity"
-];
-
-const DEADLINE_BUFFERS = [
-  "24 hours before", "48 hours before", "3 business days before", "5 business days before", "Depends on opportunity"
-];
-
-const FEEDBACK_METHODS = [
-  "Comments in document", "Email summary", "Phone call", "Video meeting", "Shared task list", "Other"
-];
-
-const ESCALATION_RULES = [
-  "Email primary contact", "Call primary contact", "Contact secondary contact", "Contact urgent approval contact", "Pause work until response", "Other"
+const HIGH_RISK_AUTHORITY_ITEMS = [
+  "Submit tenders",
+  "Submit grants",
+  "Provide pricing",
+  "Accept terms or contract conditions",
+  "Register on paid platforms"
 ];
 
 export default function OnboardingStepPage() {
@@ -193,15 +195,12 @@ export default function OnboardingStepPage() {
         setFormData(submission.sections[sid]);
       } else {
         // Initialize defaults based on step
-        if (sid === 'workflow') {
+        if (sid === 'authority') {
           setFormData({
-            commMethods: [],
-            primaryComm: '',
-            responseTimes: '',
-            reviewTime: '',
-            deadlineBuffer: '',
-            feedbackMethods: [],
-            escalationRule: ''
+            matrix: {},
+            acks: {},
+            quoteThresholdAuthority: 'No',
+            marketplaceAuthority: 'No'
           });
         } else {
           setFormData({});
@@ -241,15 +240,23 @@ export default function OnboardingStepPage() {
   };
 
   const validateStep = (sid: string, data: any) => {
-    if (sid === 'workflow') {
-      if (!data.commMethods?.length) return "Please select at least one communication method.";
-      if (!data.primaryComm) return "Please select a primary communication method.";
-      if (!data.responseTimes) return "Response time selection is required.";
-      if (!data.draftReviewer) return "Please specify who reviews draft responses.";
-      if (!data.finalApprover) return "Please specify who approves final submissions.";
-      if (!data.reviewTime) return "Review time selection is required.";
-      if (!data.deadlineBuffer) return "Deadline buffer selection is required.";
-      if (!data.escalationRule) return "Escalation rule selection is required.";
+    if (sid === 'authority') {
+      const matrix = data.matrix || {};
+      const allRowsAnswered = AUTHORITY_ROWS.every(row => matrix[row]);
+      if (!allRowsAnswered) return "Please select an authority level for every action in the matrix.";
+      if (!data.submissionApprover) return "Please specify who provides final approval for submissions.";
+      if (!data.pricingApprover) return "Please specify who provides final approval for pricing.";
+      if (!data.contractApprover) return "Please specify who provides final approval for contract terms.";
+      if (!data.paidPlatformApprover) return "Please specify who provides final approval for paid platforms.";
+      if (!data.neverActions) return "Please specify actions Bid Manager must never take (write 'None known' if applicable).";
+      
+      const acks = data.acks || {};
+      const allAcks = ['relied', 'auto', 'consequence', 'accurate'].every(id => acks[id]);
+      if (!allAcks) return "Please confirm all acknowledgments in the final authority section.";
+
+      if ((data.quoteThresholdAuthority === 'Yes' || data.quoteThresholdAuthority === 'Maybe, to be discussed') && !data.quoteThresholdValue) {
+        return "Please specify a maximum value threshold for quotes.";
+      }
     }
     return null;
   };
@@ -313,21 +320,9 @@ export default function OnboardingStepPage() {
 
   const visibleSteps = STEPS.filter(s => {
     if (!s.conditional) return true;
-    
-    // Logic for conditional steps
     const selection = submission?.sections?.selection?.selectedServices || [];
     const enabled = submission?.enabledModules?.[s.conditional];
     const unsureSelected = selection.includes('Unsure, please recommend');
-
-    if (s.id === 'quote') {
-      return (
-        enabled || 
-        selection.includes('Marketplace Leads') || 
-        selection.includes('Direct Proposals') ||
-        unsureSelected
-      );
-    }
-
     return enabled || unsureSelected;
   });
 
@@ -413,392 +408,247 @@ export default function OnboardingStepPage() {
 
 function StepContent({ stepId, data, onChange }: { stepId: string, data: any, onChange: (field: string, value: any) => void }) {
   switch (stepId) {
-    case 'workflow': {
+    case 'authority': {
       return (
         <div className="space-y-12">
           <div className="space-y-4">
-            <h2 className="text-4xl font-headline font-bold text-slate-900">Communication, Review and Workflow Rules</h2>
-            <p className="text-slate-500 text-lg leading-relaxed">Define how we'll work together during active opportunities, reviews, and approvals.</p>
+            <h2 className="text-4xl font-headline font-bold text-slate-900">Authority to Act and Approval Matrix</h2>
+            <p className="text-slate-500 text-lg leading-relaxed">Confirm what Bid Manager is authorised to do on your behalf.</p>
           </div>
-
-          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl"><MessageSquare className="w-5 h-5 text-primary" /></div>
-              <h3 className="text-xl font-bold text-slate-900">Communication Preferences</h3>
-            </div>
-            <CardContent className="p-8 space-y-8">
-              <div className="space-y-4">
-                <Label className="text-lg font-bold">Preferred communication methods *</Label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {COMMUNICATION_METHODS.map(method => (
-                    <div 
-                      key={method} 
-                      className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer transition-all ${data.commMethods?.includes(method) ? 'border-primary bg-primary/5' : 'bg-white hover:bg-slate-50'}`}
-                      onClick={() => {
-                        const current = data.commMethods || [];
-                        const next = current.includes(method) ? current.filter((m: string) => m !== method) : [...current, method];
-                        onChange('commMethods', next);
-                      }}
-                    >
-                      <Checkbox checked={data.commMethods?.includes(method)} onCheckedChange={() => {}} />
-                      <Label className="text-xs cursor-pointer">{method}</Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {data.commMethods?.includes('Other') && (
-                <div className="animate-in slide-in-from-top-2">
-                  <Label className="font-bold">Please specify other communication method *</Label>
-                  <Input 
-                    value={data.otherCommMethod || ''} 
-                    onChange={(e) => onChange('otherCommMethod', e.target.value)} 
-                    placeholder="e.g. Signal, Discord..."
-                    className="h-12 rounded-xl mt-2" 
-                  />
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label className="font-bold">Primary communication preference *</Label>
-                <Select value={data.primaryComm} onValueChange={(v) => onChange('primaryComm', v)}>
-                  <SelectTrigger className="h-12 rounded-xl">
-                    <SelectValue placeholder="Select primary method" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(data.commMethods || []).map((method: string) => (
-                      <SelectItem key={method} value={method}>{method}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="font-bold">What days or times are usually difficult for your team to respond?</Label>
-                <Textarea 
-                  value={data.difficultTimes || ''} 
-                  onChange={(e) => onChange('difficultTimes', e.target.value)} 
-                  placeholder="e.g. Monday mornings during stand-ups, Fridays after 3 PM..."
-                  className="min-h-[80px] rounded-2xl" 
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="font-bold">Any communication preferences or restrictions?</Label>
-                <Textarea 
-                  value={data.commRestrictions || ''} 
-                  onChange={(e) => onChange('commRestrictions', e.target.value)} 
-                  placeholder="e.g. No calls before 9 AM, preferred primary point of contact is Jane..."
-                  className="min-h-[80px] rounded-2xl" 
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl"><Clock className="w-5 h-5 text-primary" /></div>
-              <h3 className="text-xl font-bold text-slate-900">Response Times</h3>
-            </div>
-            <CardContent className="p-8 space-y-8">
-              <div className="space-y-4">
-                <Label className="text-lg font-bold">How quickly can you usually respond during active opportunities? *</Label>
-                <RadioGroup value={data.responseTimes} onValueChange={(v) => onChange('responseTimes', v)} className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {RESPONSE_TIMES.map(opt => (
-                    <div key={opt} className={`flex items-center space-x-2 p-3 rounded-xl border hover:bg-slate-50 transition-colors ${data.responseTimes === opt ? 'border-primary bg-primary/5' : 'bg-white'}`}>
-                      <RadioGroupItem value={opt} id={`resp-${opt}`} />
-                      <Label htmlFor={`resp-${opt}`} className="cursor-pointer flex-1 py-1">{opt}</Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </div>
-
-              {data.responseTimes === 'Depends on the request' && (
-                <div className="animate-in slide-in-from-top-2">
-                  <Label className="font-bold">Please explain what affects response time *</Label>
-                  <Textarea 
-                    value={data.responseTimeExplanation || ''} 
-                    onChange={(e) => onChange('responseTimeExplanation', e.target.value)} 
-                    className="min-h-[80px] rounded-2xl mt-2" 
-                  />
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label className="font-bold">What should be treated as urgent?</Label>
-                <Textarea 
-                  value={data.urgentDefinition || ''} 
-                  onChange={(e) => onChange('urgentDefinition', e.target.value)} 
-                  placeholder="e.g. Deadline within 24 hours, request for final price change..."
-                  className="min-h-[80px] rounded-2xl" 
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="font-bold">Who should be contacted for urgent approvals?</Label>
-                <Input 
-                  value={data.urgentContact || ''} 
-                  onChange={(e) => onChange('urgentContact', e.target.value)} 
-                  placeholder="Name and phone number"
-                  className="h-12 rounded-xl" 
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl"><FileCheck className="w-5 h-5 text-primary" /></div>
-              <h3 className="text-xl font-bold text-slate-900">Review and Approval Workflow</h3>
-            </div>
-            <CardContent className="p-8 space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label className="font-bold">Who should review draft responses? *</Label>
-                  <Input value={data.draftReviewer || ''} onChange={(e) => onChange('draftReviewer', e.target.value)} className="h-12 rounded-xl" />
-                </div>
-                <div className="space-y-2">
-                  <Label className="font-bold">Who approves final submissions? *</Label>
-                  <Input value={data.finalApprover || ''} onChange={(e) => onChange('finalApprover', e.target.value)} className="h-12 rounded-xl" />
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <Label className="font-bold">How much time do you need to review drafts? *</Label>
-                <RadioGroup value={data.reviewTime} onValueChange={(v) => onChange('reviewTime', v)} className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {REVIEW_TIMES.map(opt => (
-                    <div key={opt} className={`flex items-center space-x-2 p-3 rounded-xl border hover:bg-slate-50 transition-colors ${data.reviewTime === opt ? 'border-primary bg-primary/5' : 'bg-white'}`}>
-                      <RadioGroupItem value={opt} id={`review-${opt}`} />
-                      <Label htmlFor={`review-${opt}`} className="cursor-pointer flex-1 py-1">{opt}</Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </div>
-
-              <div className="space-y-4">
-                <Label className="font-bold">How far before the deadline should final approval be done? *</Label>
-                <RadioGroup value={data.deadlineBuffer} onValueChange={(v) => onChange('deadlineBuffer', v)} className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {DEADLINE_BUFFERS.map(opt => (
-                    <div key={opt} className={`flex items-center space-x-2 p-3 rounded-xl border hover:bg-slate-50 transition-colors ${data.deadlineBuffer === opt ? 'border-primary bg-primary/5' : 'bg-white'}`}>
-                      <RadioGroupItem value={opt} id={`buffer-${opt}`} />
-                      <Label htmlFor={`buffer-${opt}`} className="cursor-pointer flex-1 py-1">{opt}</Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </div>
-
-              <div className="space-y-4">
-                <Label className="font-bold">Preferred feedback method</Label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {FEEDBACK_METHODS.map(method => (
-                    <div 
-                      key={method} 
-                      className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer transition-all ${data.feedbackMethods?.includes(method) ? 'border-primary bg-primary/5' : 'bg-white hover:bg-slate-50'}`}
-                      onClick={() => {
-                        const current = data.feedbackMethods || [];
-                        const next = current.includes(method) ? current.filter((m: string) => m !== method) : [...current, method];
-                        onChange('feedbackMethods', next);
-                      }}
-                    >
-                      <Checkbox checked={data.feedbackMethods?.includes(method)} onCheckedChange={() => {}} />
-                      <Label className="text-xs cursor-pointer">{method}</Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {data.feedbackMethods?.includes('Other') && (
-                <div className="animate-in slide-in-from-top-2">
-                  <Label className="font-bold">Please specify other feedback method *</Label>
-                  <Input 
-                    value={data.otherFeedbackMethod || ''} 
-                    onChange={(e) => onChange('otherFeedbackMethod', e.target.value)} 
-                    className="h-12 rounded-xl mt-2" 
-                  />
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl"><AlertOctagon className="w-5 h-5 text-primary" /></div>
-              <h3 className="text-xl font-bold text-slate-900">Escalation Rules</h3>
-            </div>
-            <CardContent className="p-8 space-y-8">
-              <div className="space-y-4">
-                <Label className="text-lg font-bold">What should Bid Manager do if a deadline is approaching and we have not received a response? *</Label>
-                <RadioGroup value={data.escalationRule} onValueChange={(v) => onChange('escalationRule', v)} className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {ESCALATION_RULES.map(opt => (
-                    <div key={opt} className={`flex items-center space-x-2 p-3 rounded-xl border hover:bg-slate-50 transition-colors ${data.escalationRule === opt ? 'border-primary bg-primary/5' : 'bg-white'}`}>
-                      <RadioGroupItem value={opt} id={`esc-${opt}`} />
-                      <Label htmlFor={`esc-${opt}`} className="cursor-pointer flex-1 py-1">{opt}</Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </div>
-
-              {data.escalationRule === 'Other' && (
-                <div className="animate-in slide-in-from-top-2">
-                  <Label className="font-bold">Please specify other escalation action *</Label>
-                  <Input 
-                    value={data.otherEscalation || ''} 
-                    onChange={(e) => onChange('otherEscalation', e.target.value)} 
-                    className="h-12 rounded-xl mt-2" 
-                  />
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label className="font-bold">Are there any people who should not be contacted unless specifically approved? (Write "None" if N/A)</Label>
-                <Textarea 
-                  value={data.noContactList || ''} 
-                  onChange={(e) => onChange('noContactList', e.target.value)} 
-                  className="min-h-[80px] rounded-2xl" 
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="p-6 bg-slate-900 text-white rounded-[2rem] shadow-lg flex items-center justify-between gap-8">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-white/10 rounded-2xl"><Zap className="w-6 h-6 text-accent" /></div>
-              <div>
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Workflow Summary</p>
-                <p className="text-lg font-medium">Standard response within {data.responseTimes || '...'} | Approval needed {data.deadlineBuffer || '...'} before deadline.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-    case 'quote': {
-      return (
-        <div className="space-y-12">
-          <div className="space-y-4">
-            <h2 className="text-4xl font-headline font-bold text-slate-900">Quote Request Support</h2>
-            <p className="text-slate-500 text-lg leading-relaxed">Tell us how you manage quotes so we can help prepare, structure, and review your responses.</p>
-          </div>
-
-          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl"><FileText className="w-5 h-5 text-primary" /></div>
-              <h3 className="text-xl font-bold text-slate-900">Quote Types</h3>
-            </div>
-            <CardContent className="p-8 space-y-8">
-              <div className="space-y-4">
-                <Label className="text-lg font-bold">What quote types do you regularly prepare? *</Label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {QUOTE_TYPES.map(type => (
-                    <div key={type} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${data.quoteTypes?.includes(type) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => {
-                      const current = data.quoteTypes || [];
-                      const next = current.includes(type) ? current.filter((t: string) => t !== type) : [...current, type];
-                      onChange('quoteTypes', next);
-                    }}>
-                      <Checkbox checked={data.quoteTypes?.includes(type)} onCheckedChange={() => {}} />
-                      <Label className="text-xs cursor-pointer">{type}</Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="font-bold">What information is needed before you can quote? *</Label>
-                <Textarea value={data.infoNeededBeforeQuote || ''} onChange={(e) => onChange('infoNeededBeforeQuote', e.target.value)} placeholder="e.g. Dimensions, site photos, material preferences..." className="min-h-[100px] rounded-2xl" />
-              </div>
-              <div className="space-y-4">
-                <Label className="font-bold">Do you need inspection, photos, or documents before quoting?</Label>
-                <RadioGroup value={data.needsInspection} onValueChange={(v) => onChange('needsInspection', v)} className="flex flex-wrap gap-6">
-                  {["Yes", "No", "Sometimes", "Unsure"].map(opt => (
-                    <div key={opt} className="flex items-center space-x-2"><RadioGroupItem value={opt} id={`insp-${opt}`} /><Label htmlFor={`insp-${opt}`}>{opt}</Label></div>
-                  ))}
-                </RadioGroup>
-              </div>
-              {(data.needsInspection === 'Yes' || data.needsInspection === 'Sometimes') && (
-                <div className="pt-2 animate-in slide-in-from-top-2">
-                  <Label className="font-bold">What must be collected before a quote can be prepared? *</Label>
-                  <Input value={data.inspectionRequirementDetails || ''} onChange={(e) => onChange('inspectionRequirementDetails', e.target.value)} className="h-12 rounded-xl" />
-                </div>
-              )}
-            </CardContent>
-          </Card>
 
           <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
             <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
               <div className="p-2 bg-primary/10 rounded-xl"><Scale className="w-5 h-5 text-primary" /></div>
-              <h3 className="text-xl font-bold text-slate-900">Quote Content Rules</h3>
+              <h3 className="text-xl font-bold text-slate-900">Authority Matrix</h3>
             </div>
-            <CardContent className="p-8 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2"><Label className="font-bold">What should normally be INCLUDED? *</Label><Textarea value={data.quoteInclusions || ''} onChange={(e) => onChange('quoteInclusions', e.target.value)} className="min-h-[80px] rounded-2xl" /></div>
-                <div className="space-y-2"><Label className="font-bold">What should normally be EXCLUDED? *</Label><Textarea value={data.quoteExclusions || ''} onChange={(e) => onChange('quoteExclusions', e.target.value)} className="min-h-[80px] rounded-2xl" /></div>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-slate-50 hover:bg-slate-50">
+                      <TableHead className="w-[40%] pl-8">Action</TableHead>
+                      {AUTHORITY_LEVELS.map(level => (
+                        <TableHead key={level} className="text-center px-2 text-[10px] uppercase tracking-wider">{level}</TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {AUTHORITY_ROWS.map((row) => {
+                      const currentVal = data.matrix?.[row];
+                      const isHighRisk = HIGH_RISK_AUTHORITY_ITEMS.includes(row) && currentVal === 'Authorised';
+                      return (
+                        <React.Fragment key={row}>
+                          <TableRow className={isHighRisk ? 'bg-amber-50/50 border-amber-100' : 'hover:bg-slate-50/50'}>
+                            <TableCell className="font-medium pl-8 py-4">
+                              <div className="flex flex-col gap-1">
+                                <span className="text-sm text-slate-700">{row}</span>
+                                {isHighRisk && (
+                                  <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1 uppercase tracking-wider animate-pulse">
+                                    <AlertTriangle className="w-3 h-3" /> High Risk Item
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                            {AUTHORITY_LEVELS.map(level => (
+                              <TableCell key={level} className="text-center p-0">
+                                <label className="flex items-center justify-center w-full h-full cursor-pointer py-4 group">
+                                  <RadioGroup
+                                    value={currentVal}
+                                    onValueChange={(v) => {
+                                      const newMatrix = { ...(data.matrix || {}), [row]: v };
+                                      onChange('matrix', newMatrix);
+                                    }}
+                                    className="flex items-center justify-center"
+                                  >
+                                    <div className="relative">
+                                      <RadioGroupItem value={level} id={`${row}-${level}`} className="sr-only peer" />
+                                      <div className="w-5 h-5 rounded-full border-2 border-slate-200 peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary flex items-center justify-center transition-all group-hover:border-slate-300">
+                                        <div className="w-2 h-2 rounded-full bg-white scale-0 peer-data-[state=checked]:scale-100 transition-transform" />
+                                      </div>
+                                    </div>
+                                  </RadioGroup>
+                                </label>
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                          {isHighRisk && (
+                            <TableRow className="bg-amber-50/30 border-none no-hover">
+                              <TableCell colSpan={5} className="py-2 px-8">
+                                <Alert className="bg-amber-100/50 border-amber-200 text-amber-900 py-3 rounded-2xl flex items-center gap-3">
+                                  <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+                                  <AlertDescription className="text-[11px] font-bold">
+                                    This action may create commercial, legal, or financial commitments. Please confirm this authority carefully.
+                                  </AlertDescription>
+                                </Alert>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2"><Label className="font-bold">Standard Assumptions</Label><Textarea value={data.quoteAssumptions || ''} onChange={(e) => onChange('quoteAssumptions', e.target.value)} className="min-h-[80px] rounded-2xl" /></div>
-                <div className="space-y-2"><Label className="font-bold">Terms & Conditions</Label><Textarea value={data.quoteTerms || ''} onChange={(e) => onChange('quoteTerms', e.target.value)} className="min-h-[80px] rounded-2xl" /></div>
-              </div>
-              <div className="space-y-2"><Label className="font-bold">Quote Validity Period (e.g. 30 days)</Label><Input value={data.quoteValidity || ''} onChange={(e) => onChange('quoteValidity', e.target.value)} className="h-12 rounded-xl" /></div>
-              <div className="space-y-4 pt-2">
-                <Label className="font-bold">Are deposits required?</Label>
-                <RadioGroup value={data.depositsRequired} onValueChange={(v) => onChange('depositsRequired', v)} className="flex flex-wrap gap-6">
-                  {["Yes", "No", "Sometimes", "Unsure"].map(opt => (
-                    <div key={opt} className="flex items-center space-x-2"><RadioGroupItem value={opt} id={`dep-${opt}`} /><Label htmlFor={`dep-${opt}`}>{opt}</Label></div>
-                  ))}
-                </RadioGroup>
-              </div>
-              {(data.depositsRequired === 'Yes' || data.depositsRequired === 'Sometimes') && (
-                <div className="pt-2 animate-in slide-in-from-top-2">
-                  <Label className="font-bold">Please explain deposit requirements *</Label>
-                  <Input value={data.depositDetails || ''} onChange={(e) => onChange('depositDetails', e.target.value)} className="h-12 rounded-xl" />
+            </CardContent>
+          </Card>
+
+          {Object.entries(data.matrix || {}).some(([_, v]) => v === 'Unsure') && (
+            <div className="animate-in fade-in zoom-in-95 duration-500">
+              <Card className="bg-slate-900 border-none text-white rounded-[2.5rem] p-10 shadow-2xl overflow-hidden relative">
+                <div className="absolute top-0 right-0 p-8 opacity-10">
+                  <Scale className="w-32 h-32" />
                 </div>
-              )}
+                <div className="relative flex flex-col md:flex-row gap-10 items-start">
+                  <div className="p-4 bg-white/10 rounded-[2rem]"><HelpCircle className="w-10 h-10 text-accent" /></div>
+                  <div className="space-y-6">
+                    <div className="space-y-2">
+                      <h3 className="text-2xl font-bold">Authority items to clarify</h3>
+                      <p className="text-slate-400">We will discuss these items during your strategy kick-off call to ensure we have clear boundaries.</p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {Object.entries(data.matrix || {})
+                        .filter(([_, v]) => v === 'Unsure')
+                        .map(([row]) => (
+                          <div key={row} className="flex items-center gap-2 text-sm font-medium text-slate-300 bg-white/5 py-2 px-4 rounded-xl">
+                            <div className="w-1.5 h-1.5 rounded-full bg-accent" />
+                            {row}
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          )}
+
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><Users className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Approval Rules</h3>
+            </div>
+            <CardContent className="p-8 space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <div className="space-y-2">
+                   <Label className="font-bold">Who provides final approval for submissions? *</Label>
+                   <Input value={data.submissionApprover || ''} onChange={(e) => onChange('submissionApprover', e.target.value)} className="h-12 rounded-xl" placeholder="Full name or role" />
+                 </div>
+                 <div className="space-y-2">
+                   <Label className="font-bold">Who provides final approval for pricing? *</Label>
+                   <Input value={data.pricingApprover || ''} onChange={(e) => onChange('pricingApprover', e.target.value)} className="h-12 rounded-xl" placeholder="Full name or role" />
+                 </div>
+                 <div className="space-y-2">
+                   <Label className="font-bold">Who provides final approval for contract terms? *</Label>
+                   <Input value={data.contractApprover || ''} onChange={(e) => onChange('contractApprover', e.target.value)} className="h-12 rounded-xl" placeholder="Full name or role" />
+                 </div>
+                 <div className="space-y-2">
+                   <Label className="font-bold">Who provides final approval for paid platforms? *</Label>
+                   <Input value={data.paidPlatformApprover || ''} onChange={(e) => onChange('paidPlatformApprover', e.target.value)} className="h-12 rounded-xl" placeholder="Full name or role" />
+                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="font-bold">Are there any actions Bid Manager must NEVER take without written approval? *</Label>
+                <Textarea 
+                  value={data.neverActions || ''} 
+                  onChange={(e) => onChange('neverActions', e.target.value)} 
+                  placeholder="If none, write 'None known'."
+                  className="min-h-[100px] rounded-2xl" 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="font-bold">Are there any specific words, claims, guarantees, prices, or commitments we should not make?</Label>
+                <Textarea 
+                  value={data.forbiddenClaims || ''} 
+                  onChange={(e) => onChange('forbiddenClaims', e.target.value)} 
+                  placeholder="e.g. Never guarantee delivery date before final scope..."
+                  className="min-h-[100px] rounded-2xl" 
+                />
+              </div>
             </CardContent>
           </Card>
 
           <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
             <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl"><ShieldCheck className="w-5 h-5 text-primary" /></div>
-              <h3 className="text-xl font-bold text-slate-900">Quote Approval Rules</h3>
+              <div className="p-2 bg-primary/10 rounded-xl"><DollarSign className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Threshold Authority</h3>
             </div>
-            <CardContent className="p-8 space-y-8">
-              <div className="space-y-2"><Label className="font-bold">Who approves quotes? *</Label><Input value={data.quoteApprover || ''} onChange={(e) => onChange('quoteApprover', e.target.value)} className="h-12 rounded-xl" /></div>
-              
+            <CardContent className="p-8 space-y-10">
               <div className="space-y-4">
-                <Label className="font-bold">Can Bid Manager prepare draft quotes? *</Label>
-                <RadioGroup value={data.draftQuoteAuthority} onValueChange={(v) => onChange('draftQuoteAuthority', v)} className="flex flex-col gap-3">
-                  {["Yes", "No", "Yes, but approval required"].map(opt => (
-                    <div key={opt} className="flex items-center space-x-2 p-3 rounded-xl border hover:bg-slate-50 transition-colors">
-                      <RadioGroupItem value={opt} id={`draft-${opt}`} />
-                      <Label htmlFor={`draft-${opt}`} className="cursor-pointer">{opt}</Label>
+                <Label className="font-bold">Can Bid Manager submit quotes or responses under an agreed value threshold?</Label>
+                <RadioGroup value={data.quoteThresholdAuthority} onValueChange={(v) => onChange('quoteThresholdAuthority', v)} className="flex flex-wrap gap-4">
+                  {['Yes', 'No', 'Maybe, to be discussed'].map(opt => (
+                    <div key={opt} className={`flex items-center space-x-2 bg-white border-2 p-3 px-5 rounded-2xl hover:bg-slate-50 transition-all cursor-pointer ${data.quoteThresholdAuthority === opt ? 'border-primary bg-primary/5' : 'border-slate-100'}`}>
+                      <RadioGroupItem value={opt} id={`qthresh-${opt}`} />
+                      <Label htmlFor={`qthresh-${opt}`} className="cursor-pointer font-bold">{opt}</Label>
                     </div>
                   ))}
                 </RadioGroup>
-              </div>
-
-              <div className="space-y-4 p-6 bg-amber-50 rounded-2xl border border-amber-200">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                  <div className="space-y-4 w-full">
-                    <div>
-                      <Label className="font-bold text-amber-900">Can Bid Manager send quotes without approval under a threshold?</Label>
-                      <p className="text-xs text-amber-700 mt-1">Exercise caution when granting submission authority.</p>
+                {(data.quoteThresholdAuthority === 'Yes' || data.quoteThresholdAuthority === 'Maybe, to be discussed') && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 p-6 bg-slate-50 rounded-2xl animate-in slide-in-from-top-4 duration-500">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Maximum value threshold</Label>
+                      <Input value={data.quoteThresholdValue || ''} onChange={(e) => onChange('quoteThresholdValue', e.target.value)} placeholder="e.g. $500" className="h-12 rounded-xl bg-white" />
                     </div>
-                    <RadioGroup value={data.sendUnderThreshold} onValueChange={(v) => onChange('sendUnderThreshold', v)} className="flex gap-6">
-                      {["Yes", "No", "Maybe, to be discussed"].map(opt => (
-                        <div key={opt} className="flex items-center space-x-2"><RadioGroupItem value={opt} id={`thresh-${opt}`} /><Label htmlFor={`thresh-${opt}`}>{opt}</Label></div>
-                      ))}
-                    </RadioGroup>
-                    {(data.sendUnderThreshold === 'Yes' || data.sendUnderThreshold === 'Maybe, to be discussed') && (
-                      <div className="pt-2 animate-in slide-in-from-top-2">
-                        <Label className="font-bold text-amber-900">What is the maximum quote value or rule? *</Label>
-                        <Input value={data.thresholdRule || ''} onChange={(e) => onChange('thresholdRule', e.target.value)} placeholder="e.g. $500 max for repeat clients" className="h-12 rounded-xl bg-white border-amber-300" />
-                      </div>
-                    )}
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Applicable service types / Restrictions</Label>
+                      <Input value={data.quoteThresholdRestrictions || ''} onChange={(e) => onChange('quoteThresholdRestrictions', e.target.value)} placeholder="e.g. Only repeat maintenance" className="h-12 rounded-xl bg-white" />
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
-              <div className="space-y-2"><Label className="font-bold">Are there any quote types we must NEVER send without approval?</Label><Textarea value={data.neverSendWithoutApproval || ''} onChange={(e) => onChange('neverSendWithoutApproval', e.target.value)} className="min-h-[80px] rounded-2xl" /></div>
-              <div className="space-y-2"><Label className="font-bold">Are there any prices, discounts, or claims we should avoid?</Label><Textarea value={data.avoidClaims || ''} onChange={(e) => onChange('avoidClaims', e.target.value)} className="min-h-[80px] rounded-2xl" /></div>
+              <div className="space-y-4 pt-10 border-t">
+                <Label className="font-bold">Can Bid Manager respond to marketplace leads without approval under agreed rules?</Label>
+                <RadioGroup value={data.marketplaceAuthority} onValueChange={(v) => onChange('marketplaceAuthority', v)} className="flex flex-wrap gap-4">
+                  {['Yes', 'No', 'Maybe'].map(opt => (
+                    <div key={opt} className={`flex items-center space-x-2 bg-white border-2 p-3 px-5 rounded-2xl hover:bg-slate-50 transition-all cursor-pointer ${data.marketplaceAuthority === opt ? 'border-primary bg-primary/5' : 'border-slate-100'}`}>
+                      <RadioGroupItem value={opt} id={`mthresh-${opt}`} />
+                      <Label htmlFor={`mthresh-${opt}`} className="cursor-pointer font-bold">{opt}</Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+                {(data.marketplaceAuthority === 'Yes' || data.marketplaceAuthority === 'Maybe') && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 p-6 bg-slate-50 rounded-2xl animate-in slide-in-from-top-4 duration-500">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Marketplace response rules / Max lead value</Label>
+                      <Input value={data.marketplaceThresholdValue || ''} onChange={(e) => onChange('marketplaceThresholdValue', e.target.value)} placeholder="e.g. $1000 max" className="h-12 rounded-xl bg-white" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Platforms covered</Label>
+                      <Input value={data.marketplacePlatforms || ''} onChange={(e) => onChange('marketplacePlatforms', e.target.value)} placeholder="e.g. Airtasker, Bark" className="h-12 rounded-xl bg-white" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-[3px] border-slate-900 rounded-[2.5rem] shadow-2xl overflow-hidden bg-white">
+            <div className="p-10 border-b bg-slate-900 text-white flex items-center gap-4">
+              <div className="p-3 bg-white/10 rounded-2xl"><ShieldCheck className="w-8 h-8 text-accent" /></div>
+              <div className="space-y-1">
+                <h3 className="text-2xl font-bold">Final Authority Confirmation</h3>
+                <p className="text-slate-400 text-sm">Please review and acknowledge the following statements.</p>
+              </div>
+            </div>
+            <CardContent className="p-10 space-y-4">
+              {[
+                { id: 'relied', label: 'I understand that Bid Manager will rely on the authority settings provided in this section.' },
+                { id: 'auto', label: 'I understand that actions marked as “Authorised” may be performed without further approval unless otherwise stated.' },
+                { id: 'consequence', label: 'I understand that pricing, submissions, paid platforms, and contract terms may carry commercial or legal consequences.' },
+                { id: 'accurate', label: 'I confirm the authority settings provided are accurate to the best of my knowledge.' },
+              ].map((ack) => (
+                <div 
+                  key={ack.id} 
+                  className={`flex items-start space-x-6 p-6 rounded-[2rem] border-2 transition-all cursor-pointer group ${data.acks?.[ack.id] ? 'border-primary bg-primary/5 shadow-inner' : 'border-slate-50 hover:border-slate-200'}`}
+                  onClick={() => {
+                    const current = data.acks || {};
+                    onChange('acks', { ...current, [ack.id]: !current[ack.id] });
+                  }}
+                >
+                  <Checkbox checked={data.acks?.[ack.id]} onCheckedChange={() => {}} className="mt-1 w-6 h-6 rounded-lg" />
+                  <Label className="text-sm font-bold leading-snug cursor-pointer flex-1 text-slate-700 group-hover:text-slate-900">{ack.label} *</Label>
+                </div>
+              ))}
             </CardContent>
           </Card>
         </div>
