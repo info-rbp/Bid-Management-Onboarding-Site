@@ -24,7 +24,6 @@ import {
   Award,
   ShoppingCart,
   Users,
-  CheckCircle,
   Target,
   DollarSign,
   Globe,
@@ -40,24 +39,15 @@ import {
   HelpCircle,
   MapPin,
   Sparkles,
-  ImageIcon,
   FileStack,
   MessageSquareQuote,
   Target as TargetIcon,
   Flag,
-  TrendingUp,
   SlidersHorizontal,
-  Banknote,
-  Scale as ScaleIcon,
-  History,
-  FileWarning,
   Plus,
-  Trash2,
   Info,
-  ExternalLink,
   ShieldAlert,
   Wallet,
-  Bell,
   Monitor
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -548,7 +538,7 @@ export default function OnboardingStepPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" onClick={() => handleSave(false)} className="gap-2 rounded-lg border-2"><Save className="w-3 h-3" />Save Draft</Button>
+            <Button variant="outline" size="sm" onClick={() => handleSave(false)} className="gap-2 rounded-lg border-2">Save Draft</Button>
             <Button size="sm" onClick={() => handleSave(true)} className="gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20">{currentStepIndex === STEPS.length - 1 ? 'Finish Onboarding' : 'Next Step'} <ChevronRight className="w-4 h-4" /></Button>
           </div>
         </header>
@@ -576,7 +566,7 @@ export default function OnboardingStepPage() {
 
 function StepContent({ stepId, data, onChange }: { stepId: string, data: any, onChange: (field: string, value: any) => void }) {
   switch (stepId) {
-    case 'welcome':
+    case 'welcome': {
       return (
         <div className="space-y-10">
           <div className="space-y-4">
@@ -606,15 +596,16 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
                   { id: 'ack6', label: 'I understand I can save my progress and return later to continue from where I left off.' },
                   { id: 'ack7', label: 'I understand that the quality and completeness of the information I provide will affect the accuracy of the documents, recommendations, profiles, and action plans Bid Manager prepares.' }
                 ].map((ack) => (
-                  <div key={ack.id} className="flex items-start space-x-4 p-4 rounded-2xl hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => onChange(ack.id, !data[ack.id])}><Checkbox id={ack.id} checked={data[ack.id] || false} onCheckedChange={() => {}} className="mt-0.5"/><Label htmlFor={ack.id} className="text-sm leading-snug cursor-pointer font-medium text-slate-700">{ack.label}</Label></div>
+                  <div key={ack.id} className="flex items-start space-x-4 p-4 rounded-2xl hover:bg-slate-50 transition-colors cursor-pointer" onClick={(e) => { e.stopPropagation(); onChange(ack.id, !data[ack.id]); }}><Checkbox id={ack.id} checked={data[ack.id] || false} onCheckedChange={(val) => onChange(ack.id, !!val)} className="mt-0.5"/><Label htmlFor={ack.id} className="text-sm leading-snug cursor-pointer font-medium text-slate-700">{ack.label}</Label></div>
                 ))}
               </div>
             </div>
           </div>
         </div>
       );
+    }
 
-    case 'snapshot':
+    case 'snapshot': {
       const bizDetails = data.businessDetails || {};
       const contactSetup = data.contactSetup || { numberOfContacts: 2, contacts: [] };
       const contacts = contactSetup.contacts || [];
@@ -663,8 +654,9 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
           </div>
         </div>
       );
+    }
 
-    case 'triage':
+    case 'triage': {
       const hasOpp = data.hasLiveOpportunity;
       const details = data.opportunityDetails || { supportRequired: [] };
       const handleDetailsChange = (field: string, val: any) => onChange('opportunityDetails', { ...details, [field]: val });
@@ -682,8 +674,9 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
           {hasOpp === 'Yes' && (<Card className="border border-amber-200 bg-amber-50/5 rounded-3xl overflow-hidden shadow-sm"><CardContent className="p-8 space-y-10"><div className="grid grid-cols-1 md:grid-cols-2 gap-8"><div className="space-y-3"><Label className="font-bold text-slate-700">Opportunity Type *</Label><Select value={details.opportunityType || ''} onValueChange={(val) => handleDetailsChange('opportunityType', val)}><SelectTrigger className="h-12 rounded-xl bg-white"><SelectValue placeholder="Select type" /></SelectTrigger><SelectContent>{["Government tender", "Private tender", "Grant", "Panel or supplier registration", "Marketplace lead", "Direct proposal", "Quote request", "Other"].map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent></Select></div><div className="space-y-3"><Label className="font-bold text-slate-700">Opportunity Name *</Label><Input value={details.opportunityTitle || ''} onChange={(e) => handleDetailsChange('opportunityTitle', e.target.value)} className="h-12 rounded-xl bg-white" /></div><div className="space-y-3"><Label className="font-bold text-slate-700">Deadline *</Label><Input type="date" value={details.deadlineDate || ''} onChange={(e) => handleDetailsChange('deadlineDate', e.target.value)} className="h-12 rounded-xl bg-white" /></div></div><div className="space-y-6"><Label className="font-bold text-slate-800 text-lg">What support do you need? *</Label><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">{["Review only", "Draft response", "Prepare pricing", "Submit on our behalf", "Unsure"].map((opt) => (<div key={opt} className={`flex items-center space-x-2 p-4 rounded-xl border cursor-pointer ${details.supportRequired?.includes(opt) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleSupportToggle(opt)}><Checkbox id={`support-${opt}`} checked={details.supportRequired?.includes(opt)} onCheckedChange={() => {}} /><Label htmlFor={`support-${opt}`} className="text-xs font-medium cursor-pointer">{opt}</Label></div>))}</div></div></CardContent></Card>)}
         </div>
       );
+    }
 
-    case 'selection':
+    case 'selection': {
       const selectedServices = data.selectedServices || [];
       const handleServiceToggle = (service: string) => {
         const next = selectedServices.includes(service) ? selectedServices.filter((s: string) => s !== service) : [...selectedServices, service];
@@ -700,13 +693,14 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
       };
       return (
         <div className="space-y-12">
-          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Service Selection & Engagement Scope</h2><p className="text-slate-500 text-lg leading-relaxed">Select the services you want support with.</p></div>
+          <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Service Selection & Engagement Scope</h2><p className="text-slate-500 text-lg leading-relaxed">Select the Bid Manager services you want support with.</p></div>
           <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm"><CardContent className="p-8 space-y-6"><Label className="text-lg font-bold text-slate-800">Which services would you like support with? *</Label><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{["Government Tenders", "Private Tenders", "Panel or Supplier Registrations", "Grants", "Marketplace Leads", "Direct Proposals", "Quote Requests", "Unsure, please recommend"].map((service) => (<div key={service} className={`flex items-center space-x-3 p-4 rounded-2xl border cursor-pointer ${selectedServices.includes(service) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleServiceToggle(service)}><Checkbox id={`service-${service}`} checked={selectedServices.includes(service)} onCheckedChange={() => {}} /><Label htmlFor={`service-${service}`} className="text-sm font-medium cursor-pointer">{service}</Label></div>))}</div></CardContent></Card>
           <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm"><CardContent className="p-8 space-y-6"><Label className="font-bold text-slate-700">Highest Priority Service *</Label><Select value={data.highestPriorityService || ''} onValueChange={(val) => onChange('highestPriorityService', val)}><SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Select priority" /></SelectTrigger><SelectContent>{["Government Tenders", "Private Tenders", "Grants", "Marketplace Leads", "Direct Proposals", "Quote Requests", "Unsure"].map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent></Select><Label className="font-bold text-slate-700 pt-4 block">Why are these services important now? *</Label><Textarea value={data.reasonForSupport || ''} onChange={(e) => onChange('reasonForSupport', e.target.value)} className="min-h-[120px] rounded-2xl" /><Label className="font-bold text-slate-700 pt-4 block text-lg">How involved do you want Bid Manager to be? *</Label><RadioGroup value={data.supportLevel || ''} onValueChange={(val) => onChange('supportLevel', val)} className="space-y-3">{["Full end-to-end management", "Opportunity review only", "Drafting only", "Submission support only", "Unsure"].map((lvl) => (<div key={lvl} className="relative"><RadioGroupItem value={lvl} id={`lvl-${lvl}`} className="peer sr-only" /><Label htmlFor={`lvl-${lvl}`} className="flex items-center p-4 border-2 rounded-2xl cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-slate-50 font-medium text-sm">{lvl}</Label></div>))}</RadioGroup></CardContent></Card>
         </div>
       );
+    }
 
-    case 'profile':
+    case 'profile': {
       const overview = data.businessOverview || {};
       const valProp = data.valueProposition || {};
       const handleOverviewChange = (field: string, val: string) => onChange('businessOverview', { ...overview, [field]: val });
@@ -723,8 +717,9 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
           <Card className="border border-slate-200 rounded-3xl shadow-sm"><div className="p-8 border-b bg-slate-50/50 font-bold text-xl flex items-center gap-3"><Sparkles className="w-5 h-5 text-primary"/>Value Proposition</div><CardContent className="p-8 space-y-6"><Label className="font-bold text-slate-700">What outcomes do clients receive? *</Label><Textarea value={valProp.clientOutcomes || ''} onChange={(e) => handleValPropChange('clientOutcomes', e.target.value)} className="min-h-[100px] rounded-2xl" /><Label className="font-bold text-slate-700">“Clients choose us because...” *</Label><Textarea value={valProp.clientsChooseUsBecause || ''} onChange={(e) => handleValPropChange('clientsChooseUsBecause', e.target.value)} className="min-h-[80px] rounded-2xl" /><Label className="font-bold text-slate-700">Top three things clients should remember *</Label><div className="space-y-3">{[0, 1, 2].map(i => <Input key={i} value={(valProp.topThreePoints || [])[i] || ''} onChange={(e) => handlePointChange(i, e.target.value)} placeholder={`Point ${i + 1}`} className="h-12 rounded-xl" />)}</div></CardContent></Card>
         </div>
       );
+    }
 
-    case 'menu':
+    case 'menu': {
       const setup = data.serviceSetup || { services: [] };
       const numServicesRaw = setup.numberOfServices || '3';
       const numServices = numServicesRaw === '6 or more' ? 6 : (parseInt(numServicesRaw) || 3);
@@ -741,8 +736,9 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
           <div className="space-y-8">{Array.from({ length: numServices }).map((_, i) => (<div key={i} className="p-8 border rounded-[2rem] bg-slate-50/30 space-y-6"><h4 className="font-bold text-lg">Service {i + 1}</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-2"><Label className="font-bold">Name *</Label><Input value={(setup.services || [])[i]?.name || ''} onChange={(e) => handleSChange(i, 'name', e.target.value)} className="h-12 rounded-xl bg-white" /></div><div className="space-y-2"><Label className="font-bold">Pricing Method *</Label><Select value={(setup.services || [])[i]?.pricingMethod || ''} onValueChange={(v) => handleSChange(i, 'pricingMethod', v)}><SelectTrigger className="h-12 rounded-xl bg-white"><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{["Hourly rate", "Fixed fee", "Package", "Quote", "Other"].map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent></Select></div></div><div className="space-y-2"><Label className="font-bold">Description *</Label><Textarea value={(setup.services || [])[i]?.description || ''} onChange={(e) => handleSChange(i, 'description', e.target.value)} className="min-h-[80px] rounded-2xl bg-white" /></div></div>))}</div></CardContent></Card>
         </div>
       );
+    }
 
-    case 'capacity':
+    case 'capacity': {
       const team = data.teamSetup || { members: [] };
       const numMembersRaw = team.numberOfMembers || '2';
       const numMembers = numMembersRaw === '6 or more' ? 6 : (parseInt(numMembersRaw) || 2);
@@ -759,8 +755,9 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
           <div className="space-y-8">{Array.from({ length: numMembers }).map((_, i) => (<div key={i} className="p-8 border rounded-[2rem] bg-slate-50/30 space-y-6"><h4 className="font-bold text-lg">Member {i + 1}</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-2"><Label className="font-bold">Full Name *</Label><Input value={(team.members || [])[i]?.fullName || ''} onChange={(e) => handleMChange(i, 'fullName', e.target.value)} className="h-12 rounded-xl bg-white" /></div><div className="space-y-2"><Label className="font-bold">Role *</Label><Input value={(team.members || [])[i]?.roleTitle || ''} onChange={(e) => handleMChange(i, 'roleTitle', e.target.value)} className="h-12 rounded-xl bg-white" /></div></div></div>))}</div></CardContent></Card>
         </div>
       );
+    }
 
-    case 'proof':
+    case 'proof': {
       const proofSetup = data.caseStudySetup || { numberOfCaseStudies: '1', caseStudies: [] };
       const studiesNumRaw = proofSetup.numberOfCaseStudies || '1';
       const studiesNum = studiesNumRaw === 'None yet' ? 0 : (studiesNumRaw === '5 or more' ? 5 : parseInt(studiesNumRaw));
@@ -784,8 +781,6 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
         const next = current.includes(opt) ? current.filter((o: string) => o !== opt) : [...current, opt];
         onChange('reviewsTestimonials', { ...reviews, locations: next });
       };
-      const gaps = data.evidenceGaps || {};
-
       return (
         <div className="space-y-12">
           <div className="space-y-4">
@@ -864,8 +859,9 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
           </Card>
         </div>
       );
+    }
 
-    case 'goals':
+    case 'goals': {
       const bizGoals = data.businessGoals || { selectedGoals: [] };
       const channels = data.opportunityChannels || { selectedChannels: [] };
       const valueRules = data.valueRules || { lowerMarginReasons: [] };
@@ -995,8 +991,9 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
           </Card>
         </div>
       );
+    }
 
-    case 'commercial':
+    case 'commercial': {
       const pricing = data.pricingMethod || { methods: [] };
       const commRules = data.commercialRules || { paymentTerms: [] };
       const approvalRules = data.pricingApproval || {};
@@ -1057,8 +1054,9 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
           </Card>
         </div>
       );
+    }
 
-    case 'platform':
+    case 'platform': {
       const existing = data.existingPlatforms || [];
       const setup = data.setupPlatforms || [];
       const accSec = data.accessSecurity || {};
@@ -1074,7 +1072,7 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
         <div className="space-y-12">
           <div className="space-y-4">
             <h2 className="text-4xl font-headline font-bold text-slate-900">Platform and Channel Setup</h2>
-            <p className="text-slate-500 text-lg leading-relaxed">Tell us which platforms you use and how we should manage them.</p>
+            <p className="text-slate-500 text-lg leading-relaxed">Tell us which platforms and channels you already use, which ones need setup or improvement, who manages access, and what platform costs or lead fees you are willing to consider.</p>
           </div>
 
           <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
@@ -1161,7 +1159,7 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
               <div className="space-y-4">
                 <Label className="font-bold">Willing to pay for platform costs? *</Label>
                 <RadioGroup value={costs.willingToPay} onValueChange={(v) => onChange('costsAlerts', { ...costs, willingToPay: v })} className="flex flex-wrap gap-6">
-                  {["Yes", "No", "With approval", "Depends"].map(opt => <div key={opt} className="flex items-center space-x-2"><RadioGroupItem value={opt} id={`pay-${opt}`} /><Label htmlFor={`pay-${opt}`}>{opt}</Label></div>)}
+                  {["Yes", "No", "Maybe, with approval", "Depends"].map(opt => <div key={opt} className="flex items-center space-x-2"><RadioGroupItem value={opt} id={`pay-${opt}`} /><Label htmlFor={`pay-${opt}`}>{opt}</Label></div>)}
                 </RadioGroup>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1172,6 +1170,7 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
           </Card>
         </div>
       );
+    }
 
     default:
       return (
