@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -53,7 +52,8 @@ import {
   FileCheck,
   History,
   AlertTriangle,
-  UploadCloud
+  UploadCloud,
+  ArrowRight
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -153,6 +153,21 @@ const READINESS_COLUMNS = [
   "Do not have",
   "Unsure",
   "Not applicable"
+];
+
+const BUYER_TYPES = [
+  "Local government",
+  "State government",
+  "Federal government",
+  "Universities",
+  "Schools",
+  "Hospitals/health services",
+  "Mining/resources",
+  "Construction companies",
+  "Corporate buyers",
+  "Not-for-profits",
+  "Small business buyers",
+  "Other"
 ];
 
 export default function OnboardingStepPage() {
@@ -287,6 +302,13 @@ export default function OnboardingStepPage() {
             licenceDetails: { numberOfLicences: '1', licences: [] },
             practicalProcesses: { writtenPolicies: [] },
             complianceIssues: ''
+          });
+        } else if (sid === 'readiness') {
+          setFormData({
+            tenderExperience: { submittedTypes: [] },
+            targetOpportunities: { targetBuyers: [] },
+            readinessCheck: {},
+            supplierSetup: {}
           });
         } else {
           setFormData({});
@@ -478,6 +500,20 @@ export default function OnboardingStepPage() {
           if (!policies[i]?.type || !policies[i]?.expiryDate) return `Please complete Policy ${i + 1} type and expiry.`;
         }
       }
+    }
+
+    if (sid === 'readiness') {
+      const exp = data.tenderExperience || {};
+      const opps = data.targetOpportunities || {};
+      const read = data.readinessCheck || {};
+
+      if (!exp.status) return "Please answer the tender experience question.";
+      if (exp.status === 'Yes' && !exp.submittedTypes?.length) return "Please select types of tenders submitted.";
+      if (!opps.targetBuyers?.length) return "Please select target buyer types.";
+      if (!opps.preferredValueRange) return "Preferred contract value range is required.";
+      if (!read.submissionApprover) return "Please specify who approves final tender submissions.";
+      if (!read.contractTermsApprover) return "Please specify who approves contract terms.";
+      if (!read.risksToWatch) return "Please specify tender risks to watch for.";
     }
 
     return null;
@@ -840,11 +876,6 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
         onChange('caseStudySetup', { ...proofSetup, caseStudies: next });
       };
       const reviews = data.reviewsTestimonials || { hasReviews: '', locations: [], links: '' };
-      const handleReviewLocToggle = (opt: string) => {
-        const current = reviews.locations || [];
-        const next = current.includes(opt) ? current.filter((o: string) => o !== opt) : [...current, opt];
-        onChange('reviewsTestimonials', { ...reviews, locations: next });
-      };
       return (
         <div className="space-y-12">
           <div className="space-y-4">
@@ -891,7 +922,6 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
                             <SelectContent>{["Residential", "Commercial", "Government", "Corporate", "Not-for-profit", "Small business", "Confidential", "Other"].map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent>
                           </Select>
                         </div>
-                        <div className="space-y-2"><Label className="font-bold">Approximate Value</Label><Input value={study.approxValue || ''} onChange={(e) => handleStudyChange(i, 'approxValue', e.target.value)} placeholder="e.g. $500k" className="h-12 rounded-xl bg-white" /></div>
                       </div>
                       <div className="space-y-2"><Label className="font-bold">What did your business deliver? *</Label><Textarea value={study.deliveredSummary || ''} onChange={(e) => handleStudyChange(i, 'deliveredSummary', e.target.value)} className="min-h-[80px] rounded-2xl bg-white" /></div>
                       <div className="space-y-2"><Label className="font-bold">What was the result or outcome? *</Label><Textarea value={study.outcomeSummary || ''} onChange={(e) => handleStudyChange(i, 'outcomeSummary', e.target.value)} className="min-h-[80px] rounded-2xl bg-white" /></div>
@@ -1108,12 +1138,6 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
                 </div>
               </div>
               <div className="space-y-2"><Label className="font-bold">Who approves pricing? *</Label><Input value={approvalRules.approverName || ''} onChange={(e) => onChange('pricingApproval', { ...approvalRules, approverName: e.target.value })} className="h-12 rounded-xl" /></div>
-              <div className="space-y-4">
-                <Label className="font-bold">Drafting Authority *</Label>
-                <RadioGroup value={approvalRules.draftAuthority} onValueChange={(v) => onChange('pricingApproval', { ...approvalRules, draftAuthority: v })}>
-                  {[{v: 'Yes', l: 'Yes'}, {v: 'No', l: 'No'}, {v: 'ApprovedOnly', l: 'Yes, but must be approved'}].map(opt => <div key={opt.v} className="flex items-center space-x-2"><RadioGroupItem value={opt.v} id={`da-${opt.v}`} /><Label htmlFor={`da-${opt.v}`}>{opt.l}</Label></div>)}
-                </RadioGroup>
-              </div>
             </CardContent>
           </Card>
         </div>
@@ -1153,20 +1177,6 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
                   </div>
                 ))}
               </div>
-              {existing.filter((p: string) => p !== 'None' && p !== 'Unsure').map((p: string) => (
-                <div key={p} className="p-6 border rounded-2xl bg-slate-50/30 space-y-4 animate-in fade-in slide-in-from-top-2">
-                  <h4 className="font-bold text-sm text-primary flex items-center gap-2"><Badge variant="outline">{p}</Badge> Details</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2"><Label className="text-xs font-bold">Account Status</Label>
-                      <Select value={data.platformDetails?.[p]?.status || ''} onValueChange={(v) => onChange('platformDetails', { ...data.platformDetails, [p]: { ...data.platformDetails?.[p], status: v } })}>
-                        <SelectTrigger className="h-10 bg-white"><SelectValue placeholder="Select status" /></SelectTrigger>
-                        <SelectContent>{["Active", "Incomplete", "Not used recently", "Needs updating", "Unsure"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2"><Label className="text-xs font-bold">Who manages this?</Label><Input value={data.platformDetails?.[p]?.manager || ''} onChange={(e) => onChange('platformDetails', { ...data.platformDetails, [p]: { ...data.platformDetails?.[p], manager: e.target.value } })} className="h-10 bg-white" /></div>
-                  </div>
-                </div>
-              ))}
             </CardContent>
           </Card>
 
@@ -1226,10 +1236,6 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
                   {["Yes", "No", "Maybe, with approval", "Depends"].map(opt => <div key={opt} className="flex items-center space-x-2"><RadioGroupItem value={opt} id={`pay-${opt}`} /><Label htmlFor={`pay-${opt}`}>{opt}</Label></div>)}
                 </RadioGroup>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2"><Label className="font-bold">Monthly Budget</Label><Input value={costs.monthlyBudget || ''} onChange={(e) => onChange('costsAlerts', { ...costs, monthlyBudget: e.target.value })} placeholder="e.g. $200" className="h-12 rounded-xl" /></div>
-                <div className="space-y-2"><Label className="font-bold">Alert Recipients</Label><Input value={costs.notificationRecipients || ''} onChange={(e) => onChange('costsAlerts', { ...costs, notificationRecipients: e.target.value })} placeholder="Email addresses" className="h-12 rounded-xl" /></div>
-              </div>
             </CardContent>
           </Card>
         </div>
@@ -1239,7 +1245,6 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
     case 'compliance': {
       const checklist = data.readinessChecklist || {};
       const insurance = data.insuranceDetails || { policies: [] };
-      const licences = data.licenceDetails || { licences: [] };
       const practical = data.practicalProcesses || { writtenPolicies: [] };
 
       const handleChecklistChange = (item: string, val: string) => {
@@ -1251,13 +1256,6 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
         if (!next[idx]) next[idx] = {};
         next[idx] = { ...next[idx], [field]: val };
         onChange('insuranceDetails', { ...insurance, policies: next });
-      };
-
-      const handleLicenceChange = (idx: number, field: string, val: any) => {
-        const next = [...(licences.licences || [])];
-        if (!next[idx]) next[idx] = {};
-        next[idx] = { ...next[idx], [field]: val };
-        onChange('licenceDetails', { ...licences, licences: next });
       };
 
       const handlePolicyToggle = (policy: string) => {
@@ -1319,19 +1317,6 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
             </CardContent>
           </Card>
 
-          {potentialGaps.length > 0 && (
-            <Alert className="bg-amber-50 border-amber-200 rounded-2xl">
-              <AlertTriangle className="h-5 w-5 text-amber-600" />
-              <AlertTitle className="font-bold text-amber-900">Action Required: Compliance Gaps</AlertTitle>
-              <AlertDescription className="text-amber-800">
-                <p className="mb-4">The following items have been identified as gaps. These may be required for certain tenders or registrations:</p>
-                <div className="flex flex-wrap gap-2">
-                  {potentialGaps.map(gap => <Badge key={gap} variant="outline" className="bg-white border-amber-200 text-amber-700">{gap}</Badge>)}
-                </div>
-              </AlertDescription>
-            </Alert>
-          )}
-
           <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
             <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
               <div className="p-2 bg-primary/10 rounded-xl"><ShieldCheck className="w-5 h-5 text-primary" /></div>
@@ -1361,13 +1346,7 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
                             <SelectContent>{["Public Liability", "Professional Indemnity", "Workers Compensation", "Cyber Insurance", "Motor Vehicle", "Other"].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                           </Select>
                         </div>
-                        <div className="space-y-2"><Label className="font-bold">Insurer</Label><Input value={policy.insurer || ''} onChange={(e) => handleInsuranceChange(i, 'insurer', e.target.value)} className="h-12 rounded-xl bg-white" /></div>
-                        <div className="space-y-2"><Label className="font-bold">Coverage Amount</Label><Input value={policy.amount || ''} onChange={(e) => handleInsuranceChange(i, 'amount', e.target.value)} placeholder="e.g. $10M" className="h-12 rounded-xl bg-white" /></div>
                         <div className="space-y-2"><Label className="font-bold">Expiry Date *</Label><Input type="date" value={policy.expiryDate || ''} onChange={(e) => handleInsuranceChange(i, 'expiryDate', e.target.value)} className="h-12 rounded-xl bg-white" /></div>
-                      </div>
-                      <div className="flex items-center gap-4 p-4 border-2 border-dashed rounded-2xl bg-white/50 cursor-pointer hover:bg-slate-50 transition-colors">
-                        <UploadCloud className="w-8 h-8 text-slate-300" />
-                        <div className="flex-1 text-sm"><p className="font-bold text-slate-600">Upload Certificate of Currency</p><p className="text-slate-400">PDF, JPG or PNG (Max 5MB)</p></div>
                       </div>
                     </div>
                   );
@@ -1401,6 +1380,150 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
                 <Label className="font-bold">Are there any legal, regulatory, or compliance issues we should be aware of? *</Label>
                 <Textarea value={data.complianceIssues || ''} onChange={(e) => onChange('complianceIssues', e.target.value)} className="min-h-[80px] rounded-2xl border-amber-200 bg-amber-50/10" placeholder="If none, write 'None known'..." />
               </div>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    case 'readiness': {
+      const exp = data.tenderExperience || { submittedTypes: [] };
+      const opps = data.targetOpportunities || { targetBuyers: [] };
+      const read = data.readinessCheck || {};
+      const supplier = data.supplierSetup || {};
+
+      const handleExpToggle = (val: string) => {
+        const next = exp.submittedTypes?.includes(val) ? exp.submittedTypes.filter((t: string) => t !== val) : [...(exp.submittedTypes || []), val];
+        onChange('tenderExperience', { ...exp, submittedTypes: next });
+      };
+
+      const handleBuyerToggle = (val: string) => {
+        const next = opps.targetBuyers?.includes(val) ? opps.targetBuyers.filter((t: string) => t !== val) : [...(opps.targetBuyers || []), val];
+        onChange('targetOpportunities', { ...opps, targetBuyers: next });
+      };
+
+      return (
+        <div className="space-y-12">
+          <div className="space-y-4">
+            <h2 className="text-4xl font-headline font-bold text-slate-900">Tender and Supplier Registration Readiness</h2>
+            <p className="text-slate-500 text-lg leading-relaxed">Complete this section if you want support with government tenders, private tenders, supplier registrations, panel applications, or formal procurement opportunities.</p>
+          </div>
+
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><History className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Tender Experience</h3>
+            </div>
+            <CardContent className="p-8 space-y-8">
+              <div className="space-y-4">
+                <Label className="text-lg font-bold">Have you submitted tenders before? *</Label>
+                <RadioGroup value={exp.status} onValueChange={(v) => onChange('tenderExperience', { ...exp, status: v })} className="flex flex-wrap gap-6">
+                  {["Yes", "No", "We have started but not submitted", "Unsure"].map(opt => (
+                    <div key={opt} className="flex items-center space-x-2">
+                      <RadioGroupItem value={opt} id={`exp-${opt}`} />
+                      <Label htmlFor={`exp-${opt}`}>{opt}</Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+
+              {exp.status === 'Yes' && (
+                <div className="space-y-6 pt-4 animate-in fade-in slide-in-from-top-2">
+                  <div className="space-y-4">
+                    <Label className="font-bold">What types have you submitted? *</Label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {["Government tender", "Private tender", "Panel application", "Supplier registration", "Expression of interest", "Request for quote", "Other"].map(t => (
+                        <div key={t} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${exp.submittedTypes?.includes(t) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleExpToggle(t)}>
+                          <Checkbox checked={exp.submittedTypes?.includes(t)} onCheckedChange={() => {}} />
+                          <Label className="text-xs">{t}</Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2"><Label className="font-bold">Number submitted in last 12 months</Label><Input type="number" value={exp.count12Months || ''} onChange={(e) => onChange('tenderExperience', { ...exp, count12Months: e.target.value })} className="h-12 rounded-xl" /></div>
+                    <div className="space-y-2"><Label className="font-bold">Were any successful?</Label><Input value={exp.successHistory || ''} onChange={(e) => onChange('tenderExperience', { ...exp, successHistory: e.target.value })} className="h-12 rounded-xl" /></div>
+                  </div>
+                  <div className="space-y-2"><Label className="font-bold">What feedback did you receive?</Label><Textarea value={exp.feedbackReceived || ''} onChange={(e) => onChange('tenderExperience', { ...exp, feedbackReceived: e.target.value })} className="min-h-[100px] rounded-2xl" /></div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><Target className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Target Procurement Opportunities</h3>
+            </div>
+            <CardContent className="p-8 space-y-8">
+              <div className="space-y-4">
+                <Label className="text-lg font-bold">Which buyer types do you want to target? *</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {BUYER_TYPES.map(b => (
+                    <div key={b} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${opps.targetBuyers?.includes(b) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleBuyerToggle(b)}>
+                      <Checkbox checked={opps.targetBuyers?.includes(b)} onCheckedChange={() => {}} />
+                      <Label className="text-xs">{b}</Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2"><Label className="font-bold">Preferred value range *</Label><Input value={opps.preferredValueRange || ''} onChange={(e) => onChange('targetOpportunities', { ...opps, preferredValueRange: e.target.value })} className="h-12 rounded-xl" /></div>
+                <div className="space-y-2"><Label className="font-bold">Maximum contract value</Label><Input value={opps.maxContractValue || ''} onChange={(e) => onChange('targetOpportunities', { ...opps, maxContractValue: e.target.value })} className="h-12 rounded-xl" /></div>
+              </div>
+              <div className="space-y-2"><Label className="font-bold">Preferred locations or regions</Label><Input value={opps.preferredLocations || ''} onChange={(e) => onChange('targetOpportunities', { ...opps, preferredLocations: e.target.value })} className="h-12 rounded-xl" /></div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><ShieldCheck className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Tender Readiness</h3>
+            </div>
+            <CardContent className="p-8 space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {[{id: 'insuranceReady', label: 'Insurance ready?'}, {id: 'policyReady', label: 'Policies ready?'}, {id: 'termsReady', label: 'Contract terms ready?'}].map(item => (
+                  <div key={item.id} className="space-y-3">
+                    <Label className="font-bold">{item.label}</Label>
+                    <RadioGroup value={read[item.id]} onValueChange={(v) => onChange('readinessCheck', { ...read, [item.id]: v })} className="flex flex-wrap gap-4">
+                      {["Yes", "No", "Somewhat", "Unsure"].map(opt => (
+                        <div key={opt} className="flex items-center space-x-2"><RadioGroupItem value={opt} id={`${item.id}-${opt}`} /><Label htmlFor={`${item.id}-${opt}`}>{opt}</Label></div>
+                      ))}
+                    </RadioGroup>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+                <div className="space-y-2"><Label className="font-bold">Who approves final submissions? *</Label><Input value={read.submissionApprover || ''} onChange={(e) => onChange('readinessCheck', { ...read, submissionApprover: e.target.value })} className="h-12 rounded-xl" /></div>
+                <div className="space-y-2"><Label className="font-bold">Who approves contract terms? *</Label><Input value={read.contractTermsApprover || ''} onChange={(e) => onChange('readinessCheck', { ...read, contractTermsApprover: e.target.value })} className="h-12 rounded-xl" /></div>
+              </div>
+              <div className="space-y-2"><Label className="font-bold">What tender risks should Bid Manager watch for? *</Label><Textarea value={read.risksToWatch || ''} onChange={(e) => onChange('readinessCheck', { ...read, risksToWatch: e.target.value })} className="min-h-[100px] rounded-2xl" /></div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><Building2 className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Supplier Registration Setup</h3>
+            </div>
+            <CardContent className="p-8 space-y-8">
+              <div className="space-y-4">
+                <Label className="text-lg font-bold">Are you interested in supplier registrations? *</Label>
+                <RadioGroup value={supplier.interested} onValueChange={(v) => onChange('supplierSetup', { ...supplier, interested: v })} className="flex flex-wrap gap-6">
+                  {["Yes", "No", "Maybe", "Unsure"].map(opt => (
+                    <div key={opt} className="flex items-center space-x-2">
+                      <RadioGroupItem value={opt} id={`sup-${opt}`} />
+                      <Label htmlFor={`sup-${opt}`}>{opt}</Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+              {(supplier.interested === 'Yes' || supplier.interested === 'Maybe') && (
+                <div className="space-y-4 pt-4 animate-in fade-in slide-in-from-top-2">
+                  <div className="space-y-2"><Label className="font-bold">Preferred portals or panels</Label><Textarea value={supplier.preferredPortals || ''} onChange={(e) => onChange('supplierSetup', { ...supplier, preferredPortals: e.target.value })} className="min-h-[80px] rounded-2xl" /></div>
+                  <div className="space-y-2"><Label className="font-bold">Existing registrations</Label><Textarea value={supplier.existingRegistrations || ''} onChange={(e) => onChange('supplierSetup', { ...supplier, existingRegistrations: e.target.value })} className="min-h-[80px] rounded-2xl" /></div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
