@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -48,7 +49,11 @@ import {
   Info,
   ShieldAlert,
   Wallet,
-  Monitor
+  Monitor,
+  FileCheck,
+  History,
+  AlertTriangle,
+  UploadCloud
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -115,6 +120,39 @@ const PLATFORM_OPTIONS = [
   "Airtasker", "Bark", "ServiceSeeking", "Oneflare", "hipages", "Upwork", "Freelancer", "Fiverr", 
   "TenderLink", "AusTender", "GrantConnect", "Local council portals", "State government tender portals", 
   "Corporate supplier portals", "LinkedIn", "Other", "None", "Unsure"
+];
+
+const COMPLIANCE_ITEMS = [
+  "ABN/ACN records",
+  "Public liability insurance",
+  "Professional indemnity insurance",
+  "Workers compensation insurance",
+  "Cyber insurance",
+  "Motor vehicle insurance",
+  "Industry licences",
+  "Staff tickets or licences",
+  "Police checks",
+  "Working with Children Checks",
+  "NDIS screening checks",
+  "ISO certifications",
+  "WHS policy",
+  "Quality policy",
+  "Environmental policy",
+  "Privacy policy",
+  "Risk management process",
+  "Complaints handling process",
+  "Business continuity plan",
+  "Modern slavery statement",
+  "Capability statement",
+  "Pricing schedule"
+];
+
+const READINESS_COLUMNS = [
+  "Available and current",
+  "Available but needs updating",
+  "Do not have",
+  "Unsure",
+  "Not applicable"
 ];
 
 export default function OnboardingStepPage() {
@@ -241,6 +279,14 @@ export default function OnboardingStepPage() {
             setupDetails: {},
             accessSecurity: { credentialManager: '', preferredAccessMethod: '', passwordAcknowledgement: false },
             costsAlerts: { willingToPay: '', monthlyBudget: '', notificationRecipients: '', restrictedPlatforms: '', profileStyleNotes: '' }
+          });
+        } else if (sid === 'compliance') {
+          setFormData({
+            readinessChecklist: {},
+            insuranceDetails: { numberOfPolicies: '1', policies: [] },
+            licenceDetails: { numberOfLicences: '1', licences: [] },
+            practicalProcesses: { writtenPolicies: [] },
+            complianceIssues: ''
           });
         } else {
           setFormData({});
@@ -414,6 +460,24 @@ export default function OnboardingStepPage() {
       if (!data.accessSecurity?.preferredAccessMethod) return "Please select a preferred access method.";
       if (!data.accessSecurity?.passwordAcknowledgement) return "Please acknowledge the password safety policy.";
       if (!data.costsAlerts?.willingToPay) return "Please specify your preference regarding platform costs.";
+    }
+
+    if (sid === 'compliance') {
+      const checklist = data.readinessChecklist || {};
+      const practical = data.practicalProcesses || {};
+      const insurance = data.insuranceDetails || {};
+
+      if (Object.keys(checklist).length < COMPLIANCE_ITEMS.length) return "Please complete the readiness checklist.";
+      if (!practical.writtenPolicies?.length && !practical.practicalDescription) return "Please describe your practical processes or select written policies.";
+      if (!data.complianceIssues) return "Please answer the compliance issues field (write 'None known' if applicable).";
+      
+      if (insurance.numberOfPolicies && insurance.numberOfPolicies !== '0') {
+        const num = insurance.numberOfPolicies === '4 or more' ? 4 : parseInt(insurance.numberOfPolicies);
+        const policies = insurance.policies || [];
+        for (let i = 0; i < num; i++) {
+          if (!policies[i]?.type || !policies[i]?.expiryDate) return `Please complete Policy ${i + 1} type and expiry.`;
+        }
+      }
     }
 
     return null;
@@ -695,7 +759,7 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
         <div className="space-y-12">
           <div className="space-y-4"><h2 className="text-4xl font-headline font-bold text-slate-900">Service Selection & Engagement Scope</h2><p className="text-slate-500 text-lg leading-relaxed">Select the Bid Manager services you want support with.</p></div>
           <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm"><CardContent className="p-8 space-y-6"><Label className="text-lg font-bold text-slate-800">Which services would you like support with? *</Label><div className="grid grid-cols-1 md:grid-cols-2 gap-4">{["Government Tenders", "Private Tenders", "Panel or Supplier Registrations", "Grants", "Marketplace Leads", "Direct Proposals", "Quote Requests", "Unsure, please recommend"].map((service) => (<div key={service} className={`flex items-center space-x-3 p-4 rounded-2xl border cursor-pointer ${selectedServices.includes(service) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleServiceToggle(service)}><Checkbox id={`service-${service}`} checked={selectedServices.includes(service)} onCheckedChange={() => {}} /><Label htmlFor={`service-${service}`} className="text-sm font-medium cursor-pointer">{service}</Label></div>))}</div></CardContent></Card>
-          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm"><CardContent className="p-8 space-y-6"><Label className="font-bold text-slate-700">Highest Priority Service *</Label><Select value={data.highestPriorityService || ''} onValueChange={(val) => onChange('highestPriorityService', val)}><SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Select priority" /></SelectTrigger><SelectContent>{["Government Tenders", "Private Tenders", "Grants", "Marketplace Leads", "Direct Proposals", "Quote Requests", "Unsure"].map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent></Select><Label className="font-bold text-slate-700 pt-4 block">Why are these services important now? *</Label><Textarea value={data.reasonForSupport || ''} onChange={(e) => onChange('reasonForSupport', e.target.value)} className="min-h-[120px] rounded-2xl" /><Label className="font-bold text-slate-700 pt-4 block text-lg">How involved do you want Bid Manager to be? *</Label><RadioGroup value={data.supportLevel || ''} onValueChange={(val) => onChange('supportLevel', val)} className="space-y-3">{["Full end-to-end management", "Opportunity review only", "Drafting only", "Submission support only", "Unsure"].map((lvl) => (<div key={lvl} className="relative"><RadioGroupItem value={lvl} id={`lvl-${lvl}`} className="peer sr-only" /><Label htmlFor={`lvl-${lvl}`} className="flex items-center p-4 border-2 rounded-2xl cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-slate-50 font-medium text-sm">{lvl}</Label></div>))}</RadioGroup></CardContent></Card>
+          <Card className="border border-slate-200 rounded-3xl overflow-hidden shadow-sm"><CardContent className="p-8 space-y-6"><Label className="font-bold text-slate-700">Highest Priority Service *</Label><Select value={data.highestPriorityService || ''} onValueChange={(val) => onChange('highestPriorityService', val)}><SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Select priority" /></SelectTrigger><SelectContent>{["Government Tenders", "Private Tenders", "Grants", "Marketplace Leads", "Direct Proposals", "Quote Requests", "Unsure"].map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}</SelectContent></Select><Label className="font-bold text-slate-700 pt-4 block">Why are these services important to your business right now? *</Label><Textarea value={data.reasonForSupport || ''} onChange={(e) => onChange('reasonForSupport', e.target.value)} className="min-h-[120px] rounded-2xl" /><Label className="font-bold text-slate-700 pt-4 block text-lg">How involved do you want Bid Manager to be? *</Label><RadioGroup value={data.supportLevel || ''} onValueChange={(val) => onChange('supportLevel', val)} className="space-y-3">{["Full end-to-end management", "Opportunity review only", "Drafting only", "Submission support only", "Unsure"].map((lvl) => (<div key={lvl} className="relative"><RadioGroupItem value={lvl} id={`lvl-${lvl}`} className="peer sr-only" /><Label htmlFor={`lvl-${lvl}`} className="flex items-center p-4 border-2 rounded-2xl cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-slate-50 font-medium text-sm">{lvl}</Label></div>))}</RadioGroup></CardContent></Card>
         </div>
       );
     }
@@ -1165,6 +1229,177 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2"><Label className="font-bold">Monthly Budget</Label><Input value={costs.monthlyBudget || ''} onChange={(e) => onChange('costsAlerts', { ...costs, monthlyBudget: e.target.value })} placeholder="e.g. $200" className="h-12 rounded-xl" /></div>
                 <div className="space-y-2"><Label className="font-bold">Alert Recipients</Label><Input value={costs.notificationRecipients || ''} onChange={(e) => onChange('costsAlerts', { ...costs, notificationRecipients: e.target.value })} placeholder="Email addresses" className="h-12 rounded-xl" /></div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    case 'compliance': {
+      const checklist = data.readinessChecklist || {};
+      const insurance = data.insuranceDetails || { policies: [] };
+      const licences = data.licenceDetails || { licences: [] };
+      const practical = data.practicalProcesses || { writtenPolicies: [] };
+
+      const handleChecklistChange = (item: string, val: string) => {
+        onChange('readinessChecklist', { ...checklist, [item]: val });
+      };
+
+      const handleInsuranceChange = (idx: number, field: string, val: any) => {
+        const next = [...(insurance.policies || [])];
+        if (!next[idx]) next[idx] = {};
+        next[idx] = { ...next[idx], [field]: val };
+        onChange('insuranceDetails', { ...insurance, policies: next });
+      };
+
+      const handleLicenceChange = (idx: number, field: string, val: any) => {
+        const next = [...(licences.licences || [])];
+        if (!next[idx]) next[idx] = {};
+        next[idx] = { ...next[idx], [field]: val };
+        onChange('licenceDetails', { ...licences, licences: next });
+      };
+
+      const handlePolicyToggle = (policy: string) => {
+        const current = practical.writtenPolicies || [];
+        const next = current.includes(policy) ? current.filter((p: string) => p !== policy) : [...current, policy];
+        onChange('practicalProcesses', { ...practical, writtenPolicies: next });
+      };
+
+      const potentialGaps = COMPLIANCE_ITEMS.filter(item => checklist[item] === 'Do not have' || checklist[item] === 'Unsure');
+
+      return (
+        <div className="space-y-12">
+          <div className="space-y-4">
+            <h2 className="text-4xl font-headline font-bold text-slate-900">Compliance, Insurance and Readiness</h2>
+            <p className="text-slate-500 text-lg leading-relaxed">Confirm which insurance policies, licences, certifications, checks, and policies you already have. This helps us identify readiness gaps before pursuing opportunities.</p>
+          </div>
+
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-primary/10 rounded-xl"><FileCheck className="w-5 h-5 text-primary" /></div>
+                <h3 className="text-xl font-bold text-slate-900">Readiness Checklist</h3>
+              </div>
+              {potentialGaps.length > 0 && (
+                <Badge variant="destructive" className="gap-1 px-3 py-1">
+                  <AlertTriangle className="w-3 h-3" /> {potentialGaps.length} Potential Gaps
+                </Badge>
+              )}
+            </div>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[300px]">Compliance Item</TableHead>
+                    {READINESS_COLUMNS.map(col => (
+                      <TableHead key={col} className="text-center text-[10px] leading-tight px-2">{col}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {COMPLIANCE_ITEMS.map(item => (
+                    <TableRow key={item}>
+                      <TableCell className="font-medium text-xs">{item}</TableCell>
+                      {READINESS_COLUMNS.map(col => (
+                        <TableCell key={col} className="text-center">
+                          <RadioGroup 
+                            value={checklist[item]} 
+                            onValueChange={(v) => handleChecklistChange(item, v)}
+                            className="flex justify-center"
+                          >
+                            <RadioGroupItem value={col} />
+                          </RadioGroup>
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {potentialGaps.length > 0 && (
+            <Alert className="bg-amber-50 border-amber-200 rounded-2xl">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              <AlertTitle className="font-bold text-amber-900">Action Required: Compliance Gaps</AlertTitle>
+              <AlertDescription className="text-amber-800">
+                <p className="mb-4">The following items have been identified as gaps. These may be required for certain tenders or registrations:</p>
+                <div className="flex flex-wrap gap-2">
+                  {potentialGaps.map(gap => <Badge key={gap} variant="outline" className="bg-white border-amber-200 text-amber-700">{gap}</Badge>)}
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><ShieldCheck className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Insurance Details</h3>
+            </div>
+            <CardContent className="p-8 space-y-10">
+              <div className="space-y-4">
+                <Label className="text-lg font-bold">How many insurance policies would you like to add?</Label>
+                <div className="max-w-[240px]">
+                  <Select value={insurance.numberOfPolicies || '1'} onValueChange={(v) => onChange('insuranceDetails', { ...insurance, numberOfPolicies: v })}>
+                    <SelectTrigger className="h-12 rounded-xl"><SelectValue /></SelectTrigger>
+                    <SelectContent>{["0", "1", "2", "3", "4 or more"].map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-8">
+                {Array.from({ length: (insurance.numberOfPolicies === '4 or more' ? 4 : parseInt(insurance.numberOfPolicies || '1')) }).map((_, i) => {
+                  const policy = (insurance.policies || [])[i] || {};
+                  return (
+                    <div key={i} className="p-8 border border-slate-100 bg-slate-50/30 rounded-[2.5rem] space-y-8">
+                      <h4 className="font-bold text-lg">Policy {i + 1}</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2"><Label className="font-bold">Insurance Type *</Label>
+                          <Select value={policy.type || ''} onValueChange={(v) => handleInsuranceChange(i, 'type', v)}>
+                            <SelectTrigger className="h-12 rounded-xl bg-white"><SelectValue placeholder="Select type" /></SelectTrigger>
+                            <SelectContent>{["Public Liability", "Professional Indemnity", "Workers Compensation", "Cyber Insurance", "Motor Vehicle", "Other"].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2"><Label className="font-bold">Insurer</Label><Input value={policy.insurer || ''} onChange={(e) => handleInsuranceChange(i, 'insurer', e.target.value)} className="h-12 rounded-xl bg-white" /></div>
+                        <div className="space-y-2"><Label className="font-bold">Coverage Amount</Label><Input value={policy.amount || ''} onChange={(e) => handleInsuranceChange(i, 'amount', e.target.value)} placeholder="e.g. $10M" className="h-12 rounded-xl bg-white" /></div>
+                        <div className="space-y-2"><Label className="font-bold">Expiry Date *</Label><Input type="date" value={policy.expiryDate || ''} onChange={(e) => handleInsuranceChange(i, 'expiryDate', e.target.value)} className="h-12 rounded-xl bg-white" /></div>
+                      </div>
+                      <div className="flex items-center gap-4 p-4 border-2 border-dashed rounded-2xl bg-white/50 cursor-pointer hover:bg-slate-50 transition-colors">
+                        <UploadCloud className="w-8 h-8 text-slate-300" />
+                        <div className="flex-1 text-sm"><p className="font-bold text-slate-600">Upload Certificate of Currency</p><p className="text-slate-400">PDF, JPG or PNG (Max 5MB)</p></div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><History className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Policies and Practical Processes</h3>
+            </div>
+            <CardContent className="p-8 space-y-10">
+              <div className="space-y-4">
+                <Label className="text-lg font-bold">Which written policies do you currently have?</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {["WHS", "Quality", "Environmental", "Privacy", "Risk", "Complaints", "Incident management", "Business continuity", "Modern slavery", "Diversity and inclusion", "Cybersecurity"].map(p => (
+                    <div key={p} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${practical.writtenPolicies?.includes(p) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handlePolicyToggle(p)}>
+                      <Checkbox checked={practical.writtenPolicies?.includes(p)} onCheckedChange={() => {}} />
+                      <Label className="text-xs">{p}</Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-4">
+                <Label className="font-bold">Even without written policies, what processes do you follow in practice? *</Label>
+                <Textarea value={practical.practicalDescription || ''} onChange={(e) => onChange('practicalProcesses', { ...practical, practicalDescription: e.target.value })} className="min-h-[120px] rounded-2xl" placeholder="Describe how you manage safety, quality, and risk on the job..." />
+              </div>
+              <div className="space-y-4">
+                <Label className="font-bold">Are there any legal, regulatory, or compliance issues we should be aware of? *</Label>
+                <Textarea value={data.complianceIssues || ''} onChange={(e) => onChange('complianceIssues', e.target.value)} className="min-h-[80px] rounded-2xl border-amber-200 bg-amber-50/10" placeholder="If none, write 'None known'..." />
               </div>
             </CardContent>
           </Card>
