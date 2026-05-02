@@ -57,7 +57,10 @@ import {
   Briefcase,
   FileStack,
   MessageSquareQuote,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Flag,
+  TrendingUp,
+  SlidersHorizontal
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -73,6 +76,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const STEPS = [
   { id: 'welcome', title: '1. Welcome & Expectations', icon: Zap },
@@ -95,6 +99,28 @@ const STEPS = [
   { id: 'workflow', title: '18. Workflow Rules', icon: MessageSquare },
   { id: 'library', title: '19. Document Library', icon: Library },
   { id: 'authority', title: '20. Authority Matrix', icon: Scale },
+];
+
+const RANKING_FACTORS = [
+  "Contract value",
+  "Location",
+  "Profitability",
+  "Buyer relationship potential",
+  "Strategic fit",
+  "Ease of delivery",
+  "Compliance requirements",
+  "Deadline",
+  "Competition level",
+  "Review or testimonial potential",
+  "Cashflow speed",
+  "Risk level"
+];
+
+const RANKING_COLUMNS = [
+  "Low priority",
+  "Medium priority",
+  "High priority",
+  "Critical"
 ];
 
 export default function OnboardingStepPage() {
@@ -197,6 +223,14 @@ export default function OnboardingStepPage() {
             caseStudySetup: { numberOfCaseStudies: '1', caseStudies: [] },
             reviewsTestimonials: { hasReviews: '', locations: [], links: '' },
             evidenceGaps: {}
+          });
+        } else if (sid === 'goals') {
+          setFormData({
+            businessGoals: { selectedGoals: [] },
+            opportunityChannels: { selectedChannels: [] },
+            valueRules: { lowerMarginReasons: [] },
+            targetAvoidRules: {},
+            factorRanking: {}
           });
         } else {
           setFormData({});
@@ -334,6 +368,18 @@ export default function OnboardingStepPage() {
         }
       }
       if (!data.reviewsTestimonials?.hasReviews) return "Please select whether you have reviews or testimonials.";
+    }
+
+    if (sid === 'goals') {
+      if (!data.businessGoals?.selectedGoals?.length) return "Please select at least one main goal.";
+      if (!data.businessGoals?.success12Months) return "Success criteria for 12 months is required.";
+      if (!data.opportunityChannels?.selectedChannels?.length) return "Please select at least one opportunity channel.";
+      if (!data.opportunityChannels?.positioningPreference) return "Please select a lead generation vs positioning preference.";
+      if (!data.valueRules?.minVal) return "Minimum opportunity value is required.";
+      if (!data.valueRules?.idealVal) return "Ideal opportunity value range is required.";
+      if (!data.targetAvoidRules?.automaticNo) return "Automatic no-go criteria is required.";
+      const rankedFactors = Object.keys(data.factorRanking || {});
+      if (rankedFactors.length < RANKING_FACTORS.length) return "Please rank all opportunity factors.";
     }
 
     return null;
@@ -804,6 +850,199 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
             <CardContent className="p-8 space-y-6">
               <div className="space-y-2"><Label className="font-bold">What proof or evidence do you wish you had but do not yet have?</Label><Textarea value={gaps.missingProof || ''} onChange={(e) => onChange('evidenceGaps', { ...gaps, missingProof: e.target.value })} className="min-h-[80px] rounded-2xl" /></div>
               <div className="space-y-2"><Label className="font-bold">Are there clients we should help turn into case studies later?</Label><Textarea value={gaps.candidates || ''} onChange={(e) => onChange('evidenceGaps', { ...gaps, candidates: e.target.value })} className="min-h-[80px] rounded-2xl" /></div>
+            </CardContent>
+          </Card>
+        </div>
+      );
+
+    case 'goals':
+      const bizGoals = data.businessGoals || { selectedGoals: [] };
+      const channels = data.opportunityChannels || { selectedChannels: [] };
+      const valueRules = data.valueRules || { lowerMarginReasons: [] };
+      const targetAvoid = data.targetAvoidRules || {};
+      const factorRanking = data.factorRanking || {};
+
+      const handleGoalToggle = (goal: string) => {
+        const current = bizGoals.selectedGoals || [];
+        const next = current.includes(goal) ? current.filter((g: string) => g !== goal) : [...current, goal];
+        onChange('businessGoals', { ...bizGoals, selectedGoals: next });
+      };
+
+      const handleChannelToggle = (channel: string) => {
+        const current = channels.selectedChannels || [];
+        const next = current.includes(channel) ? current.filter((c: string) => c !== channel) : [...current, channel];
+        onChange('opportunityChannels', { ...channels, selectedChannels: next });
+      };
+
+      const handleLowerMarginToggle = (reason: string) => {
+        const current = valueRules.lowerMarginReasons || [];
+        const next = current.includes(reason) ? current.filter((r: string) => r !== reason) : [...current, reason];
+        onChange('valueRules', { ...valueRules, lowerMarginReasons: next });
+      };
+
+      const handleRankChange = (factor: string, rank: string) => {
+        onChange('factorRanking', { ...factorRanking, [factor]: rank });
+      };
+
+      return (
+        <div className="space-y-12">
+          <div className="space-y-4">
+            <h2 className="text-4xl font-headline font-bold text-slate-900">Goals, Opportunity Strategy and Bid/No-Bid Rules</h2>
+            <p className="text-slate-500 text-lg leading-relaxed">Set your growth goals, preferred opportunity types, minimum opportunity values, target clients, no-go criteria, and decision rules.</p>
+          </div>
+
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><TargetIcon className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Business Goals</h3>
+            </div>
+            <CardContent className="p-8 space-y-8">
+              <div className="space-y-4">
+                <Label className="text-lg font-bold">What are your main goals for using Bid Manager? *</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {[
+                    "Win government contracts", "Win private sector contracts", "Apply for grants", 
+                    "Join supplier panels or registers", "Win marketplace leads", "Build proposal documents", 
+                    "Improve business credibility", "Create a capability statement", "Develop case studies", 
+                    "Build recurring client pipeline", "Enter a new market", "Increase revenue", "Improve win rate", "Other"
+                  ].map(goal => (
+                    <div key={goal} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${bizGoals.selectedGoals?.includes(goal) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleGoalToggle(goal)}>
+                      <Checkbox id={`goal-${goal}`} checked={bizGoals.selectedGoals?.includes(goal)} onCheckedChange={() => {}} />
+                      <Label htmlFor={`goal-${goal}`} className="text-xs font-medium cursor-pointer">{goal}</Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {bizGoals.selectedGoals?.includes('Other') && (
+                <div className="space-y-2"><Label className="font-bold">Please describe your other goal</Label><Input value={bizGoals.otherGoal || ''} onChange={(e) => onChange('businessGoals', { ...bizGoals, otherGoal: e.target.value })} className="h-12 rounded-xl" /></div>
+              )}
+              <div className="space-y-2"><Label className="font-bold">What does success look like over the next 12 months? *</Label><Textarea value={bizGoals.success12Months || ''} onChange={(e) => onChange('businessGoals', { ...bizGoals, success12Months: e.target.value })} className="min-h-[100px] rounded-2xl" /></div>
+              <div className="space-y-2"><Label className="font-bold">What does success look like over the next 24-36 months?</Label><Textarea value={bizGoals.success24to36Months || ''} onChange={(e) => onChange('businessGoals', { ...bizGoals, success24to36Months: e.target.value })} className="min-h-[100px] rounded-2xl" /></div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><Globe className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Opportunity Channels</h3>
+            </div>
+            <CardContent className="p-8 space-y-8">
+              <div className="space-y-4">
+                <Label className="text-lg font-bold">Which opportunity channels are you interested in? *</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {[
+                    "Government tenders", "Private tenders", "Grants", "Panels and supplier registers", 
+                    "Airtasker", "Bark", "ServiceSeeking", "Oneflare", "hipages", "Upwork", 
+                    "Freelancer", "Fiverr", "LinkedIn outreach", "Email outreach", "Direct proposals", 
+                    "Partnerships", "Local procurement", "Corporate supplier registrations", "Quote requests", "Other"
+                  ].map(ch => (
+                    <div key={ch} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${channels.selectedChannels?.includes(ch) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleChannelToggle(ch)}>
+                      <Checkbox id={`ch-${ch}`} checked={channels.selectedChannels?.includes(ch)} onCheckedChange={() => {}} />
+                      <Label htmlFor={`ch-${ch}`} className="text-xs font-medium cursor-pointer">{ch}</Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-4">
+                <Label className="font-bold">Do you prefer fast lead generation, long-term procurement positioning, or both? *</Label>
+                <RadioGroup value={channels.positioningPreference} onValueChange={(v) => onChange('opportunityChannels', { ...channels, positioningPreference: v })} className="flex flex-wrap gap-6">
+                  {["Fast lead generation", "Long-term procurement positioning", "Both", "Unsure"].map(opt => (
+                    <div key={opt} className="flex items-center space-x-2">
+                      <RadioGroupItem value={opt} id={`pos-${opt}`} />
+                      <Label htmlFor={`pos-${opt}`}>{opt}</Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><DollarSign className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Opportunity Value Rules</h3>
+            </div>
+            <CardContent className="p-8 space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="space-y-2"><Label className="font-bold">Minimum Value *</Label><Input value={valueRules.minVal || ''} onChange={(e) => onChange('valueRules', { ...valueRules, minVal: e.target.value })} placeholder="e.g. $5,000" className="h-12 rounded-xl" /></div>
+                <div className="space-y-2"><Label className="font-bold">Ideal Range *</Label><Input value={valueRules.idealVal || ''} onChange={(e) => onChange('valueRules', { ...valueRules, idealVal: e.target.value })} placeholder="e.g. $20k - $100k" className="h-12 rounded-xl" /></div>
+                <div className="space-y-2"><Label className="font-bold">Largest Realistic</Label><Input value={valueRules.maxVal || ''} onChange={(e) => onChange('valueRules', { ...valueRules, maxVal: e.target.value })} placeholder="e.g. $500,000" className="h-12 rounded-xl" /></div>
+              </div>
+              <div className="space-y-4">
+                <Label className="font-bold text-lg">Would you accept lower-margin work for strategic reasons?</Label>
+                <RadioGroup value={valueRules.acceptLowerMargin} onValueChange={(v) => onChange('valueRules', { ...valueRules, acceptLowerMargin: v })} className="flex flex-wrap gap-6">
+                  {["Yes", "No", "Maybe, with approval", "Unsure"].map(opt => (
+                    <div key={opt} className="flex items-center space-x-2">
+                      <RadioGroupItem value={opt} id={`margin-${opt}`} />
+                      <Label htmlFor={`margin-${opt}`}>{opt}</Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+              {(valueRules.acceptLowerMargin === 'Yes' || valueRules.acceptLowerMargin === 'Maybe, with approval') && (
+                <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                  <Label className="font-bold">What strategic reasons would justify lower-margin work?</Label>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {["Enter a new market", "Build reviews", "Create case study proof", "Build buyer relationship", "Secure repeat work", "Fill short-term capacity", "Other"].map(reason => (
+                      <div key={reason} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${valueRules.lowerMarginReasons?.includes(reason) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handleLowerMarginToggle(reason)}>
+                        <Checkbox id={`reason-${reason}`} checked={valueRules.lowerMarginReasons?.includes(reason)} onCheckedChange={() => {}} />
+                        <Label htmlFor={`reason-${reason}`} className="text-xs font-medium cursor-pointer">{reason}</Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><Flag className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Target and Avoid Rules</h3>
+            </div>
+            <CardContent className="p-8 space-y-6">
+              <div className="space-y-2"><Label className="font-bold">Who are your ideal clients or customers?</Label><Textarea value={targetAvoid.idealClients || ''} onChange={(e) => onChange('targetAvoidRules', { ...targetAvoid, idealClients: e.target.value })} className="min-h-[80px] rounded-2xl" /></div>
+              <div className="space-y-2"><Label className="font-bold">Which industries, sectors, or buyer types do you prefer?</Label><Textarea value={targetAvoid.preferredIndustries || ''} onChange={(e) => onChange('targetAvoidRules', { ...targetAvoid, preferredIndustries: e.target.value })} className="min-h-[80px] rounded-2xl" /></div>
+              <div className="space-y-2"><Label className="font-bold">Are there clients, sectors, locations, or types of work you want to avoid?</Label><Textarea value={targetAvoid.avoidCriteria || ''} onChange={(e) => onChange('targetAvoidRules', { ...targetAvoid, avoidCriteria: e.target.value })} className="min-h-[80px] rounded-2xl" /></div>
+              <div className="space-y-2"><Label className="font-bold">What would make an opportunity an automatic “no”? *</Label><Textarea value={targetAvoid.automaticNo || ''} onChange={(e) => onChange('targetAvoidRules', { ...targetAvoid, automaticNo: e.target.value })} className="min-h-[80px] rounded-2xl" /></div>
+              <div className="space-y-2"><Label className="font-bold">Are there any red flags Bid Manager should watch for?</Label><Textarea value={targetAvoid.redFlags || ''} onChange={(e) => onChange('targetAvoidRules', { ...targetAvoid, redFlags: e.target.value })} className="min-h-[80px] rounded-2xl" /></div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><SlidersHorizontal className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Opportunity Factor Ranking</h3>
+            </div>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50/50">
+                    <TableHead className="font-bold">Factor</TableHead>
+                    {RANKING_COLUMNS.map(col => <TableHead key={col} className="text-center font-bold text-xs">{col}</TableHead>)}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {RANKING_FACTORS.map(factor => (
+                    <TableRow key={factor}>
+                      <TableCell className="font-medium text-xs">{factor}</TableCell>
+                      {RANKING_COLUMNS.map(col => (
+                        <TableCell key={col} className="text-center">
+                          <RadioGroup 
+                            value={factorRanking[factor]} 
+                            onValueChange={(v) => handleRankChange(factor, v)}
+                            className="flex justify-center"
+                          >
+                            <div className="flex items-center">
+                              <RadioGroupItem value={col} id={`rank-${factor}-${col}`} className="w-4 h-4" />
+                            </div>
+                          </RadioGroup>
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </div>
