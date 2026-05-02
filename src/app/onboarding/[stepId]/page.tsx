@@ -55,7 +55,10 @@ import {
   UploadCloud,
   ArrowRight,
   Handshake,
-  Lightbulb
+  Lightbulb,
+  Clock,
+  ShieldQuestion,
+  Search
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -124,6 +127,10 @@ const PLATFORM_OPTIONS = [
   "Corporate supplier portals", "LinkedIn", "Other", "None", "Unsure"
 ];
 
+const MARKETPLACE_PLATFORMS = [
+  "Airtasker", "Bark", "ServiceSeeking", "Oneflare", "hipages", "Upwork", "Freelancer", "Fiverr", "Other service-based marketplaces", "Unsure, please recommend"
+];
+
 const COMPLIANCE_ITEMS = [
   "ABN/ACN records",
   "Public liability insurance",
@@ -182,10 +189,6 @@ const GRANT_OUTCOMES = [
   "Create jobs", "Improve productivity", "Increase revenue", "Reduce risk", 
   "Improve safety", "Deliver community benefit", "Support regional development", 
   "Improve accessibility", "Improve environmental outcomes", "Other"
-];
-
-const GRANT_CONTRIBUTIONS = [
-  "Cash", "Labour", "Equipment", "In-kind support", "Partner contribution", "Unsure"
 ];
 
 export default function OnboardingStepPage() {
@@ -333,6 +336,13 @@ export default function OnboardingStepPage() {
             grantInterest: '',
             projectSetup: { numberOfProjects: '1', projects: [] }
           });
+        } else if (sid === 'marketplace') {
+          setFormData({
+            selectedPlatforms: [],
+            platformStrategies: {},
+            leadRules: { urgencyHandling: [] },
+            authority: {}
+          });
         } else {
           setFormData({});
         }
@@ -444,10 +454,10 @@ export default function OnboardingStepPage() {
     }
 
     if (sid === 'capacity') {
-      const setup = data.teamSetup || { members: [] };
-      const numMembersRaw = setup.numberOfMembers || '2';
+      const team = data.teamSetup || { members: [] };
+      const numMembersRaw = team.numberOfMembers || '2';
       const numMembers = numMembersRaw === '6 or more' ? 6 : (parseInt(numMembersRaw) || 0);
-      const members = setup.members || [];
+      const members = team.members || [];
       if (numMembers === 0) return "Please add at least one team member.";
       for (let i = 0; i < numMembers; i++) {
         const m = members[i];
@@ -552,6 +562,20 @@ export default function OnboardingStepPage() {
             return `Please complete all required fields for Grant Project ${i + 1}.`;
           }
         }
+      }
+    }
+
+    if (sid === 'marketplace') {
+      if (!data.selectedPlatforms?.length) return "Please select at least one marketplace platform.";
+      const leadRules = data.leadRules || {};
+      if (!leadRules.minJobValue) return "Minimum job value for marketplace leads is required.";
+      if (!leadRules.jobsToPursue) return "Preferred job types description is required.";
+      if (!leadRules.jobsToIgnore) return "Ignored job types description is required.";
+      if (!data.authority?.canPrepareResponses) return "Marketplace response authority is required.";
+      
+      const strategies = data.platformStrategies || {};
+      for (const p of data.selectedPlatforms) {
+        if (!strategies[p]?.accountStatus) return `Please select account status for ${p}.`;
       }
     }
 
@@ -840,7 +864,7 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
     }
 
     case 'profile': {
-      const overview = data.businessOverview || {};
+      const overview = data.business Overview || {};
       const valProp = data.valueProposition || {};
       const handleOverviewChange = (field: string, val: string) => onChange('businessOverview', { ...overview, [field]: val });
       const handleValPropChange = (field: string, val: any) => onChange('valueProposition', { ...valProp, [field]: val });
@@ -1189,12 +1213,6 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
       const accSec = data.accessSecurity || {};
       const costs = data.costsAlerts || {};
 
-      const handlePlatformToggle = (group: 'existingPlatforms' | 'setupPlatforms', p: string) => {
-        const current = data[group] || [];
-        const next = current.includes(p) ? current.filter((i: string) => i !== p) : [...current, p];
-        onChange(group, next);
-      };
-
       return (
         <div className="space-y-12">
           <div className="space-y-4">
@@ -1210,7 +1228,10 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
             <CardContent className="p-8 space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {PLATFORM_OPTIONS.map(p => (
-                  <div key={p} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${existing.includes(p) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handlePlatformToggle('existingPlatforms', p)}>
+                  <div key={p} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${existing.includes(p) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => {
+                    const next = existing.includes(p) ? existing.filter((i: string) => i !== p) : [...existing, p];
+                    onChange('existingPlatforms', next);
+                  }}>
                     <Checkbox checked={existing.includes(p)} onCheckedChange={() => {}} />
                     <Label className="text-xs">{p}</Label>
                   </div>
@@ -1227,7 +1248,10 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
             <CardContent className="p-8 space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {PLATFORM_OPTIONS.map(p => (
-                  <div key={p} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${setup.includes(p) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handlePlatformToggle('setupPlatforms', p)}>
+                  <div key={p} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${setup.includes(p) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => {
+                    const next = setup.includes(p) ? setup.filter((i: string) => i !== p) : [...setup, p];
+                    onChange('setupPlatforms', next);
+                  }}>
                     <Checkbox checked={setup.includes(p)} onCheckedChange={() => {}} />
                     <Label className="text-xs">{p}</Label>
                   </div>
@@ -1428,7 +1452,7 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
     case 'readiness': {
       const exp = data.tenderExperience || { submittedTypes: [] };
       const opps = data.targetOpportunities || { targetBuyers: [] };
-      const read = data.readinessCheck || {};
+      const read = data.readiness Check || {};
       const supplier = data.supplierSetup || {};
 
       const handleExpToggle = (val: string) => {
@@ -1669,9 +1693,6 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
                                 </div>
                               ))}
                             </div>
-                            {project.fundingUse?.includes('Other') && (
-                              <Input value={project.otherFundingUse || ''} onChange={(e) => handleProjectChange(i, 'otherFundingUse', e.target.value)} placeholder="Please specify..." className="h-12 rounded-xl bg-white mt-2" />
-                            )}
                           </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1709,6 +1730,173 @@ function StepContent({ stepId, data, onChange }: { stepId: string, data: any, on
               </CardContent>
             </Card>
           )}
+        </div>
+      );
+    }
+
+    case 'marketplace': {
+      const selectedPlatforms = data.selectedPlatforms || [];
+      const leadRules = data.leadRules || { urgencyHandling: [] };
+      const authority = data.authority || {};
+      const strategies = data.platformStrategies || {};
+
+      const handlePlatformToggle = (p: string) => {
+        const next = selectedPlatforms.includes(p) ? selectedPlatforms.filter((i: string) => i !== p) : [...selectedPlatforms, p];
+        onChange('selectedPlatforms', next);
+      };
+
+      const handleStrategyChange = (p: string, f: string, v: any) => {
+        const next = { ...strategies };
+        if (!next[p]) next[p] = {};
+        next[p] = { ...next[p], [f]: v };
+        onChange('platformStrategies', next);
+      };
+
+      return (
+        <div className="space-y-12">
+          <div className="space-y-4">
+            <h2 className="text-4xl font-headline font-bold text-slate-900">Marketplace Lead Strategy</h2>
+            <p className="text-slate-500 text-lg leading-relaxed">Complete this section if you want support with marketplace lead platforms such as Airtasker, Bark, hipages, or Upwork.</p>
+          </div>
+
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><ShoppingCart className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Marketplace Platform Selection</h3>
+            </div>
+            <CardContent className="p-8 space-y-8">
+              <div className="space-y-4">
+                <Label className="text-lg font-bold">Which marketplace platforms are you open to using? *</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {MARKETPLACE_PLATFORMS.map(p => (
+                    <div key={p} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${selectedPlatforms.includes(p) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => handlePlatformToggle(p)}>
+                      <Checkbox checked={selectedPlatforms.includes(p)} onCheckedChange={() => {}} />
+                      <Label className="text-xs cursor-pointer">{p}</Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-10 pt-4">
+                {selectedPlatforms.filter((p: string) => p !== "Unsure, please recommend").map((p: string) => {
+                  const strategy = strategies[p] || {};
+                  return (
+                    <div key={p} className="p-8 border border-slate-100 bg-slate-50/30 rounded-[2.5rem] space-y-8 animate-in zoom-in-95">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-bold text-xl text-primary">{p} Strategy</h4>
+                        <Badge variant="outline" className="bg-white">Platform Configuration</Badge>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-3">
+                          <Label className="font-bold">Current Account Status *</Label>
+                          <Select value={strategy.accountStatus || ''} onValueChange={(v) => handleStrategyChange(p, 'accountStatus', v)}>
+                            <SelectTrigger className="h-12 rounded-xl bg-white"><SelectValue placeholder="Select status" /></SelectTrigger>
+                            <SelectContent>
+                              {["No account yet", "Account exists", "Active profile", "Profile needs updating", "Unsure"].map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-3">
+                          <Label className="font-bold">Paid Lead / Credit Comfort *</Label>
+                          <Select value={strategy.paidLeadComfort || ''} onValueChange={(v) => handleStrategyChange(p, 'paidLeadComfort', v)}>
+                            <SelectTrigger className="h-12 rounded-xl bg-white"><SelectValue placeholder="Select preference" /></SelectTrigger>
+                            <SelectContent>
+                              {["Yes, willing to pay", "Only with approval", "No paid leads", "Unsure"].map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        <Label className="font-bold">Preferred Lead Types for {p}</Label>
+                        <Input value={strategy.preferredLeadTypes || ''} onChange={(e) => handleStrategyChange(p, 'preferredLeadTypes', e.target.value)} placeholder="e.g. Commercial cleaning over 500sqm" className="h-12 rounded-xl bg-white" />
+                      </div>
+                      <div className="space-y-3">
+                        <Label className="font-bold">Notes / Response Speed Expectation</Label>
+                        <Textarea value={strategy.notes || ''} onChange={(e) => handleStrategyChange(p, 'notes', e.target.value)} placeholder="e.g. Respond within 30 mins during business hours" className="min-h-[80px] rounded-2xl bg-white" />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><Target className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Marketplace Lead Rules</h3>
+            </div>
+            <CardContent className="p-8 space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-3">
+                  <Label className="font-bold">What types of jobs should we pursue? *</Label>
+                  <Textarea value={leadRules.jobsToPursue || ''} onChange={(e) => onChange('leadRules', { ...leadRules, jobsToPursue: e.target.value })} className="min-h-[100px] rounded-2xl" />
+                </div>
+                <div className="space-y-3">
+                  <Label className="font-bold">What types of jobs should we ignore? *</Label>
+                  <Textarea value={leadRules.jobsToIgnore || ''} onChange={(e) => onChange('leadRules', { ...leadRules, jobsToIgnore: e.target.value })} className="min-h-[100px] rounded-2xl" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-3">
+                  <Label className="font-bold">Minimum job value for marketplace leads *</Label>
+                  <Input value={leadRules.minJobValue || ''} onChange={(e) => onChange('leadRules', { ...leadRules, minJobValue: e.target.value })} className="h-12 rounded-xl" placeholder="e.g. $500" />
+                </div>
+                <div className="space-y-3">
+                  <Label className="font-bold">Monthly budget for paid leads/credits</Label>
+                  <Input value={leadRules.monthlyBudget || ''} onChange={(e) => onChange('leadRules', { ...leadRules, monthlyBudget: e.target.value })} className="h-12 rounded-xl" placeholder="e.g. $200" />
+                </div>
+              </div>
+              <div className="space-y-4">
+                <Label className="font-bold">Can you handle urgent work? *</Label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {["Same-day", "Next-day", "Within 1 week", "Not usually"].map(opt => (
+                    <div key={opt} className={`flex items-center space-x-2 p-3 rounded-xl border cursor-pointer ${leadRules.urgencyHandling?.includes(opt) ? 'border-primary bg-primary/5' : 'bg-white'}`} onClick={() => {
+                      const current = leadRules.urgencyHandling || [];
+                      const next = current.includes(opt) ? current.filter((i: string) => i !== opt) : [...current, opt];
+                      onChange('leadRules', { ...leadRules, urgencyHandling: next });
+                    }}>
+                      <Checkbox checked={leadRules.urgencyHandling?.includes(opt)} onCheckedChange={() => {}} />
+                      <Label className="text-xs cursor-pointer">{opt}</Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+            <div className="p-8 border-b bg-slate-50/50 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-xl"><Scale className="w-5 h-5 text-primary" /></div>
+              <h3 className="text-xl font-bold text-slate-900">Marketplace Authority</h3>
+            </div>
+            <CardContent className="p-8 space-y-8">
+              <div className="space-y-4">
+                <Label className="font-bold">Can Bid Manager prepare responses? *</Label>
+                <RadioGroup value={authority.canPrepareResponses} onValueChange={(v) => onChange('authority', { ...authority, canPrepareResponses: v })} className="flex flex-wrap gap-6">
+                  {["Yes", "No", "Yes, but approval required"].map(opt => <div key={opt} className="flex items-center space-x-2"><RadioGroupItem value={opt} id={`prep-${opt}`} /><Label htmlFor={`prep-${opt}`}>{opt}</Label></div>)}
+                </RadioGroup>
+              </div>
+              <div className="space-y-4">
+                <Label className="font-bold">Can Bid Manager send responses under a threshold? *</Label>
+                <RadioGroup value={authority.canSendUnderThreshold} onValueChange={(v) => onChange('authority', { ...authority, canSendUnderThreshold: v })} className="flex flex-wrap gap-6">
+                  {["Yes", "No", "Maybe, to be discussed"].map(opt => <div key={opt} className="flex items-center space-x-2"><RadioGroupItem value={opt} id={`send-${opt}`} /><Label htmlFor={`send-${opt}`}>{opt}</Label></div>)}
+                </RadioGroup>
+              </div>
+              {authority.canSendUnderThreshold === 'Yes' && (
+                <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+                  <Label className="font-bold">What value threshold should apply?</Label>
+                  <Input value={authority.thresholdValue || ''} onChange={(e) => onChange('authority', { ...authority, thresholdValue: e.target.value })} className="h-12 rounded-xl" placeholder="e.g. Under $1,000" />
+                </div>
+              )}
+              <Alert variant="default" className="bg-blue-50 border-blue-100 text-blue-800 rounded-2xl">
+                <Info className="h-5 w-5 text-blue-600" />
+                <AlertDescription className="font-medium">
+                  We recommend setting clear threshold rules so Bid Manager can secure leads quickly while you are on site or in meetings.
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </Card>
         </div>
       );
     }
