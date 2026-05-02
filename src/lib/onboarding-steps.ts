@@ -45,7 +45,7 @@ export interface EnabledModules {
   tenderReadiness: boolean;
   grants: boolean;
   marketplaceStrategy: boolean;
-  directOutreachStrategy: boolean;
+  outreachStrategy: boolean;
   quoteSupport: boolean;
 }
 
@@ -195,15 +195,15 @@ export const allSteps: OnboardingStep[] = [
     route: "/onboarding/marketplace_strategy",
   },
   {
-    key: "direct_outreach_strategy",
-    title: "Direct Outreach Strategy",
+    key: "outreach_strategy",
+    title: "Outreach Strategy",
     shortTitle: "Outreach",
     icon: Anchor,
     description: "Strategy for direct proposals and campaigns.",
     required: false,
     isConditional: true,
-    moduleKey: "directOutreachStrategy",
-    route: "/onboarding/direct_outreach_strategy",
+    moduleKey: "outreachStrategy",
+    route: "/onboarding/outreach_strategy",
   },
   {
     key: "quote_support",
@@ -259,53 +259,13 @@ export function getVisibleOnboardingSteps(
   enabledModules?: EnabledModules
 ): OnboardingStep[] {
   if (!enabledModules) {
-    // Before service selection, show only the initial steps
     return allSteps.filter(step => !step.isConditional);
   }
 
-  const visibleSteps: OnboardingStep[] = [];
-  const conditionalModuleKeys: (keyof EnabledModules)[] = [
-    "tenderReadiness",
-    "grants",
-    "marketplaceStrategy",
-    "directOutreachStrategy",
-    "quoteSupport",
-  ];
-
-  for (const step of allSteps) {
-    if (step.isConditional) {
-      // It's a conditional step, check if its module is enabled
-      if (step.moduleKey && enabledModules[step.moduleKey]) {
-        visibleSteps.push(step);
-      }
-    } else {
-      // It's a core step, always include it
-      visibleSteps.push(step);
+  return allSteps.filter(step => {
+    if (!step.isConditional) {
+      return true; 
     }
-  }
-  
-  // Ensure the order is correct by re-inserting conditional modules in their designated place
-  const finalSteps: OnboardingStep[] = [];
-  const tenderReadinessIndex = allSteps.findIndex(s => s.key === 'tender_readiness');
-  
-  const coreStepsBeforeConditionals = allSteps.slice(0, tenderReadinessIndex).filter(s => !s.isConditional);
-  const coreStepsAfterConditionals = allSteps.slice(tenderReadinessIndex).filter(s => !s.isConditional);
-
-  finalSteps.push(...coreStepsBeforeConditionals);
-  
-  // Add enabled conditional modules in their predefined order
-  for (const moduleKey of conditionalModuleKeys) {
-    if (enabledModules[moduleKey]) {
-      const stepToAdd = allSteps.find(s => s.moduleKey === moduleKey);
-      if (stepToAdd) {
-        finalSteps.push(stepToAdd);
-      }
-    }
-  }
-  
-  finalSteps.push(...coreStepsAfterConditionals);
-
-  // Return only the steps that are actually present in the original filtered `visibleSteps`
-  const visibleKeys = new Set(visibleSteps.map(s => s.key));
-  return finalSteps.filter(s => visibleKeys.has(s.key));
+    return step.moduleKey && enabledModules[step.moduleKey];
+  });
 }

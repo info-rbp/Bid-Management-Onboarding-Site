@@ -44,6 +44,48 @@ export function validateOnboardingSection(stepId: string, data: any): { isValid:
         if(!data.paidApprover) missingFields.push('paidApprover');
         break;
     }
+     case 'opportunity_triage': {
+      if (!data.hasLiveOpportunity) missingFields.push('hasLiveOpportunity');
+      if (data.hasLiveOpportunity === 'yes') {
+          if(!data.opportunityName) missingFields.push('opportunityName');
+          if(!data.deadlineDate) missingFields.push('deadlineDate');
+      }
+      break;
+    }
+    case 'business_profile': {
+      if (!data.what) missingFields.push('what');
+      break;
+    }
+    case 'team_capacity': {
+      if (!data.team || data.team.length === 0) missingFields.push('team');
+      break;
+    }
+    case 'proof_evidence': {
+      if (!data.caseStudies || data.caseStudies.length === 0) missingFields.push('caseStudies');
+      break;
+    }
+    case 'goals_strategy': {
+      if (!data.mainGoals) missingFields.push('mainGoals');
+      break;
+    }
+    case 'pricing_commercial': {
+      if (!data.pricingGuidance) missingFields.push('pricingGuidance');
+      break;
+    }
+    case 'platform_setup': {
+        if (!data.selectedPlatforms || data.selectedPlatforms.length === 0) missingFields.push('selectedPlatforms');
+        break;
+    }
+    case 'compliance_insurance': {
+        if (!data.readiness) missingFields.push('readiness');
+        break;
+    }
+    case 'workflow_rules': {
+        if (!data.communicationMethods) missingFields.push('communicationMethods');
+        if (!data.draftReviewer) missingFields.push('draftReviewer');
+        if (!data.finalApprover) missingFields.push('finalApprover');
+        break;
+    }
   }
 
   return { isValid: missingFields.length === 0, missingFields };

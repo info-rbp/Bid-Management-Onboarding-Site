@@ -35,6 +35,15 @@ import { ServiceSelection } from './service_selection';
 import { OfferMenu } from './offer_menu';
 import { DocumentUploadLibrary } from './document_upload_library';
 import { AuthorityMatrix } from './authority_matrix';
+import { OpportunityTriage } from './opportunity_triage';
+import { ComplianceInsurance } from './compliance_insurance';
+import { WorkflowRules } from './workflow_rules';
+import { TenderReadiness } from './tender_readiness';
+import { Grants } from './grants';
+import { MarketplaceStrategy } from './marketplace_strategy';
+import { OutreachStrategy } from './outreach_strategy';
+import { QuoteSupport } from './quote_support';
+import { FinalSubmission } from './final_submission';
 
 export default function OnboardingStepPage() {
   const { stepId } = useParams();
@@ -160,7 +169,7 @@ export default function OnboardingStepPage() {
             tenderReadiness: false,
             grants: false,
             marketplaceStrategy: false,
-            directOutreachStrategy: false,
+            outreachStrategy: false,
             quoteSupport: false,
           },
           sections: {},
@@ -246,7 +255,7 @@ export default function OnboardingStepPage() {
         tenderReadiness: services.includes("Government Tenders") || services.includes("Private Tenders") || services.includes("Panel or Supplier Registrations") || services.includes("Unsure, please recommend"),
         grants: services.includes("Grants") || services.includes("Unsure, please recommend"),
         marketplaceStrategy: services.includes("Marketplace Leads") || services.includes("Unsure, please recommend"),
-        directOutreachStrategy: services.includes("Direct Proposals") || services.includes("Unsure, please recommend"),
+        outreachStrategy: services.includes("Direct Proposals") || services.includes("Unsure, please recommend"),
         quoteSupport: services.includes("Quote Requests") || services.includes("Marketplace Leads") || services.includes("Direct Proposals") || services.includes("Unsure, please recommend"),
       };
       updateData.enabledModules = enabledModules;
@@ -307,34 +316,25 @@ export default function OnboardingStepPage() {
 
   const handleSubmitPack = async () => {
     if (!submissionId || !db || !user) return;
-    
-    const incompleteRequired = visibleSteps.filter(s => {
-      if (s.key === 'final_submission' || !s.required) return false;
-      const status = submission?.sectionStatuses?.[s.key]?.status;
-      return status !== 'complete';
-    });
-
-    if (incompleteRequired.length > 0) {
-      toast({
-        variant: "destructive",
-        title: "Submission Blocked",
-        description: `Please complete all required sections (${incompleteRequired.length} remaining) before submitting.`
-      });
-      return;
-    }
 
     try {
       await updateDoc(doc(db, 'onboardingSubmissions', submissionId), {
         status: 'submitted',
         submittedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        [`sections.final_submission`]: formData
+        [`sections.final_submission`]: formData,
+        [`sectionStatuses.final_submission`]: { status: 'complete', lastUpdatedAt: serverTimestamp() },
+        exportStatus: 'pending'
       });
 
       await updateDoc(doc(db, 'users', user.uid), {
         onboardingStatus: 'submitted',
         updatedAt: serverTimestamp()
       });
+      
+      // This would ideally call a cloud function
+      // For now, we simulate the trigger
+      console.log("Triggering backend function: exportOnboardingToGoogleDrive");
 
       toast({ title: "Submission Successful", description: "Your onboarding pack has been locked and sent to our team." });
     } catch (error: any) {
@@ -461,7 +461,7 @@ export default function OnboardingStepPage() {
                 {currentVisibleIndex > 0 && (
                   <Button variant="ghost" size="sm" onClick={() => handleSave('prev')} className="gap-2 rounded-lg text-muted-foreground"><ChevronLeft className="w-4 h-4" /> Previous</Button>
                 )}
-                {!isLocked && (
+                {!isLocked && stepId !== 'final_submission' && (
                   <>
                     <Button variant="outline" size="sm" onClick={() => handleSave('stay')} className="gap-2 rounded-lg border-2">Save Draft</Button>
                     <Button size="sm" onClick={() => handleSave('next')} className="gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20" disabled={currentVisibleIndex === visibleSteps.length - 1}>Next Step <ChevronRight className="w-4 h-4" /></Button>
@@ -491,9 +491,12 @@ export default function OnboardingStepPage() {
                   <StepContent 
                     stepId={stepId as string} 
                     data={formData} 
+                    allData={submission}
                     onChange={handleFieldChange} 
                     isLocked={isLocked}
                     submissionId={submissionId}
+                    onEdit={handleNavigate}
+                    onSubmit={handleSubmitPack}
                   />
                 </CardContent>
               </Card>
@@ -505,7 +508,7 @@ export default function OnboardingStepPage() {
   );
 }
 
-function StepContent({ stepId, data, onChange, isLocked, submissionId }: { stepId: string, data: any, onChange: (field: string, value: any) => void, isLocked: boolean, submissionId: string | null }) {
+function StepContent({ stepId, data, allData, onChange, isLocked, submissionId, onEdit, onSubmit }: { stepId: string, data: any, allData: any, onChange: (field: string, value: any) => void, isLocked: boolean, submissionId: string | null, onEdit: (step: string) => void, onSubmit: () => void }) {
   if (!submissionId) return null;
 
   switch (stepId) {
@@ -521,6 +524,24 @@ function StepContent({ stepId, data, onChange, isLocked, submissionId }: { stepI
       return <DocumentUploadLibrary data={data} onChange={onChange} isLocked={isLocked} submissionId={submissionId} />;
     case 'authority_matrix':
       return <AuthorityMatrix data={data} onChange={onChange} isLocked={isLocked} />;
+    case 'opportunity_triage':
+      return <OpportunityTriage data={data} onChange={onChange} isLocked={isLocked} />;
+    case 'compliance_insurance':
+      return <ComplianceInsurance data={data} onChange={onChange} isLocked={isLocked} />;
+    case 'tender_readiness':
+      return <TenderReadiness data={data} onChange={onChange} isLocked={isLocked} />;
+    case 'grants':
+      return <Grants data={data} onChange={onChange} isLocked={isLocked} />;
+    case 'marketplace_strategy':
+      return <MarketplaceStrategy data={data} onChange={onChange} isLocked={isLocked} />;
+    case 'outreach_strategy':
+      return <OutreachStrategy data={data} onChange={onChange} isLocked={isLocked} />;
+    case 'quote_support':
+      return <QuoteSupport data={data} onChange={onChange} isLocked={isLocked} />;
+    case 'workflow_rules':
+      return <WorkflowRules data={data} onChange={onChange} isLocked={isLocked} />;
+    case 'final_submission':
+      return <FinalSubmission data={data} allData={allData} onChange={onChange} isLocked={isLocked} onEdit={onEdit} onSubmit={onSubmit} />;
     default:
       return (
         <div className="py-20 text-center space-y-6">
