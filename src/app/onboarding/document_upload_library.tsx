@@ -1,140 +1,289 @@
 
 "use client";
 
-import React from 'react';
-import { useUser } from '@/firebase';
+import React, { useMemo } from 'react';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { collection, query, where, doc, updateDoc, serverTimestamp, addDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { UploadCloud, Trash2, FileText, Paperclip } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { 
+  UploadCloud, 
+  Trash2, 
+  FileText, 
+  Paperclip, 
+  CheckCircle2, 
+  AlertTriangle, 
+  Info, 
+  Clock, 
+  HelpCircle, 
+  ShieldCheck, 
+  Globe, 
+  Briefcase,
+  Zap,
+  FolderOpen
+} from 'lucide-react';
+import { deriveDocumentReadiness } from '@/lib/onboarding-steps';
 
 interface DocumentUploadProps {
   data: any;
   onChange: (field: string, value: any) => void;
   isLocked: boolean;
   submissionId: string;
+  allData?: any;
 }
 
-const categories = [
-  { key: 'profile', title: 'Business Profile and Brand' },
-  { key: 'compliance', title: 'Compliance and Insurance' },
-  { key: 'team', title: 'Team and Capability' },
-  { key: 'proof', title: 'Case Studies and Proof' },
-  { key: 'submissions', title: 'Previous Submissions and Feedback' },
-  { key: 'commercial', title: 'Pricing and Commercial' },
-  { key: 'grant', title: 'Grant Project Documents' },
-  { key: 'other', title: 'Other Relevant Documents' },
+const baseCategories = [
+  { id: 'business_profile_capability_brochures', label: 'Business Profile & Capability', description: 'Business profiles, capability statements, or brochures.' },
+  { id: 'logos_brand_assets_style_guides', label: 'Logos & Brand Assets', description: 'Logos, style guides, and brand identity files.' },
+  { id: 'insurance_certificates', label: 'Insurance Certificates', description: 'Public liability, indemnity, and workers compensation certificates.' },
+  { id: 'licences_registrations_certifications_checks', label: 'Licences & Certifications', description: 'Industry licences, staff tickets, and business registrations.' },
+  { id: 'policies_and_procedures', label: 'Policies & Procedures', description: 'WHS, Quality, Environmental, and Privacy policies.' },
+  { id: 'staff_cvs_bios_qualifications_tickets', label: 'Staff Documentation', description: 'CVs, staff bios, and qualification records.' },
+  { id: 'project_examples_case_studies_photos_reports_testimonials', label: 'Proof & Evidence', description: 'Case studies, project photos, and testimonials.' },
+  { id: 'previous_tenders_grants_proposals_quotes_feedback', label: 'Previous Submissions', description: 'Past tender responses, grant applications, and feedback.' },
+  { id: 'pricing_schedules_rate_cards_package_lists_budget_templates', label: 'Pricing & Budgets', description: 'Rate cards, pricing schedules, and budget templates.' },
+  { id: 'grant_project_documents_budgets_supplier_quotes_support_letters', label: 'Grant Specific Files', description: 'Project plans, supplier quotes, and support letters for grants.', conditional: true },
+  { id: 'other_relevant_documents', label: 'Other Documents', description: 'Any other files that support your application.' },
 ];
 
-export function DocumentUploadLibrary({ data, onChange, isLocked, submissionId }: DocumentUploadProps) {
+export function DocumentUploadLibrary({ data, onChange, isLocked, submissionId, allData }: DocumentUploadProps) {
   const { user } = useUser();
+  const db = useFirestore();
   const { toast } = useToast();
-  const uploads = data.uploads || [];
 
-  const handleFileUpload = async (categoryKey: string, files: FileList | null) => {
-    if (!files || !submissionId || !user) return;
+  // Explicitly query only the current user's documents
+  const docsQuery = useMemoFirebase(() => {
+    if (!user || !db) return null;
+    // Querying the collection directly as it's scoped by path in the rules
+    return collection(db, 'clients', user.uid, 'documents');
+  }, [user, db]);
+
+  const { data: clientDocuments } = useCollection(docsQuery);
+  
+  const selectedServices = allData?.sections?.service_selection?.selectedServices || [];
+  const activeModules = allData?.sections?.service_modules?.activeModules || {};
+
+  const categories = useMemo(() => {
+    return baseCategories.filter(cat => {
+      if (cat.id === 'grant_project_documents_budgets_supplier_quotes_support_letters') {
+        return selectedServices.includes('grants') || activeModules.grants;
+      }
+      return true;
+    });
+  }, [selectedServices, activeModules]);
+
+  const handleFileUpload = async (category: string, files: FileList | null) => {
+    if (!files || !user || !db) return;
     const storage = getStorage();
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const fileName = `${Date.now()}_${file.name}`;
-      const path = `onboardingUploads/${user.uid}/${submissionId}/${categoryKey}/${fileName}`;
-      const fileRef = ref(storage, path);
+      const docId = Math.random().toString(36).substr(2, 9);
+      const storagePath = `clients/${user.uid}/documents/${category}/${docId}_${file.name}`;
+      const fileRef = ref(storage, storagePath);
 
       try {
         const snapshot = await uploadBytes(fileRef, file);
-        const url = await getDownloadURL(snapshot.ref);
-        const newUploads = [...uploads, {
-          id: fileName,
-          name: file.name,
-          size: file.size,
-          category: categoryKey,
-          url,
-          path,
-          uploadedAt: new Date().toISOString(),
-          notes: '',
-          status: 'uploaded'
-        }];
-        onChange('uploads', newUploads);
+        const downloadUrl = await getDownloadURL(snapshot.ref);
+
+        await addDoc(collection(db, 'clients', user.uid, 'documents'), {
+          documentId: docId,
+          clientId: user.uid,
+          originalFileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+          storagePath,
+          downloadUrl,
+          documentCategory: category,
+          sourceSection: 'section_14_documents',
+          status: 'received',
+          uploadedAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          approvedForUse: false
+        });
+
+        toast({ title: "File uploaded successfully" });
       } catch (e) {
         toast({ variant: "destructive", title: "Upload failed" });
       }
     }
   };
 
-  const handleRemoveFile = (fileId: string) => {
-    if (isLocked) return;
-    const newUploads = uploads.filter((f: any) => f.id !== fileId);
-    onChange('uploads', newUploads);
+  const getFilesForCategory = (categoryId: string) => {
+    return (clientDocuments || []).filter((doc: any) => doc.documentCategory === categoryId);
   };
 
-  const handleFileDetailChange = (fileId: string, field: string, value: string) => {
-    const newUploads = uploads.map((f: any) => f.id === fileId ? { ...f, [field]: value } : f);
-    onChange('uploads', newUploads);
-  }
+  const readiness = deriveDocumentReadiness([], clientDocuments || [], selectedServices);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-16">
       <div className="space-y-4">
-        <h2 className="text-4xl font-headline font-bold text-slate-900">Document Upload Library</h2>
-        <p className="text-slate-500 text-lg leading-relaxed">Upload documents to build your reusable bid library. This is a critical step for efficient proposal generation.</p>
+        <h2 className="text-3xl font-bold tracking-tight text-slate-900">Document Upload Library</h2>
+        <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6 text-blue-800 text-sm leading-relaxed">
+          “Please upload any documents that may help us build your client profile, proposal content, compliance library, case studies, pricing guidance, opportunity action plan and platform materials. If you do not have a document yet, skip the upload and we will record it as a gap to review.”
+        </div>
       </div>
 
-      <div className="space-y-6">
-        {categories.map(cat => (
-          <Card key={cat.key} className="border-none shadow-sm rounded-3xl bg-white">
-            <CardHeader className="border-b flex flex-row items-center justify-between">
-              <CardTitle className="flex items-center gap-2 text-primary"><Paperclip className="w-5 h-5" /> <span>{cat.title}</span></CardTitle>
-              {!isLocked && (
-                <div className="relative">
-                  <input type="file" id={`upload-${cat.key}`} className="sr-only" multiple onChange={(e) => handleFileUpload(cat.key, e.target.files)} disabled={isLocked} />
-                  <Button asChild variant="outline" size="sm"><label htmlFor={`upload-${cat.key}`} className="gap-2 cursor-pointer"><UploadCloud className="w-4 h-4" /> Upload Files</label></Button>
-                </div>
-              )}
-            </CardHeader>
-            <CardContent className="p-6 space-y-4">
-              {uploads.filter((f: any) => f.category === cat.key).map((file: any) => (
-                <div key={file.id} className="p-4 border rounded-2xl bg-slate-50/50 space-y-4">
-                  <div className="flex justify-between items-start">
-                    <div className="flex items-center gap-3">
-                      <FileText className="w-5 h-5 text-slate-500" />
-                      <div className="font-bold text-slate-800">{file.name}</div>
+      <div className="space-y-8">
+        {categories.map((cat) => {
+          const files = getFilesForCategory(cat.id);
+          const hasFiles = files.length > 0;
+
+          return (
+            <Card key={cat.id} className={`border-2 rounded-[2rem] overflow-hidden transition-all ${hasFiles ? 'border-green-100 bg-green-50/10' : 'border-slate-100'}`}>
+              <CardHeader className="p-8 border-b border-slate-100 bg-white/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${hasFiles ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-400'}`}>
+                      {hasFiles ? <CheckCircle2 className="w-6 h-6" /> : <FolderOpen className="w-6 h-6" />}
                     </div>
-                    {!isLocked && <Button variant="ghost" size="icon" onClick={() => handleRemoveFile(file.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>}
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-900">{cat.label}</h3>
+                      <p className="text-sm text-muted-foreground">{cat.description}</p>
+                    </div>
                   </div>
+                  {!isLocked && (
+                    <div className="relative">
+                      <input 
+                        type="file" 
+                        id={`upload-${cat.id}`} 
+                        className="sr-only" 
+                        multiple 
+                        onChange={(e) => handleFileUpload(cat.id, e.target.files)} 
+                      />
+                      <Button asChild variant="outline" size="sm" className="rounded-xl border-2 hover:bg-primary hover:text-white hover:border-primary transition-all">
+                        <label htmlFor={`upload-${cat.id}`} className="gap-2 cursor-pointer">
+                          <UploadCloud className="w-4 h-4" /> Upload
+                        </label>
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="p-8 space-y-4">
+                {hasFiles ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Notes</Label>
-                      <Textarea value={file.notes} onChange={(e) => handleFileDetailChange(file.id, 'notes', e.target.value)} disabled={isLocked} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Status</Label>
-                      <Select value={file.status} onValueChange={(v) => handleFileDetailChange(file.id, 'status', v)} disabled={isLocked}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="uploaded">Uploaded</SelectItem>
-                          <SelectItem value="not_available">Not available yet</SelectItem>
-                          <SelectItem value="not_applicable">Not applicable</SelectItem>
-                          <SelectItem value="needs_updating">Needs updating</SelectItem>
-                          <SelectItem value="unsure">Unsure</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    {files.map((file: any) => (
+                      <div key={file.id} className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl shadow-sm group">
+                        <div className="flex items-center gap-3 overflow-hidden">
+                          <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400 shrink-0">
+                            <FileText className="w-4 h-4" />
+                          </div>
+                          <div className="truncate">
+                            <p className="text-xs font-bold text-slate-700 truncate">{file.originalFileName}</p>
+                            <p className="text-[10px] text-slate-400 uppercase font-bold tracking-tight">Source: {file.sourceSection?.replace(/_/g, ' ')}</p>
+                          </div>
+                        </div>
+                        <a href={file.downloadUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-primary hover:underline px-2 py-1 bg-primary/5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                          View File
+                        </a>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              ))}
-              {uploads.filter((f: any) => f.category === cat.key).length === 0 && (
-                <div className="text-center text-slate-500 py-4">No files uploaded for this category yet.</div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
+                ) : (
+                  <div className="text-center py-8 border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/50">
+                    <p className="text-sm text-slate-400 font-medium italic">No documents received for this category yet.</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
+
+      {/* Summary Card */}
+      <Card className="bg-slate-900 border-none rounded-[2.5rem] overflow-hidden shadow-2xl">
+        <CardContent className="p-10 space-y-10">
+          <div className="flex items-center gap-4 border-b border-slate-800 pb-6">
+            <div className="w-12 h-12 rounded-2xl bg-primary/20 flex items-center justify-center">
+              <Paperclip className="w-7 h-7 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-2xl font-bold text-white">Document Library Summary</h3>
+              <p className="text-slate-400 text-sm">Library readiness & data management.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="space-y-4">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                <Globe className="w-3 h-3" /> Coverage
+              </p>
+              <div className="space-y-3">
+                <ReadinessBadge active={readiness.hasBusinessProfileDocs} label="Business Profile" />
+                <ReadinessBadge active={readiness.hasInsuranceCertificates} label="Insurance" />
+                <ReadinessBadge active={readiness.hasPoliciesProcedures} label="Policies" />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                <Briefcase className="w-3 h-3" /> Capability
+              </p>
+              <div className="space-y-3">
+                <ReadinessBadge active={readiness.hasStaffDocuments} label="Staff Documentation" />
+                <ReadinessBadge active={readiness.hasProofDocuments} label="Case Studies & Proof" />
+                <ReadinessBadge active={readiness.hasPricingDocuments} label="Pricing & Budgets" />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                <Zap className="w-3 h-3" /> Service Readiness
+              </p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <ChannelBadge active={readiness.tenderDocumentReady} label="Tenders" />
+                <ChannelBadge active={readiness.grantDocumentReady} label="Grants" />
+                <ChannelBadge active={readiness.marketplaceDocumentReady} label="Marketplace" />
+                <ChannelBadge active={readiness.quoteDocumentReady} label="Quotes" />
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-8 border-t border-slate-800 text-center space-y-6">
+            <p className="text-sm text-slate-400 italic">
+              “Based on your uploaded documents, Bid Manager can build your client document library and identify any gaps before preparing proposals or tenders.”
+            </p>
+            <div className="flex flex-col items-center gap-4">
+               <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl p-6 w-full max-w-lg">
+                 <Checkbox 
+                  id="final-confirm" 
+                  checked={data.clientDocumentConfirmation} 
+                  onCheckedChange={(v) => onChange('clientDocumentConfirmation', !!v)} 
+                  disabled={isLocked}
+                  className="w-6 h-6 rounded-lg border-white/20 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                 />
+                 <Label htmlFor="final-confirm" className="text-sm font-bold text-white text-left leading-snug cursor-pointer">
+                    I have uploaded the documents currently available or marked unavailable documents for follow-up.
+                 </Label>
+               </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
+  );
+}
+
+function ReadinessBadge({ active, label }: { active: boolean, label: string }) {
+  return (
+    <div className={`flex items-center gap-3 px-4 py-2 rounded-xl border transition-all ${active ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-slate-800/50 border-slate-800 text-slate-600'}`}>
+      {active ? <CheckCircle2 className="w-4 h-4" /> : <div className="w-4 h-4 rounded-full border-2 border-slate-700" />}
+      <span className="text-xs font-bold truncate">{label}</span>
+    </div>
+  );
+}
+
+function ChannelBadge({ active, label }: { active: boolean, label: string }) {
+  return (
+    <Badge variant="outline" className={`border-none px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${active ? 'bg-primary text-white' : 'bg-slate-800 text-slate-500'}`}>
+      {label}
+    </Badge>
   );
 }

@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
-import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, addDoc } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, addDoc, getDoc, writeBatch } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -26,13 +26,19 @@ import {
   CloudOff
 } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
-import { getVisibleOnboardingSteps, allSteps, EnabledModules, OnboardingStep } from '@/lib/onboarding-steps';
+import { getVisibleOnboardingSteps, allSteps, EnabledModules, OnboardingStep, deriveServiceModules, deriveAuthorityReadiness } from '@/lib/onboarding-steps';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { validateOnboardingSection } from '@/lib/onboardingValidation';
 import { WelcomeExpectations } from '../welcome_expectations';
 import { BusinessSnapshot } from '../business_snapshot';
 import { ServiceSelection } from '../service_selection';
+import { BusinessProfile } from '../business_profile';
 import { OfferMenu } from '../offer_menu';
+import { TeamCapacity } from '../team_capacity';
+import { ProofEvidence } from '../proof_evidence';
+import { GoalsStrategy } from '../goals_strategy';
+import { PricingCommercial } from '../pricing_commercial';
+import { PlatformSetup } from '../platform_setup';
 import { DocumentUploadLibrary } from '../document_upload_library';
 import { AuthorityMatrix } from '../authority_matrix';
 import { OpportunityTriage } from '../opportunity_triage';
@@ -44,6 +50,7 @@ import { MarketplaceStrategy } from '../marketplace_strategy';
 import { OutreachStrategy } from '../outreach_strategy';
 import { QuoteSupport } from '../quote_support';
 import { FinalSubmission } from '../final_submission';
+import ServiceModules from '../service_modules';
 
 const buildSectionStatus = (currentStatus: any, newStatus: 'in_progress' | 'needs_attention' | 'complete' | 'skipped' | 'not_started', missingFields: string[] = []) => ({
   ...(currentStatus || {}),
@@ -128,7 +135,31 @@ export default function OnboardingStepPage() {
           lastSavedAt: serverTimestamp(),
           currentStep: sid
         };
-        updateData[`sections.${sid}`] = formData;
+
+        let processedFormData = { ...formData };
+        if (sid === 'authority_matrix') {
+          const readiness = deriveAuthorityReadiness(formData, {
+            pricing: submission.sections?.pricing_commercial,
+            serviceModules: submission.sections?.service_modules,
+            platforms: submission.sections?.platform_setup,
+            workflow: submission.sections?.workflow_rules
+          });
+          processedFormData.derivedAuthorityReadiness = readiness;
+          processedFormData.updatedAt = serverTimestamp();
+          
+          const validation = validateOnboardingSection(sid, formData, submission);
+          processedFormData.sectionStatus = {
+            isComplete: validation.isValid,
+            requiredFieldsComplete: validation.isValid,
+            validationErrors: validation.missingFields,
+            updatedAt: serverTimestamp()
+          };
+          if (validation.isValid) {
+            processedFormData.completedAt = serverTimestamp();
+          }
+        }
+
+        updateData[`sections.${sid}`] = processedFormData;
         updateData[`sectionStatuses.${sid}`] = buildSectionStatus(submission.sectionStatuses[sid], 'in_progress');
 
         await updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
@@ -232,7 +263,7 @@ export default function OnboardingStepPage() {
     }
     
     if (direction === 'next' && stepId !== 'final_submission') {
-      const validation = validateOnboardingSection(stepId as string, formData);
+      const validation = validateOnboardingSection(stepId as string, formData, submission);
       if (!validation.isValid) {
         const updateData: any = { updatedAt: serverTimestamp() };
         updateData[`sections.${stepId}`] = formData;
@@ -250,7 +281,31 @@ export default function OnboardingStepPage() {
     }
 
     const updateData: any = { updatedAt: serverTimestamp(), lastSavedAt: serverTimestamp() };
-    updateData[`sections.${stepId}`] = formData;
+    
+    let processedFormData = { ...formData };
+    if (stepId === 'authority_matrix') {
+      const readiness = deriveAuthorityReadiness(formData, {
+        pricing: submission.sections?.pricing_commercial,
+        serviceModules: submission.sections?.service_modules,
+        platforms: submission.sections?.platform_setup,
+        workflow: submission.sections?.workflow_rules
+      });
+      processedFormData.derivedAuthorityReadiness = readiness;
+      processedFormData.updatedAt = serverTimestamp();
+      
+      const validation = validateOnboardingSection(stepId as string, formData, submission);
+      processedFormData.sectionStatus = {
+        isComplete: validation.isValid,
+        requiredFieldsComplete: validation.isValid,
+        validationErrors: validation.missingFields,
+        updatedAt: serverTimestamp()
+      };
+      if (validation.isValid) {
+        processedFormData.completedAt = serverTimestamp();
+      }
+    }
+
+    updateData[`sections.${stepId}`] = processedFormData;
 
     let targetStepKey = stepId as string;
     let postSaveNavigation = true;
@@ -258,13 +313,7 @@ export default function OnboardingStepPage() {
 
     if (stepId === 'service_selection') {
       const services = formData.selectedServices || [];
-      const newEnabledModules: EnabledModules = {
-        tenderReadiness: services.includes("Government Tenders") || services.includes("Private Tenders") || services.includes("Panel or Supplier Registrations") || services.includes("Unsure, please recommend"),
-        grants: services.includes("Grants") || services.includes("Unsure, please recommend"),
-        marketplaceStrategy: services.includes("Marketplace Leads") || services.includes("Unsure, please recommend"),
-        outreachStrategy: services.includes("Direct Proposals") || services.includes("Unsure, please recommend"),
-        quoteSupport: services.includes("Quote Requests") || services.includes("Marketplace Leads") || services.includes("Direct Proposals") || services.includes("Unsure, please recommend"),
-      };
+      const newEnabledModules: EnabledModules = deriveServiceModules(services);
       tempEnabledModules = newEnabledModules;
 
       const newVisibleSteps = getVisibleOnboardingSteps(newEnabledModules);
@@ -273,13 +322,12 @@ export default function OnboardingStepPage() {
       let shouldRedirect = false;
 
       for (const step of allSteps) {
-          if (step.isConditional) {
+          if (step.key === 'service_modules') {
               const isNowVisible = newVisibleStepKeys.includes(step.key);
               const wasVisible = submission.visibleStepKeys.includes(step.key);
 
               if (isNowVisible && !wasVisible) {
-                  const previousStatus = currentStatuses[step.key].status === 'skipped' ? 'in_progress' : currentStatuses[step.key].status;
-                  currentStatuses[step.key] = buildSectionStatus(currentStatuses[step.key], previousStatus);
+                  currentStatuses[step.key] = buildSectionStatus(currentStatuses[step.key], 'not_started');
               } else if (!isNowVisible && wasVisible) {
                   currentStatuses[step.key] = buildSectionStatus(currentStatuses[step.key], 'skipped');
                   if (stepId === step.key) {
@@ -302,7 +350,7 @@ export default function OnboardingStepPage() {
             targetStepKey = 'final_submission';
         }
         postSaveNavigation = false;
-        toast({ title: "Section Hidden", description: "This section has been hidden because it is no longer selected in your service scope." });
+        toast({ title: "Section Hidden", description: "This section has been hidden because it is no longer in scope." });
         router.push(allSteps.find(s => s.key === targetStepKey)!.route);
       }
     }
@@ -363,8 +411,35 @@ export default function OnboardingStepPage() {
   };
 
   const handleSubmitPack = async () => {
-    if (!submissionId || !db || !user) return;
+    if (!submissionId || !db || !user || !submission) return;
 
+    const batch = writeBatch(db);
+    const submissionRef = doc(db, 'onboardingSubmissions', submissionId);
+    
+    // 1. Prepare Snapshot
+    const snapshotData = {
+      clientId: user.uid, // Assuming userId is clientId here for simplicity
+      submissionId,
+      submissionVersion: (submission.submissionVersion || 0) + 1,
+      submittedAt: serverTimestamp(),
+      submittedByUserId: user.uid,
+      submittedByName: user.displayName || 'Client',
+      submittedByEmail: user.email || '',
+      onboardingDataSnapshot: { ...submission.sections, final_submission: formData },
+      documentSnapshot: {
+        documentIds: submission.sections?.document_upload_library?.uploadedDocumentIds || [],
+        documentRequirements: submission.sections?.document_upload_library?.requirements || [],
+        documentReadiness: {} // Add readiness if available
+      },
+      status: 'submitted',
+      createdAt: serverTimestamp()
+    };
+
+    // 2. Create Immutable Snapshot
+    const snapshotRef = doc(collection(db, 'clients', user.uid, 'onboardingSubmissions'));
+    batch.set(snapshotRef, snapshotData);
+
+    // 3. Update Meta & Submission
     const finalStatuses = { ...submission.sectionStatuses };
     for (const step of visibleSteps) {
         if(finalStatuses[step.key].status !== 'complete') {
@@ -373,21 +448,31 @@ export default function OnboardingStepPage() {
     }
     finalStatuses['final_submission'] = buildSectionStatus(finalStatuses['final_submission'], 'complete');
 
-    try {
-      await updateDoc(doc(db, 'onboardingSubmissions', submissionId), {
-        status: 'submitted',
+    batch.update(submissionRef, {
+      status: 'submitted',
+      submittedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      [`sections.final_submission`]: {
+        ...formData,
+        sectionCompletionSnapshot: finalStatuses,
+        submissionStatus: 'submitted',
         submittedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        [`sections.final_submission`]: formData,
-        sectionStatuses: finalStatuses,
-        exportStatus: 'pending'
-      });
+        submittedByUserId: user.uid,
+        submissionVersion: snapshotData.submissionVersion
+      },
+      sectionStatuses: finalStatuses,
+      submissionVersion: snapshotData.submissionVersion,
+      exportStatus: 'pending'
+    });
 
-      await updateDoc(doc(db, 'users', user.uid), {
-        onboardingStatus: 'submitted',
-        updatedAt: serverTimestamp()
-      });
+    // Update User Onboarding Status
+    batch.update(doc(db, 'users', user.uid), {
+      onboardingStatus: 'submitted',
+      updatedAt: serverTimestamp()
+    });
 
+    try {
+      await batch.commit();
       toast({ title: "Submission Successful", description: "Your onboarding pack has been locked and sent to our team." });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Submission Failed", description: error.message });
@@ -573,16 +658,30 @@ function StepContent({ stepId, data, allData, onChange, isLocked, submissionId, 
       return <BusinessSnapshot data={data} onChange={onChange} isLocked={isLocked} />;
     case 'service_selection':
       return <ServiceSelection data={data} onChange={onChange} isLocked={isLocked} />;
+    case 'business_profile':
+      return <BusinessProfile data={data} onChange={onChange} isLocked={isLocked} allData={allData} />;
     case 'offer_menu':
       return <OfferMenu data={data} onChange={onChange} isLocked={isLocked} />;
+    case 'team_capacity':
+      return <TeamCapacity data={data} onChange={onChange} isLocked={isLocked} />;
+    case 'proof_evidence':
+      return <ProofEvidence data={data} onChange={onChange} isLocked={isLocked} />;
+    case 'goals_strategy':
+      return <GoalsStrategy data={data} onChange={onChange} isLocked={isLocked} />;
+    case 'pricing_commercial':
+      return <PricingCommercial data={data} onChange={onChange} isLocked={isLocked} allData={allData} />;
+    case 'platform_setup':
+      return <PlatformSetup data={data} onChange={onChange} isLocked={isLocked} allData={allData} />;
     case 'document_upload_library':
       return <DocumentUploadLibrary data={data} onChange={onChange} isLocked={isLocked} submissionId={submissionId} />;
     case 'authority_matrix':
-      return <AuthorityMatrix data={data} onChange={onChange} isLocked={isLocked} />;
+      return <AuthorityMatrix data={data} allData={allData} onChange={onChange} isLocked={isLocked} />;
     case 'opportunity_triage':
       return <OpportunityTriage data={data} onChange={onChange} isLocked={isLocked} />;
     case 'compliance_insurance':
       return <ComplianceInsurance data={data} onChange={onChange} isLocked={isLocked} />;
+    case 'service_modules':
+      return <ServiceModules data={data} onChange={onChange} isLocked={isLocked} allData={allData} />;
     case 'tender_readiness':
       return <TenderReadiness data={data} onChange={onChange} isLocked={isLocked} />;
     case 'grants':
@@ -597,12 +696,6 @@ function StepContent({ stepId, data, allData, onChange, isLocked, submissionId, 
       return <WorkflowRules data={data} onChange={onChange} isLocked={isLocked} />;
     case 'final_submission':
       return <FinalSubmission data={data} allData={allData} onChange={onChange} isLocked={isLocked} onEdit={onEdit} onSubmit={onSubmit} />;
-    case 'business_profile':
-    case 'team_capacity':
-    case 'proof_evidence':
-    case 'goals_strategy':
-    case 'pricing_commercial':
-    case 'platform_setup':
     default:
       return (
         <div className="py-20 text-center space-y-6">

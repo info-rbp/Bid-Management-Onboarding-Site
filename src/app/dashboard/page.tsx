@@ -24,7 +24,7 @@ import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { doc, query, collection, where, addDoc, serverTimestamp } from 'firebase/firestore';
 import Link from 'next/link';
-import { getVisibleOnboardingSteps, allSteps } from '@/lib/onboarding-steps';
+import { getVisibleOnboardingSteps, allSteps, deriveServiceModules } from '@/lib/onboarding-steps';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 
 export default function DashboardPage() {
@@ -111,14 +111,21 @@ export default function DashboardPage() {
       if (isVisible) return `/onboarding/${submission.currentStep}`;
     }
 
-    const completedKeys = submission.completedSteps || [];
+    const completedKeys = Object.entries(submission.sectionStatuses || {})
+      .filter(([_, status]: [string, any]) => status.status === 'complete')
+      .map(([key]) => key);
+    
     const firstIncomplete = visibleSteps.find(s => !completedKeys.includes(s.key));
     if (firstIncomplete) return firstIncomplete.route;
 
     return '/onboarding/final_submission';
   }, [submission, visibleSteps]);
 
-  const completedCount = submission?.completedSteps?.length || 0;
+  const completedCount = useMemo(() => {
+    if (!submission || !visibleSteps.length) return 0;
+    return visibleSteps.filter(s => submission.sectionStatuses?.[s.key]?.status === 'complete').length;
+  }, [submission, visibleSteps]);
+
   const progressValue = submission?.completionPercentage || 0;
 
   const isSubmitted = submission?.status === 'submitted';

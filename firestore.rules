@@ -2,109 +2,55 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    /**
-     * BID MANAGER SECURITY RULES
-     * 
-     * Core Philosophy:
-     * This ruleset enforces a strict user-ownership model designed for a high-security onboarding 
-     * environment. Authorization is primary; data shape validation is secondary to support 
-     * rapid prototyping.
-     * 
-     * Data Structure:
-     * - /users/{userId}: Private user profiles, indexed by Auth UID.
-     * - /onboardingSubmissions/{id}: Flat collection of onboarding drafts, linked via 'userId'.
-     * - /uploadedDocuments/{id}: Flat collection of document metadata, linked via 'userId'.
-     * - /admins/{userId}: Role-based access control via existence checks.
-     * 
-     * Key Security Decisions:
-     * 1. Authorization Independence: Ownership fields (userId) are denormalized onto all 
-     *    documents to allow for fast, reliable authorization without excessive cross-document lookups.
-     * 2. Subscription Gating: Access to create or modify onboarding data is contingent 
-     *    on a 'subscriptionStatus' of 'active' found in the user's profile.
-     * 3. Submission Locking: Once an onboarding pack is marked as 'submitted', it is 
-     *    locked from further client edits unless explicitly 'adminReopened' by an administrator.
-     * 4. Listing Restrictions: Users can list their own data by filtering by their UID. 
-     *    Public listing is strictly prohibited.
-     */
-
-    // --- Helper Functions ---
-
-    /** @description Checks if the request is from an authenticated user. */
     function isSignedIn() {
       return request.auth != null;
     }
 
-    /** @description Checks if the authenticated user's UID matches the provided userId. */
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
-
-    /** @description Checks if a document exists and the current user is the owner. */
-    function isExistingOwner(userId) {
-      return resource != null && isOwner(userId);
-    }
-
-    /** @description Implements DBAC by checking if the user exists in the /admins collection. */
+    
     function isAdmin() {
       return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    /** @description Verifies if the user has an active subscription in their profile. */
-    function isSubscriptionActive() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subscriptionStatus == 'active';
-    }
-
-    /** @description Checks if an onboarding submission is in an editable state. */
-    function isSubmissionEditable(data) {
-      return data.status != 'submitted' || data.adminReopened == true;
-    }
-
-    // --- Collection Rules ---
-
-    /**
-     * @description Rules for the User profile collection.
-     * @path /users/{userId}
-     */
+    // Users collection
     match /users/{userId} {
-      allow get: if isOwner(userId) || isAdmin();
-      allow list: if isAdmin();
-      allow create: if isOwner(userId);
-      allow update: if (isExistingOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin();
-      allow delete: if isAdmin();
+      allow read, write: if isOwner(userId) || isAdmin();
     }
 
-    /**
-     * @description Rules for onboarding submissions.
-     * @path /onboardingSubmissions/{submissionId}
-     */
-    match /onboardingSubmissions/{submissionId} {
-      allow get: if isOwner(resource.data.userId) || isAdmin();
-      allow list: if isSignedIn() && (isAdmin() || (resource != null && resource.data.userId == request.auth.uid));
-      allow create: if isSignedIn() && isOwner(request.resource.data.userId) && isSubscriptionActive();
-      allow update: if isExistingOwner(resource.data.userId) && isSubmissionEditable(resource.data) && request.resource.data.userId == resource.data.userId;
-      allow delete: if isAdmin();
+    // Onboarding submissions
+    match /onboardingSubmissions/{id} {
+      // For list, the query must filter by userId
+      // For get, the document must have the correct userId
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.userId == request.auth.uid || isAdmin());
+      allow update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
-    /**
-     * @description Rules for uploaded document metadata.
-     * @path /uploadedDocuments/{documentId}
-     */
-    match /uploadedDocuments/{documentId} {
-      allow get: if isOwner(resource.data.userId) || isAdmin();
-      allow list: if isSignedIn() && (isAdmin() || (resource != null && resource.data.userId == request.auth.uid));
-      allow create: if isSignedIn() && isOwner(request.resource.data.userId) && isSubscriptionActive();
-      allow update: if isExistingOwner(resource.data.userId) && request.resource.data.userId == resource.data.userId;
-      allow delete: if isExistingOwner(resource.data.userId) || isAdmin();
+    // Clients collection and all its subcollections
+    // This allows the user to access their own client document and everything under it
+    match /clients/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+      
+      match /{allPaths=**} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
     }
 
-    /**
-     * @description Rules for the administrative roles collection.
-     * @path /admins/{adminId}
-     */
-    match /admins/{adminId} {
-      allow get: if isSignedIn();
-      allow list: if isAdmin();
-      allow create, update, delete: if false;
+    // Uploaded documents
+    match /uploadedDocuments/{id} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.userId == request.auth.uid || isAdmin());
+      allow update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // Admins collection
+    match /admins/{id} {
+      allow read: if isSignedIn();
+      // Only admins can write to the admins collection? 
+      // Usually you'd want a bootstrap admin or a manual process.
+      allow write: if isAdmin();
     }
   }
 }
