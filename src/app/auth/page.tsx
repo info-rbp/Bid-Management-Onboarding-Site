@@ -6,13 +6,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth, useFirestore } from '@/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Mail, Lock, User, Building2 } from 'lucide-react';
+import { Loader2, Mail, Lock, User, Building2, MapPin } from 'lucide-react';
 import Link from 'next/link';
 
 function AuthContent() {
@@ -53,6 +54,7 @@ function AuthContent() {
     const password = formData.get('password') as string;
     const fullName = formData.get('fullName') as string;
     const businessName = formData.get('businessName') as string;
+    const billingAddress = formData.get('billingAddress') as string;
 
     setLoading(true);
     try {
@@ -61,17 +63,32 @@ function AuthContent() {
 
       await updateProfile(user, { displayName: fullName });
 
-      await setDoc(doc(db, 'users', user.uid), {
+      const userData = {
         id: user.uid,
         email,
         fullName,
         businessName,
+        billingAddress,
         role: 'client',
         subscriptionStatus: 'inactive',
         onboardingStatus: 'not_started',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      };
+
+      await setDoc(doc(db, 'users', user.uid), userData);
+
+      // Trigger Email Notification API
+      fetch('/api/notifications/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            fullName,
+            businessName,
+            email,
+            billingAddress
+        })
+      }).catch(err => console.error("Email notification failed", err));
 
       router.push('/payment');
     } catch (error: any) {
@@ -138,6 +155,19 @@ function AuthContent() {
                   </div>
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="billingAddress">Billing Address</Label>
+                  <div className="relative">
+                    <Textarea 
+                        id="billingAddress" 
+                        name="billingAddress" 
+                        placeholder="123 Business St, Sydney NSW 2000" 
+                        className="pl-10 min-h-[80px]" 
+                        required 
+                    />
+                    <MapPin className="absolute left-3 top-3 w-5 h-5 text-muted-foreground" />
+                  </div>
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="signup-email">Email</Label>
                   <div className="relative">
                     <Input id="signup-email" name="email" type="email" placeholder="name@company.com" className="pl-10 h-12" required />
@@ -159,10 +189,6 @@ function AuthContent() {
           </Tabs>
         </CardContent>
       </Card>
-
-      <p className="mt-8 text-sm text-slate-500">
-        New to Bid Manager? <Link href="/onboarding" className="text-primary font-bold hover:underline">Start the signup flow</Link>
-      </p>
     </div>
   );
 }

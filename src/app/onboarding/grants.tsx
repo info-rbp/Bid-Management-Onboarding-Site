@@ -43,7 +43,6 @@ const GrantProjectCard = ({ project, index, onChange, onRemove, isLocked }: any)
         <div className="space-y-2"><Label>Known grant programs or deadlines</Label><Input value={project.knownPrograms || ''} onChange={(e) => handleChange('knownPrograms', e.target.value)} disabled={isLocked} /></div>
         <div className="space-y-2"><Label>Partners or collaborators</Label><Input value={project.partners || ''} onChange={(e) => handleChange('partners', e.target.value)} disabled={isLocked} /></div>
         <div className="space-y-2 col-span-2"><Label>Sustainability after grant funding</Label><Textarea value={project.sustainability || ''} onChange={(e) => handleChange('sustainability', e.target.value)} disabled={isLocked} /></div>
-        <div className="col-span-2"><Button variant="outline" disabled={isLocked}><UploadCloud className="w-4 h-4 mr-2" /> Upload Supporting Documents</Button></div>
       </CardContent>
     </Card>
   );

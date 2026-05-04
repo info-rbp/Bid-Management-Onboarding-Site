@@ -68,6 +68,7 @@ export default function OnboardingStepPage() {
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [formData, setFormData] = useState<any>({});
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
   
   const initialSyncDone = useRef<Record<string, boolean>>({});
@@ -413,69 +414,48 @@ export default function OnboardingStepPage() {
   const handleSubmitPack = async () => {
     if (!submissionId || !db || !user || !submission) return;
 
-    const batch = writeBatch(db);
-    const submissionRef = doc(db, 'onboardingSubmissions', submissionId);
-    
-    // 1. Prepare Snapshot
-    const snapshotData = {
-      clientId: user.uid, // Assuming userId is clientId here for simplicity
-      submissionId,
-      submissionVersion: (submission.submissionVersion || 0) + 1,
-      submittedAt: serverTimestamp(),
-      submittedByUserId: user.uid,
-      submittedByName: user.displayName || 'Client',
-      submittedByEmail: user.email || '',
-      onboardingDataSnapshot: { ...submission.sections, final_submission: formData },
-      documentSnapshot: {
-        documentIds: submission.sections?.document_upload_library?.uploadedDocumentIds || [],
-        documentRequirements: submission.sections?.document_upload_library?.requirements || [],
-        documentReadiness: {} // Add readiness if available
-      },
-      status: 'submitted',
-      createdAt: serverTimestamp()
-    };
-
-    // 2. Create Immutable Snapshot
-    const snapshotRef = doc(collection(db, 'clients', user.uid, 'onboardingSubmissions'));
-    batch.set(snapshotRef, snapshotData);
-
-    // 3. Update Meta & Submission
-    const finalStatuses = { ...submission.sectionStatuses };
-    for (const step of visibleSteps) {
-        if(finalStatuses[step.key].status !== 'complete') {
-            finalStatuses[step.key].status = step.required ? finalStatuses[step.key].status : 'skipped';
-        }
-    }
-    finalStatuses['final_submission'] = buildSectionStatus(finalStatuses['final_submission'], 'complete');
-
-    batch.update(submissionRef, {
-      status: 'submitted',
-      submittedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      [`sections.final_submission`]: {
-        ...formData,
-        sectionCompletionSnapshot: finalStatuses,
-        submissionStatus: 'submitted',
-        submittedAt: serverTimestamp(),
-        submittedByUserId: user.uid,
-        submissionVersion: snapshotData.submissionVersion
-      },
-      sectionStatuses: finalStatuses,
-      submissionVersion: snapshotData.submissionVersion,
-      exportStatus: 'pending'
-    });
-
-    // Update User Onboarding Status
-    batch.update(doc(db, 'users', user.uid), {
-      onboardingStatus: 'submitted',
-      updatedAt: serverTimestamp()
-    });
-
+    setIsSubmitting(true);
     try {
-      await batch.commit();
-      toast({ title: "Submission Successful", description: "Your onboarding pack has been locked and sent to our team." });
+      // 1. First, save current section data to Firestore
+      const updateData: any = { 
+        updatedAt: serverTimestamp(),
+        [`sections.final_submission`]: formData 
+      };
+      await updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
+
+      // 2. Call the Finalize API which handles Google Drive and Status Updates
+      const response = await fetch('/api/onboarding/finalize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submissionId, userId: user.uid }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to finalize submission');
+      }
+      
+      // 3. NEW: Call the notification API
+      await fetch('/api/notifications/submission', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+              submissionId: submissionId,
+              businessName: submission.businessName || 'N/A',
+          }),
+      });
+
+      toast({ 
+        title: "Submission Successful", 
+        description: "Your onboarding pack has been submitted and a notification has been sent." 
+      });
+
+      // 4. Redirect to a confirmation page
+      router.push(`/onboarding/submitted?id=${submissionId}`);
+      
     } catch (error: any) {
       toast({ variant: "destructive", title: "Submission Failed", description: error.message });
+      setIsSubmitting(false); // Only set this on failure
     }
   };
 
@@ -628,16 +608,26 @@ export default function OnboardingStepPage() {
 
               <Card className="border-none shadow-xl shadow-slate-200/50 rounded-[2.5rem] overflow-hidden bg-white">
                 <CardContent className="p-10 lg:p-14">
-                  <StepContent 
-                    stepId={stepId as string} 
-                    data={formData} 
-                    allData={submission}
-                    onChange={handleFieldChange} 
-                    isLocked={isLocked}
-                    submissionId={submissionId}
-                    onEdit={handleNavigate}
-                    onSubmit={handleSubmitPack}
-                  />
+                  {isSubmitting ? (
+                    <div className="py-20 flex flex-col items-center justify-center gap-4">
+                      <Loader2 className="animate-spin text-primary w-12 h-12" />
+                      <div className="text-center">
+                        <h3 className="text-lg font-bold">Finalizing Onboarding</h3>
+                        <p className="text-sm text-muted-foreground">Creating your Google Drive workspace and locking files...</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <StepContent 
+                      stepId={stepId as string} 
+                      data={formData} 
+                      allData={submission}
+                      onChange={handleFieldChange} 
+                      isLocked={isLocked}
+                      submissionId={submissionId}
+                      onEdit={handleNavigate}
+                      onSubmit={handleSubmitPack}
+                    />
+                  )}
                 </CardContent>
               </Card>
             </div>

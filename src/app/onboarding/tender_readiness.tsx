@@ -48,7 +48,6 @@ export function TenderReadiness({ data, onChange, isLocked }: TenderReadinessPro
                  <div className="space-y-2"><Label>How many in the last 12 months?</Label><Input type="number" value={data.submissionsLast12Months || ''} onChange={(e) => onChange('submissionsLast12Months', e.target.value)} disabled={isLocked} /></div>
                  <div className="space-y-2"><Label>What was your success history?</Label><Textarea value={data.successHistory || ''} onChange={(e) => onChange('successHistory', e.target.value)} disabled={isLocked} /></div>
                  <div className="space-y-2"><Label>What feedback have you received?</Label><Textarea value={data.feedbackReceived || ''} onChange={(e) => onChange('feedbackReceived', e.target.value)} disabled={isLocked} /></div>
-                 <Button variant="outline" disabled={isLocked}><UploadCloud className="w-4 h-4 mr-2" /> Upload Past Submissions or Feedback</Button>
             </div>}
         </CardContent>
       </Card>

@@ -304,6 +304,49 @@ export function validateOnboardingSection(stepId: string, data: any, allData?: a
         }
         break;
     }
+    case 'tender_readiness': {
+        const fields = ['previousExperience', 'submissionFrequency', 'selectionCriteriaPriorities', 'internalOrExternalResources', 'awareOfReportingObligations', 'handlesSubcontractors'];
+        fields.forEach(f => { if (!data[f]) missingFields.push(f) });
+        if (data.previousExperience === 'yes' && !data.previousExperienceDetails) {
+            missingFields.push('previousExperienceDetails');
+        }
+        if (data.awareOfReportingObligations === 'yes' && !data.reportingObligationsDetails) {
+            missingFields.push('reportingObligationsDetails');
+        }
+        if (data.handlesSubcontractors === 'yes' && !data.subcontractorManagementProcess) {
+            missingFields.push('subcontractorManagementProcess');
+        }
+        break;
+    }
+    case 'grants': {
+        const fields = ['grantWritingExperience', 'grantTypes', 'strategicAlignment', 'grantWishlist'];
+        fields.forEach(f => { if (!data[f]) missingFields.push(f) });
+        if (data.grantWritingExperience === 'yes' && !data.grantWritingExperienceDetails) {
+            missingFields.push('grantWritingExperienceDetails');
+        }
+        break;
+    }
+    case 'marketplace_strategy': {
+        const fields = ['relevantMarketplaces', 'profileCompletion', 'leadGenerationStrategy', 'reviewManagement'];
+        fields.forEach(f => { if (!data[f]) missingFields.push(f) });
+        if (data.relevantMarketplaces === 'yes' && !data.marketplaceExamples) {
+            missingFields.push('marketplaceExamples');
+        }
+        break;
+    }
+    case 'outreach_strategy': {
+        const fields = ['outreachChannels', 'targetAudience', 'messaging', 'trackingAndReporting'];
+        fields.forEach(f => { if (!data[f]) missingFields.push(f) });
+        if (data.outreachChannels?.includes('other') && !data.otherOutreachChannel) {
+            missingFields.push('otherOutreachChannel');
+        }
+        break;
+    }
+    case 'quote_support': {
+        const fields = ['quoteTurnaround', 'quoteFormat', 'pricingStrategy', 'followUpProcess'];
+        fields.forEach(f => { if (!data[f]) missingFields.push(f) });
+        break;
+    }
     case 'workflow_rules': {
         if (!data.preferredCommunicationMethods || data.preferredCommunicationMethods.length === 0) missingFields.push('preferredCommunicationMethods');
         if (data.preferredCommunicationMethods?.includes('other') && !data.otherCommunicationMethod) missingFields.push('otherCommunicationMethod');
