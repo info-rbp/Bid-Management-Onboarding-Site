@@ -104,7 +104,7 @@ export function ComplianceInsurance({ data, onChange, isLocked }: ComplianceInsu
                   {compliances[type.key] && (
                     <>
                       <div className="space-y-2"><Label>Certification ID</Label><Input value={compliances[type.key]?.id || ''} onChange={(e) => handleComplianceChange(type.key, 'id', e.target.value)} disabled={isLocked} /></div>
-                      <div className="space-y-2"><Label>Expiry</Date></Label><Input type="date" value={compliances[type.key]?.expiry || ''} onChange={(e) => handleComplianceChange(type.key, 'expiry', e.target.value)} disabled={isLocked} /></div>
+                      <div className="space-y-2"><Label>Expiry</Label><Input type="date" value={compliances[type.key]?.expiry || ''} onChange={(e) => handleComplianceChange(type.key, 'expiry', e.target.value)} disabled={isLocked} /></div>
                       <div className="space-y-2 self-end"><Button variant="outline" size="sm" disabled={isLocked}><UploadCloud className="w-4 h-4 mr-2" />Certificate</Button></div>
                     </>
                   )}

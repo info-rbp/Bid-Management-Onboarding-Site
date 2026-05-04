@@ -29,21 +29,28 @@ import { Badge } from "@/components/ui/badge";
 import { getVisibleOnboardingSteps, allSteps, EnabledModules, OnboardingStep } from '@/lib/onboarding-steps';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { validateOnboardingSection } from '@/lib/onboardingValidation';
-import { WelcomeExpectations } from '@/app/onboarding/welcome_expectations';
-import { BusinessSnapshot } from '@/app/onboarding/business_snapshot';
-import { ServiceSelection } from '@/app/onboarding/service_selection';
-import { OfferMenu } from '@/app/onboarding/offer_menu';
-import { DocumentUploadLibrary } from '@/app/onboarding/document_upload_library';
-import { AuthorityMatrix } from '@/app/onboarding/authority_matrix';
-import { OpportunityTriage } from '@/app/onboarding/opportunity_triage';
-import { ComplianceInsurance } from '@/app/onboarding/compliance_insurance';
-import { WorkflowRules } from '@/app/onboarding/workflow_rules';
-import { TenderReadiness } from '@/app/onboarding/tender_readiness';
-import { Grants } from '@/app/onboarding/grants';
-import { MarketplaceStrategy } from '@/app/onboarding/marketplace_strategy';
-import { OutreachStrategy } from '@/app/onboarding/outreach_strategy';
-import { QuoteSupport } from '@/app/onboarding/quote_support';
-import { FinalSubmission } from '@/app/onboarding/final_submission';
+import { WelcomeExpectations } from '../welcome_expectations';
+import { BusinessSnapshot } from '../business_snapshot';
+import { ServiceSelection } from '../service_selection';
+import { OfferMenu } from '../offer_menu';
+import { DocumentUploadLibrary } from '../document_upload_library';
+import { AuthorityMatrix } from '../authority_matrix';
+import { OpportunityTriage } from '../opportunity_triage';
+import { ComplianceInsurance } from '../compliance_insurance';
+import { WorkflowRules } from '../workflow_rules';
+import { TenderReadiness } from '../tender_readiness';
+import { Grants } from '../grants';
+import { MarketplaceStrategy } from '../marketplace_strategy';
+import { OutreachStrategy } from '../outreach_strategy';
+import { QuoteSupport } from '../quote_support';
+import { FinalSubmission } from '../final_submission';
+
+const buildSectionStatus = (currentStatus: any, newStatus: 'in_progress' | 'needs_attention' | 'complete' | 'skipped' | 'not_started', missingFields: string[] = []) => ({
+  ...(currentStatus || {}),
+  status: newStatus,
+  missingFields,
+  lastUpdatedAt: serverTimestamp(),
+});
 
 export default function OnboardingStepPage() {
   const { stepId } = useParams();
@@ -57,7 +64,7 @@ export default function OnboardingStepPage() {
   const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
   
   const initialSyncDone = useRef<Record<string, boolean>>({});
-  const lastSavedDataRef = useRef<string>("");
+  const lastSavedDataRef = useRef<string>("{}");
 
   const submissionRef = useMemoFirebase(() => {
     if (!submissionId || !db) return null;
@@ -122,11 +129,7 @@ export default function OnboardingStepPage() {
           currentStep: sid
         };
         updateData[`sections.${sid}`] = formData;
-        updateData[`sectionStatuses.${sid}`] = {
-            ...(submission.sectionStatuses[sid] || {}),
-            status: 'in_progress',
-            lastUpdatedAt: serverTimestamp(),
-        }
+        updateData[`sectionStatuses.${sid}`] = buildSectionStatus(submission.sectionStatuses[sid], 'in_progress');
 
         await updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
         
@@ -177,13 +180,7 @@ export default function OnboardingStepPage() {
           },
           sections: {},
           sectionStatuses: allSteps.reduce((acc, step) => {
-            acc[step.key] = {
-              sectionKey: step.key,
-              status: 'not_started',
-              required: step.required,
-              missingFields: [],
-              lastUpdatedAt: null
-            };
+            acc[step.key] = buildSectionStatus(null, 'not_started');
             return acc;
           }, {} as { [key: string]: any }),
           createdAt: serverTimestamp(),
@@ -239,12 +236,7 @@ export default function OnboardingStepPage() {
       if (!validation.isValid) {
         const updateData: any = { updatedAt: serverTimestamp() };
         updateData[`sections.${stepId}`] = formData;
-        updateData[`sectionStatuses.${stepId}`] = {
-          ...(submission.sectionStatuses[stepId as string] || {}),
-          status: 'needs_attention',
-          missingFields: validation.missingFields,
-          lastUpdatedAt: serverTimestamp()
-        };
+        updateData[`sectionStatuses.${stepId}`] = buildSectionStatus(submission.sectionStatuses[stepId as string], 'needs_attention', validation.missingFields);
         
         updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
         
@@ -287,9 +279,9 @@ export default function OnboardingStepPage() {
 
               if (isNowVisible && !wasVisible) {
                   const previousStatus = currentStatuses[step.key].status === 'skipped' ? 'in_progress' : currentStatuses[step.key].status;
-                  currentStatuses[step.key].status = previousStatus;
+                  currentStatuses[step.key] = buildSectionStatus(currentStatuses[step.key], previousStatus);
               } else if (!isNowVisible && wasVisible) {
-                  currentStatuses[step.key].status = 'skipped';
+                  currentStatuses[step.key] = buildSectionStatus(currentStatuses[step.key], 'skipped');
                   if (stepId === step.key) {
                       shouldRedirect = true;
                   }
@@ -318,20 +310,23 @@ export default function OnboardingStepPage() {
     if (direction === 'next') {
       const finalVisibleSteps = getVisibleOnboardingSteps(tempEnabledModules);
       const finalVisibleRequiredSteps = finalVisibleSteps.filter(s => s.required);
-      const completedVisibleRequiredSteps = finalVisibleRequiredSteps.filter(
-          s => (s.key !== stepId && submission.sectionStatuses[s.key]?.status === 'complete') || (s.key === stepId)
-      ).length;
-
-      const completionPercentage = (completedVisibleRequiredSteps / finalVisibleRequiredSteps.length) * 100;
-
-      updateData[`sectionStatuses.${stepId}`] = {
-          ...(submission.sectionStatuses[stepId as string] || {}),
-          status: 'complete',
-          missingFields: [],
-          lastUpdatedAt: serverTimestamp()
-      };
       
-      updateData.completionPercentage = completionPercentage;
+      if (finalVisibleRequiredSteps.length === 0) {
+        updateData.completionPercentage = 100;
+      } else {
+        const completedRequiredStepsCount = finalVisibleRequiredSteps.reduce((count, step) => {
+          const isCurrentStep = step.key === stepId;
+          const isCompleted = submission.sectionStatuses[step.key]?.status === 'complete';
+          if ((!isCurrentStep && isCompleted) || (isCurrentStep)) {
+             return count + 1;
+          }
+          return count;
+        }, 0);
+        const completionPercentage = (completedRequiredStepsCount / finalVisibleRequiredSteps.length) * 100;
+        updateData.completionPercentage = completionPercentage;
+      }
+      
+      updateData[`sectionStatuses.${stepId}`] = buildSectionStatus(submission.sectionStatuses[stepId as string], 'complete');
       
       if (currentVisibleIndex < visibleSteps.length - 1) {
         targetStepKey = visibleSteps[currentVisibleIndex + 1].key;
@@ -341,11 +336,7 @@ export default function OnboardingStepPage() {
         targetStepKey = visibleSteps[currentVisibleIndex - 1].key;
       }
     } else {
-      updateData[`sectionStatuses.${stepId}`] = {
-          ...(submission.sectionStatuses[stepId as string] || {}),
-          status: 'in_progress',
-          lastUpdatedAt: serverTimestamp()
-      };
+      updateData[`sectionStatuses.${stepId}`] = buildSectionStatus(submission.sectionStatuses[stepId as string], 'in_progress');
     }
 
     updateData.currentStep = targetStepKey;
@@ -380,13 +371,7 @@ export default function OnboardingStepPage() {
             finalStatuses[step.key].status = step.required ? finalStatuses[step.key].status : 'skipped';
         }
     }
-    finalStatuses['final_submission'] = {
-        sectionKey: 'final_submission',
-        status: 'complete',
-        required: true,
-        missingFields: [],
-        lastUpdatedAt: serverTimestamp()
-    };
+    finalStatuses['final_submission'] = buildSectionStatus(finalStatuses['final_submission'], 'complete');
 
     try {
       await updateDoc(doc(db, 'onboardingSubmissions', submissionId), {
@@ -402,10 +387,6 @@ export default function OnboardingStepPage() {
         onboardingStatus: 'submitted',
         updatedAt: serverTimestamp()
       });
-      
-      // This would ideally call a cloud function
-      // For now, we simulate the trigger
-      console.log("Triggering backend function: exportOnboardingToGoogleDrive");
 
       toast({ title: "Submission Successful", description: "Your onboarding pack has been locked and sent to our team." });
     } catch (error: any) {
@@ -616,6 +597,12 @@ function StepContent({ stepId, data, allData, onChange, isLocked, submissionId, 
       return <WorkflowRules data={data} onChange={onChange} isLocked={isLocked} />;
     case 'final_submission':
       return <FinalSubmission data={data} allData={allData} onChange={onChange} isLocked={isLocked} onEdit={onEdit} onSubmit={onSubmit} />;
+    case 'business_profile':
+    case 'team_capacity':
+    case 'proof_evidence':
+    case 'goals_strategy':
+    case 'pricing_commercial':
+    case 'platform_setup':
     default:
       return (
         <div className="py-20 text-center space-y-6">

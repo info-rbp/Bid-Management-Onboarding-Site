@@ -69,16 +69,7 @@ export const allSteps: OnboardingStep[] = [
     required: true,
     route: "/onboarding/business_snapshot",
   },
-  {
-    key: "opportunity_triage",
-    title: "Opportunity Triage",
-    shortTitle: "Triage Rules",
-    icon: Search,
-    description: "Define which opportunities are a 'YES' and which are a 'NO'.",
-    required: true,
-    route: "/onboarding/opportunity_triage",
-  },
-  {
+    {
     key: "service_selection",
     title: "Service Selection",
     shortTitle: "Services",
@@ -97,7 +88,7 @@ export const allSteps: OnboardingStep[] = [
     required: true,
     route: "/onboarding/business_profile",
   },
-  {
+    {
     key: "offer_menu",
     title: "Offer Menu",
     shortTitle: "Offers",
@@ -106,7 +97,7 @@ export const allSteps: OnboardingStep[] = [
     required: true,
     route: "/onboarding/offer_menu",
   },
-  {
+    {
     key: "team_capacity",
     title: "Team & Capacity",
     shortTitle: "Team",
@@ -115,7 +106,7 @@ export const allSteps: OnboardingStep[] = [
     required: true,
     route: "/onboarding/team_capacity",
   },
-  {
+    {
     key: "proof_evidence",
     title: "Proof & Evidence",
     shortTitle: "Proof",
@@ -124,7 +115,7 @@ export const allSteps: OnboardingStep[] = [
     required: true,
     route: "/onboarding/proof_evidence",
   },
-  {
+   {
     key: "goals_strategy",
     title: "Goals & Strategy",
     shortTitle: "Goals",
@@ -144,21 +135,12 @@ export const allSteps: OnboardingStep[] = [
   },
   {
     key: "platform_setup",
-    title: "Platform & Channel Setup",
+    title: "Platform Setup",
     shortTitle: "Platforms",
     icon: Globe,
     description: "Tell us which platforms you already use.",
     required: true,
     route: "/onboarding/platform_setup",
-  },
-  {
-    key: "compliance_insurance",
-    title: "Compliance & Readiness",
-    shortTitle: "Compliance",
-    icon: ShieldCheck,
-    description: "A readiness check for critical compliance documents.",
-    required: true,
-    route: "/onboarding/compliance_insurance",
   },
   // Phase 3: Conditional Service Modules
   {
@@ -185,7 +167,7 @@ export const allSteps: OnboardingStep[] = [
   },
   {
     key: "marketplace_strategy",
-    title: "Marketplace Lead Strategy",
+    title: "Marketplace Strategy",
     shortTitle: "Marketplaces",
     icon: PocketKnife,
     description: "Strategy for marketplace lead platforms.",
@@ -207,7 +189,7 @@ export const allSteps: OnboardingStep[] = [
   },
   {
     key: "quote_support",
-    title: "Quote Request Support",
+    title: "Quote Support",
     shortTitle: "Quotes",
     icon: MessageCircleQuestion,
     description: "How we can help prepare and review quotes.",
@@ -217,9 +199,27 @@ export const allSteps: OnboardingStep[] = [
     route: "/onboarding/quote_support",
   },
   // Phase 4: Finalisation
+    {
+    key: "opportunity_triage",
+    title: "Opportunity Triage",
+    shortTitle: "Triage Rules",
+    icon: Search,
+    description: "Define which opportunities are a 'YES' and which are a 'NO'.",
+    required: true,
+    route: "/onboarding/opportunity_triage",
+  },
+    {
+    key: "compliance_insurance",
+    title: "Compliance",
+    shortTitle: "Compliance",
+    icon: ShieldCheck,
+    description: "A readiness check for critical compliance documents.",
+    required: true,
+    route: "/onboarding/compliance_insurance",
+  },
   {
     key: "workflow_rules",
-    title: "Communication & Workflow",
+    title: "Workflow & Communication",
     shortTitle: "Workflow",
     icon: Workflow,
     description: "Set your preferences for communication and approvals.",
@@ -246,7 +246,7 @@ export const allSteps: OnboardingStep[] = [
   },
   {
     key: "final_submission",
-    title: "Final Declaration & Submission",
+    title: "Final Submission",
     shortTitle: "Submission",
     icon: Check,
     description: "Final review and submission of your onboarding pack.",

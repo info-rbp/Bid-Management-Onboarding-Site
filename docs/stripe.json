@@ -1,0 +1,5 @@
+{
+  "publicKey": "YOUR_STRIPE_PUBLIC_KEY",
+  "privateKey": "YOUR_STRIPE_PRIVATE_KEY",
+  "webhookSecret": "YOUR_STRIPE_WEBHOOK_SECRET"
+}
