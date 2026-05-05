@@ -1,6 +1,73 @@
 
-export function validateOnboardingSection(stepId: string, data: any, allData?: any): { isValid: boolean; missingFields: string[] } {
+export type ValidationError = {
+  fieldKey: string;
+  fieldLabel: string;
+  message: string;
+  section: string;
+  anchorId?: string;
+};
+
+export type ValidationResult = {
+  isValid: boolean;
+  missingFields: ValidationError[];
+  invalidFields: ValidationError[];
+  warningFields: ValidationError[];
+};
+
+export const snapshotFieldLabels: Record<string, string> = {
+  registeredBusinessName: "Registered business name",
+  tradingName: "Trading name",
+  abn: "ABN",
+  acn: "ACN",
+  businessStructure: "Business structure",
+  yearStarted: "Year business started",
+  registeredBusinessAddress: "Registered business address",
+  operatingAddress: "Main operating address",
+  postalAddress: "Postal address",
+  businessPhone: "Business phone number",
+  businessEmail: "Business email address",
+  website: "Website",
+  socialMediaLinks: "Business social media links",
+  "primaryContact.fullName": "Primary contact full name",
+  "primaryContact.roleTitle": "Primary contact role/title",
+  "primaryContact.email": "Primary contact email address",
+  "primaryContact.phone": "Primary contact phone number",
+  "secondaryContact.fullName": "Secondary contact full name",
+  "secondaryContact.roleTitle": "Secondary contact role/title",
+  "secondaryContact.email": "Secondary contact email address",
+  "secondaryContact.phone": "Secondary contact phone number",
+  "secondaryContact.usage": "Secondary contact usage",
+  "secondaryContact.otherUsage": "Other secondary contact usage",
+  finalDecisionMaker: "Final decision-maker",
+  complianceContact: "Compliance document contact",
+  pricingCommercialContact: "Pricing/commercial approval contact",
+  urgentApprovalContact: "Urgent approval contact"
+};
+
+const toError = (fieldKey: string, message: string, section = 'general', anchorId?: string): ValidationError => ({
+  fieldKey,
+  fieldLabel: snapshotFieldLabels[fieldKey] || fieldKey,
+  message,
+  section,
+  anchorId: anchorId || fieldKey
+});
+
+const isEmail = (value: string) => /\S+@\S+\.\S+/.test(value);
+const digitsOnly = (value: string) => (value || '').replace(/\D/g, '');
+
+function isContactReferenceComplete(contact: any) {
+  if (!contact) return false;
+  if (contact.contactType === "primary") return true;
+  if (contact.contactType === "secondary") return true;
+  if (contact.contactType === "custom") {
+    return Boolean(contact.fullName && contact.roleTitle && (contact.email || contact.phone));
+  }
+  return false;
+}
+
+export function validateOnboardingSection(stepId: string, data: any, allData?: any): ValidationResult {
   let missingFields: string[] = [];
+  const result: ValidationResult = { isValid: true, missingFields: [], invalidFields: [], warningFields: [] };
 
   switch (stepId) {
     case 'welcome_expectations': {
@@ -9,36 +76,29 @@ export function validateOnboardingSection(stepId: string, data: any, allData?: a
       break;
     }
     case 'business_snapshot': {
-        const requiredBusinessFields = ['registeredBusinessName', 'abn', 'businessStructure', 'registeredAddress', 'businessPhone', 'businessEmail'];
-        requiredBusinessFields.forEach(field => {
-            if (!data[field]) missingFields.push(field);
-        });
-
-        if (!data.contacts || data.contacts.length === 0) {
-            missingFields.push('contacts');
-        } else {
-            if (!data.contacts[0].fullName) missingFields.push('Contact 1 fullName');
-            if (!data.contacts[0].email) missingFields.push('Contact 1 email');
-            if (!data.contacts[0].phone) missingFields.push('Contact 1 phone');
-            if (!data.contacts[0].responsibilities?.includes('Primary contact')) missingFields.push('Contact 1 must be Primary contact');
-
-            if (!data.contacts.some((c: any) => c.responsibilities?.includes('Final decision-maker'))) {
-                missingFields.push('at least one Final decision-maker');
-            }
-            if (!data.contacts.some((c: any) => c.responsibilities?.includes('Pricing/commercial approval'))) {
-                missingFields.push('at least one Pricing/commercial approver');
-            }
-            if (!data.contacts.some((c: any) => c.responsibilities?.includes('Urgent approvals'))) {
-                missingFields.push('at least one Urgent approver');
-            }
-
-            data.contacts.forEach((contact: any, index: number) => {
-                if (contact.email && !/\S+@\S+\.\S+/.test(contact.email)) {
-                    missingFields.push(`Contact ${index + 1} email format`);
-                }
-            });
-        }
-        break;
+      const section = 'snapshot';
+      const addMissing = (k: string, m: string) => result.missingFields.push(toError(k, m, section, k));
+      const addInvalid = (k: string, m: string) => result.invalidFields.push(toError(k, m, section, k));
+      const required = ['registeredBusinessName','businessStructure','yearStarted','registeredBusinessAddress','businessPhone','businessEmail'];
+      required.forEach((k) => { if (!data?.[k]) addMissing(k, `${snapshotFieldLabels[k]} is required.`); });
+      if (!data?.abn) addMissing('abn', 'ABN is required.');
+      else if (digitsOnly(data.abn).length !== 11) addInvalid('abn', 'ABN must contain 11 digits.');
+      if (data?.acn && digitsOnly(data.acn).length !== 9) addInvalid('acn', 'ACN must contain 9 digits.');
+      if (data?.businessEmail && !isEmail(data.businessEmail)) addInvalid('businessEmail', 'Business email address must be a valid email.');
+      const primary = data?.primaryContact || {};
+      const secondary = data?.secondaryContact || {};
+      ['fullName','roleTitle','email','phone'].forEach((f) => { if (!primary[f]) addMissing(`primaryContact.${f}`, `${snapshotFieldLabels[`primaryContact.${f}`]} is required.`); });
+      ['fullName','roleTitle','email','phone'].forEach((f) => { if (!secondary[f]) addMissing(`secondaryContact.${f}`, `${snapshotFieldLabels[`secondaryContact.${f}`]} is required.`); });
+      if (primary.email && !isEmail(primary.email)) addInvalid('primaryContact.email', 'Primary contact email address must be a valid email.');
+      if (secondary.email && !isEmail(secondary.email)) addInvalid('secondaryContact.email', 'Secondary contact email address must be a valid email.');
+      if (!Array.isArray(secondary.usage) || secondary.usage.length === 0) addMissing('secondaryContact.usage', 'Select at least one use for the secondary contact.');
+      if (Array.isArray(secondary.usage) && secondary.usage.includes('other') && !secondary.otherUsage) addMissing('secondaryContact.otherUsage', 'Please specify the other secondary contact usage.');
+      ['finalDecisionMaker','complianceContact','pricingCommercialContact','urgentApprovalContact'].forEach((k) => {
+        if (!data?.[k]) addMissing(k, `${snapshotFieldLabels[k]} is required.`);
+        else if (!isContactReferenceComplete(data[k])) addInvalid(k, `${snapshotFieldLabels[k]} is incomplete.`);
+      });
+      result.isValid = result.missingFields.length === 0 && result.invalidFields.length === 0;
+      return result;
     }
     case 'service_selection': {
         if (!data.selectedServices || data.selectedServices.length === 0) missingFields.push('selectedServices');
@@ -449,5 +509,7 @@ export function validateOnboardingSection(stepId: string, data: any, allData?: a
     }
   }
 
-  return { isValid: missingFields.length === 0, missingFields };
+  result.missingFields = missingFields.map((f) => ({ fieldKey: f, fieldLabel: f, message: `${f} is required.`, section: stepId }));
+  result.isValid = result.missingFields.length === 0;
+  return result;
 }
