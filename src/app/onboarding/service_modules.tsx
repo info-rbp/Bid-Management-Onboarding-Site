@@ -46,7 +46,7 @@ export default function ServiceModules({ data, onChange, isLocked, allData }: Se
     Object.entries(activeModules).filter(([_, v]) => v).map(([k]) => k)
   );
 
-  const toggleExpand = (key: string) => {
+  const expandModule = (key: string) => {
     setExpanded(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
   };
 
@@ -98,7 +98,7 @@ export default function ServiceModules({ data, onChange, isLocked, allData }: Se
             title="12A. Tender and Supplier Registration Readiness" 
             icon={FileText} 
             isExpanded={expanded.includes('tenderSupplierReadiness')}
-            onToggle={() => toggleExpand('tenderSupplierReadiness')}
+            onToggle={() => expandModule('tenderSupplierReadiness')}
           >
             <div className="space-y-8">
               <div className="space-y-4">
@@ -166,7 +166,7 @@ export default function ServiceModules({ data, onChange, isLocked, allData }: Se
 
         {/* 12B: GRANTS */}
         {activeModules.grants && (
-          <ModuleCard title="12B. Grants" icon={Lightbulb} isExpanded={expanded.includes('grants')} onToggle={() => toggleExpand('grants')}>
+          <ModuleCard title="12B. Grants" icon={Lightbulb} isExpanded={expanded.includes('grants')} onToggle={() => expandModule('grants')}>
             <div className="space-y-8">
               <div className="space-y-4">
                 <Label className="text-base font-bold">12B.1 Are you interested in grant funding support?</Label>
@@ -201,7 +201,7 @@ export default function ServiceModules({ data, onChange, isLocked, allData }: Se
 
         {/* 12C: MARKETPLACE LEADS */}
         {activeModules.marketplaceLeads && (
-          <ModuleCard title="12C. Marketplace Lead Strategy" icon={PocketKnife} isExpanded={expanded.includes('marketplaceLeads')} onToggle={() => toggleExpand('marketplaceLeads')}>
+          <ModuleCard title="12C. Marketplace Lead Strategy" icon={PocketKnife} isExpanded={expanded.includes('marketplaceLeads')} onToggle={() => expandModule('marketplaceLeads')}>
             <div className="space-y-8">
               <div className="space-y-4">
                 <Label className="text-sm font-bold">12C.1 Marketplace platforms you are open to using?</Label>
@@ -351,7 +351,7 @@ export default function ServiceModules({ data, onChange, isLocked, allData }: Se
 
         {/* 12E: QUOTE REQUEST SUPPORT */}
         {activeModules.quoteRequests && (
-          <ModuleCard title="12E. Quote Request Support" icon={MessageCircleQuestion} isExpanded={expanded.includes('quoteRequests')} onToggle={() => toggleExpand('quoteRequests')}>
+          <ModuleCard title="12E. Quote Request Support" icon={MessageCircleQuestion} isExpanded={expanded.includes('quoteRequests')} onToggle={() => expandModule('quoteRequests')}>
             <div className="space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-2"><Label className="text-sm font-bold">12E.1 Types of quote requests received?</Label><Textarea value={data.quoteRequests?.quoteRequestTypes || ''} onChange={(e) => handleModuleChange('quoteRequests', 'quoteRequestTypes', e.target.value)} disabled={isLocked} className="rounded-xl min-h-[80px]" /></div>

@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth, useFirestore } from '@/firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
@@ -24,7 +24,7 @@ function AuthContent() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
 
-  const returnUrl = searchParams.get('returnUrl') || '/dashboard';
+  const returnUrl = searchParams.get('returnUrl') || '/onboarding/welcome_expectations';
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -90,12 +90,41 @@ function AuthContent() {
         })
       }).catch(err => console.error("Email notification failed", err));
 
-      router.push('/payment');
+      router.push('/onboarding/welcome_expectations');
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Signup Failed",
         description: error.message || "Could not create account."
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    const email = (document.getElementById('email') as HTMLInputElement)?.value;
+    if (!email) {
+      toast({
+        variant: "destructive",
+        title: "Email Required",
+        description: "Please enter your email address in the email field.",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, email);
+      toast({
+        title: "Password Reset Email Sent",
+        description: "Please check your inbox for instructions to reset your password.",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Password Reset Failed",
+        description: error.message || "Could not send reset email.",
       });
     } finally {
       setLoading(false);
@@ -131,6 +160,9 @@ function AuthContent() {
                     <Input id="password" name="password" type="password" placeholder="••••••••" className="pl-10 h-12" required />
                     <Lock className="absolute left-3 top-3.5 w-5 h-5 text-muted-foreground" />
                   </div>
+                </div>
+                <div className="text-right">
+                  <Button type="button" variant="link" onClick={handleForgotPassword} className="p-0 h-auto">Forgot Password?</Button>
                 </div>
                 <Button type="submit" className="w-full h-12 rounded-xl font-bold mt-2" disabled={loading}>
                   {loading ? <Loader2 className="animate-spin" /> : "Sign In"}

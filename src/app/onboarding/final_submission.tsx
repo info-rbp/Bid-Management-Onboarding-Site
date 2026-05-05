@@ -5,15 +5,15 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useOnboarding } from '@/hooks/use-onboarding';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { detectAuthorityConflicts } from '@/lib/conflict_detector'; // Import the new conflict detector
+import { detectAuthorityConflicts } from '@/lib/conflict_detector';
+import { Label } from '@/components/ui/label';
 
 interface Acknowledgement {
   id: string;
   text: string;
-  isGated?: boolean; // If true, this must be checked to enable submission
+  isGated?: boolean; 
 }
 
 const acknowledgements: Acknowledgement[] = [
@@ -43,7 +43,6 @@ const acknowledgements: Acknowledgement[] = [
 export function FinalSubmission({ data, onChange, isLocked, allData, onSubmit }: any) {
   const checkedState = data.acknowledgements || {};
 
-  // Detect authority conflicts
   const authorityConflicts = detectAuthorityConflicts(allData);
 
   const handleCheckboxChange = (id: string, checked: boolean) => {
@@ -65,7 +64,6 @@ export function FinalSubmission({ data, onChange, isLocked, allData, onSubmit }:
         </div>
       </div>
 
-      {/* Authority Conflict Warnings */}
       {authorityConflicts.length > 0 && (
         <Alert variant="destructive" className="border-2 border-orange-500/50 bg-orange-50 rounded-2xl">
           <AlertTriangle className="h-5 w-5 !text-orange-500" />
@@ -113,7 +111,7 @@ export function FinalSubmission({ data, onChange, isLocked, allData, onSubmit }:
           size="lg" 
           className="rounded-full font-bold h-12 w-64 shadow-lg"
           disabled={!allGatedChecked || isLocked}
-          onClick={onSubmit} // Use the passed onSubmit prop
+          onClick={onSubmit}
         >
           <CheckCircle2 className="w-5 h-5 mr-2" />
           Complete Onboarding

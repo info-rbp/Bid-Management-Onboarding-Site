@@ -1,18 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getFirestore } from 'firebase-admin/firestore';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { initializeApp, getApps } from 'firebase-admin/app';
 import { createFolder } from '@/lib/google-drive';
 
-const firebaseAdminConfig = {
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-  privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-};
-
 if (!getApps().length) {
-  initializeApp({
-    credential: cert(firebaseAdminConfig as any),
-  });
+  initializeApp();
 }
 
 const db = getFirestore();
@@ -33,7 +25,11 @@ export async function POST(req: Request) {
 
     const submissionData = submissionDoc.data();
     
-    if (submissionData?.userId !== userId) {
+    if (!submissionData) {
+      return NextResponse.json({ error: 'Submission data is missing' }, { status: 404 });
+    }
+
+    if (submissionData.userId !== userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 

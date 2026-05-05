@@ -258,13 +258,13 @@ export function TeamCapacity({ data, onChange, isLocked }: TeamCapacityProps) {
                       <div className="flex gap-4">
                         <div className="flex-1 space-y-1">
                           <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Regular Use?</Label>
-                          <Select value={partner.usedRegularly} onValueChange={(v) => handlePartnerChange(idx, 'usedRegularly', v)} disabled={isLocked}>
+                          <Select value={partner.usedRegularly} onValueChange={(v: string) => handlePartnerChange(idx, 'usedRegularly', v)} disabled={isLocked}>
                              <option value="yes">Yes</option><option value="no">No</option><option value="sometimes">Sometimes</option>
                           </Select>
                         </div>
                         <div className="flex-1 space-y-1">
                           <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Can Scale?</Label>
-                          <Select value={partner.canSupportLargerContracts} onValueChange={(v) => handlePartnerChange(idx, 'canSupportLargerContracts', v)} disabled={isLocked}>
+                          <Select value={partner.canSupportLargerContracts} onValueChange={(v: string) => handlePartnerChange(idx, 'canSupportLargerContracts', v)} disabled={isLocked}>
                              <option value="yes">Yes</option><option value="no">No</option><option value="maybe">Maybe</option>
                           </Select>
                         </div>

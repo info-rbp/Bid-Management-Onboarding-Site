@@ -323,19 +323,17 @@ export default function OnboardingStepPage() {
       let shouldRedirect = false;
 
       for (const step of allSteps) {
-          if (step.key === 'service_modules') {
-              const isNowVisible = newVisibleStepKeys.includes(step.key);
-              const wasVisible = submission.visibleStepKeys.includes(step.key);
+        const isNowVisible = newVisibleStepKeys.includes(step.key);
+        const wasVisible = submission.visibleStepKeys.includes(step.key);
 
-              if (isNowVisible && !wasVisible) {
-                  currentStatuses[step.key] = buildSectionStatus(currentStatuses[step.key], 'not_started');
-              } else if (!isNowVisible && wasVisible) {
-                  currentStatuses[step.key] = buildSectionStatus(currentStatuses[step.key], 'skipped');
-                  if (stepId === step.key) {
-                      shouldRedirect = true;
-                  }
-              }
-          }
+        if (isNowVisible && !wasVisible) {
+            currentStatuses[step.key] = buildSectionStatus(currentStatuses[step.key], 'not_started');
+        } else if (!isNowVisible && wasVisible) {
+            currentStatuses[step.key] = buildSectionStatus(currentStatuses[step.key], 'skipped');
+            if (stepId === step.key) {
+                shouldRedirect = true;
+            }
+        }
       }
 
       updateData.enabledModules = newEnabledModules;
