@@ -70,7 +70,7 @@ function AuthContent() {
         businessName,
         billingAddress,
         role: 'client',
-        subscriptionStatus: 'inactive',
+        subscriptionStatus: 'active', // Set to active by default to allow onboarding access
         onboardingStatus: 'not_started',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),

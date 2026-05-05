@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState } from 'react';
@@ -26,18 +25,7 @@ export function StartOnboardingButton() {
 
     setLoading(true);
     try {
-      // 2. Check user profile for subscription status
-      const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
-      
-      if (!userSnap.exists() || userSnap.data().subscriptionStatus !== 'active') {
-        router.push('/payment');
-        return;
-      }
-
-      const userData = userSnap.data();
-
-      // 3. Check for existing submission
+      // 2. Check for existing submission
       const q = query(collection(db, 'onboardingSubmissions'), where('userId', '==', user.uid));
       const querySnapshot = await getDocs(q);
 
@@ -47,7 +35,12 @@ export function StartOnboardingButton() {
         return;
       }
 
-      // 4. Create new onboarding submission
+      // 3. Create new onboarding submission
+      // Fetch user data for business name
+      const userRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userRef);
+      const userData = userSnap.exists() ? userSnap.data() : {};
+
       const newSubmissionId = doc(collection(db, 'onboardingSubmissions')).id;
       const initialVisibleSteps = getVisibleOnboardingSteps(); // Default steps when no services selected
       

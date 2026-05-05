@@ -8,10 +8,13 @@ import { Loader2 } from 'lucide-react';
 
 interface AuthGuardProps {
   children: React.ReactNode;
-  requireSubscription?: boolean;
 }
 
-export function AuthGuard({ children, requireSubscription = true }: AuthGuardProps) {
+/**
+ * AuthGuard ensures the user is authenticated and has a profile record.
+ * Subscription gating has been disabled as per user request.
+ */
+export function AuthGuard({ children }: AuthGuardProps) {
   const { user, isUserLoading } = useUser();
   const db = useFirestore();
   const router = useRouter();
@@ -47,7 +50,7 @@ export function AuthGuard({ children, requireSubscription = true }: AuthGuardPro
             fullName: user.displayName || 'Client User',
             businessName: 'Business Name Pending',
             role: 'client',
-            subscriptionStatus: 'inactive',
+            subscriptionStatus: 'active',
             onboardingStatus: 'not_started',
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -58,12 +61,6 @@ export function AuthGuard({ children, requireSubscription = true }: AuthGuardPro
         }
         setProfile(currentProfile);
 
-        // 3. Check Subscription Gating
-        if (requireSubscription && currentProfile.subscriptionStatus !== 'active') {
-          if (pathname !== '/payment') {
-            router.push('/payment');
-          }
-        }
       } catch (error) {
         console.error("AuthGuard Verification Error:", error);
       } finally {
@@ -72,7 +69,7 @@ export function AuthGuard({ children, requireSubscription = true }: AuthGuardPro
     }
 
     verifyAccess();
-  }, [user, isUserLoading, db, router, pathname, requireSubscription]);
+  }, [user, isUserLoading, db, router, pathname]);
 
   if (isUserLoading || isVerifying) {
     return (
@@ -85,7 +82,6 @@ export function AuthGuard({ children, requireSubscription = true }: AuthGuardPro
 
   // Final check to prevent flashing content if we are about to redirect
   if (!user && pathname !== '/auth') return null;
-  if (requireSubscription && profile?.subscriptionStatus !== 'active' && pathname !== '/payment') return null;
 
   return <>{children}</>;
 }
