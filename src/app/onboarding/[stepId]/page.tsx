@@ -26,7 +26,7 @@ import {
   CloudOff
 } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
-import { getVisibleOnboardingSteps, allSteps, EnabledModules, OnboardingStep, deriveServiceModules, deriveAuthorityReadiness } from '@/lib/onboarding-steps';
+import { getVisibleOnboardingSteps, allSteps, EnabledModules, OnboardingStep, deriveServiceModules, deriveAuthorityReadiness, deriveActiveServiceModules } from '@/lib/onboarding-steps';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { validateOnboardingSection, ValidationResult } from '@/lib/onboardingValidation';
 import { ValidationSummary } from '@/components/ValidationSummary';
@@ -83,7 +83,15 @@ export default function OnboardingStepPage() {
 
   const { data: submission, isLoading: loadingSubmissions } = useDoc(submissionRef);
 
-  const enabledModules = submission?.enabledModules;
+  const [optimisticServiceSelection, setOptimisticServiceSelection] = useState<{
+    selectedServices: string[];
+    enabledModules: EnabledModules;
+    visibleStepKeys: string[];
+    sectionStatuses: Record<string, any>;
+  } | null>(null);
+
+  const effectiveSelectedServices = optimisticServiceSelection?.selectedServices ?? submission?.selectedServices ?? [];
+  const enabledModules = optimisticServiceSelection?.enabledModules ?? submission?.enabledModules;
 
   const visibleSteps = useMemo(() => {
     return getVisibleOnboardingSteps(enabledModules);
@@ -94,7 +102,20 @@ export default function OnboardingStepPage() {
 
   const isLocked = submission?.status === 'submitted' && !submission?.adminReopened;
 
+  const serviceModuleActivity = useMemo(() => deriveActiveServiceModules(effectiveSelectedServices), [effectiveSelectedServices]);
+
   // Initial Data Sync
+  useEffect(() => {
+    if (optimisticServiceSelection && submission) {
+      const matches =
+        JSON.stringify(optimisticServiceSelection.selectedServices) === JSON.stringify(submission.selectedServices || []) &&
+        JSON.stringify(optimisticServiceSelection.enabledModules) === JSON.stringify(submission.enabledModules || {});
+      if (matches) {
+        setOptimisticServiceSelection(null);
+      }
+    }
+  }, [submission, optimisticServiceSelection]);
+
   useEffect(() => {
     const sid = stepId as string;
     if (submission && !initialSyncDone.current[sid]) {
@@ -393,6 +414,15 @@ export default function OnboardingStepPage() {
 
     updateData.currentStep = targetStepKey;
 
+    if (stepId === 'service_selection') {
+      setOptimisticServiceSelection({
+        selectedServices: updateData.selectedServices ?? effectiveSelectedServices,
+        enabledModules: updateData.enabledModules ?? enabledModules,
+        visibleStepKeys: updateData.visibleStepKeys ?? submission.visibleStepKeys,
+        sectionStatuses: updateData.sectionStatuses ?? submission.sectionStatuses,
+      });
+    }
+
     setSaveStatus('saving');
     updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData).then(() => {
       setSaveStatus('saved');
@@ -524,8 +554,11 @@ export default function OnboardingStepPage() {
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-1">
             {visibleSteps.map((step, idx) => {
-              const statusInfo = submission?.sectionStatuses?.[step.key];
-              const status = statusInfo?.status || 'not_started';
+              const statusInfo = (optimisticServiceSelection?.sectionStatuses ?? submission?.sectionStatuses)?.[step.key];
+              const derivedServiceModuleStatus = step.key === 'service_modules'
+                ? (Object.values(serviceModuleActivity).some(Boolean) ? 'in_progress' : 'not_started')
+                : null;
+              const status = derivedServiceModuleStatus || statusInfo?.status || 'not_started';
               const isCurrent = step.key === stepId;
               
               const getIcon = () => {
