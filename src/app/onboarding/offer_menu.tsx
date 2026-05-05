@@ -19,6 +19,7 @@ interface OfferMenuProps {
   onChange: (field: string, value: any) => void;
   isLocked: boolean;
   allData?: any;
+  fieldErrors?: Record<string, string>;
 }
 
 const deliveryMethodOptions = [
@@ -47,7 +48,7 @@ const statusOptions = [
   { label: "Not applicable", value: "not_applicable" },
 ];
 
-export function OfferMenu({ data, onChange, isLocked }: OfferMenuProps) {
+export function OfferMenu({ data, onChange, isLocked, fieldErrors = {} }: OfferMenuProps) {
   const offerItems = data.offerItems || [{}];
   const existingPackages = data.existingPackages || [];
   const offerMenu = data.offerMenu || {
@@ -99,6 +100,10 @@ export function OfferMenu({ data, onChange, isLocked }: OfferMenuProps) {
 
   const readiness = deriveOfferReadiness(data);
 
+  const errorFor = (key: string) => fieldErrors[key];
+  const invalidClass = (key: string, base = 'rounded-xl') => `${base} ${errorFor(key) ? 'border-destructive focus-visible:ring-destructive' : ''}`;
+
+
   return (
     <div className="space-y-16">
       <div className="space-y-4">
@@ -120,15 +125,16 @@ export function OfferMenu({ data, onChange, isLocked }: OfferMenuProps) {
         </div>
 
         <div className="space-y-6">
-          <div className="space-y-2">
+          <div id="offer-main-services-products" className="space-y-2">
             <Label className="text-base font-bold">5.1 What are your main services or products?</Label>
             <p className="text-sm text-muted-foreground">List the main services, products or solutions your business provides.</p>
             <Textarea 
               value={data.mainServicesProducts || ''} 
               onChange={(e) => onChange('mainServicesProducts', e.target.value)} 
               disabled={isLocked}
-              className="rounded-xl min-h-[100px]"
+              className={invalidClass('offer-main-services-products', 'rounded-xl min-h-[100px]')}
             />
+            {errorFor('offer-main-services-products') && <p className="text-sm text-destructive">{errorFor('offer-main-services-products')}</p>}
           </div>
 
           <div className="space-y-2">
@@ -143,15 +149,16 @@ export function OfferMenu({ data, onChange, isLocked }: OfferMenuProps) {
             />
           </div>
 
-          <div className="space-y-2">
+          <div id="offer-strategic-services" className="space-y-2">
             <Label className="text-base font-bold">5.3 Which services are most profitable or strategically important?</Label>
             <p className="text-sm text-muted-foreground">List the services you most want to promote because they are profitable, strategic or important to growth.</p>
             <Textarea 
               value={data.strategicOrProfitableServices || ''} 
               onChange={(e) => onChange('strategicOrProfitableServices', e.target.value)} 
               disabled={isLocked}
-              className="rounded-xl min-h-[100px]"
+              className={invalidClass('offer-strategic-services', 'rounded-xl min-h-[100px]')}
             />
+            {errorFor('offer-strategic-services') && <p className="text-sm text-destructive">{errorFor('offer-strategic-services')}</p>}
           </div>
 
           <div className="space-y-2">
@@ -193,15 +200,17 @@ export function OfferMenu({ data, onChange, isLocked }: OfferMenuProps) {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2 md:col-span-2">
+                  <div id={index === 0 ? 'offer-item-1-name' : undefined} className="space-y-2 md:col-span-2">
                     <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Service or product name</Label>
-                    <Input value={item.name || ''} onChange={(e) => handleOfferItemChange(index, 'name', e.target.value)} disabled={isLocked} className="rounded-xl" />
+                    <Input value={item.name || ''} onChange={(e) => handleOfferItemChange(index, 'name', e.target.value)} disabled={isLocked} className={invalidClass('offer-item-1-name', 'rounded-xl')} />
+                    {index === 0 && errorFor('offer-item-1-name') && <p className="text-xs text-destructive">{errorFor('offer-item-1-name')}</p>}
                   </div>
 
-                  <div className="space-y-2 md:col-span-2">
+                  <div id={index === 0 ? 'offer-item-1-description' : undefined} className="space-y-2 md:col-span-2">
                     <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Description</Label>
                     <p className="text-[10px] text-muted-foreground">Describe what this service or product includes in plain English.</p>
-                    <Textarea value={item.description || ''} onChange={(e) => handleOfferItemChange(index, 'description', e.target.value)} disabled={isLocked} className="rounded-xl min-h-[80px]" />
+                    <Textarea value={item.description || ''} onChange={(e) => handleOfferItemChange(index, 'description', e.target.value)} disabled={isLocked} className={invalidClass('offer-item-1-description', 'rounded-xl min-h-[80px]')} />
+                    {index === 0 && errorFor('offer-item-1-description') && <p className="text-xs text-destructive">{errorFor('offer-item-1-description')}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -298,7 +307,7 @@ export function OfferMenu({ data, onChange, isLocked }: OfferMenuProps) {
             <Textarea value={data.additionalServicesProductsPackages || ''} onChange={(e) => onChange('additionalServicesProductsPackages', e.target.value)} disabled={isLocked} className="rounded-xl" />
           </div>
 
-          <div className="space-y-4">
+          <div id="offer-fixed-price-potential" className="space-y-4">
             <Label className="text-base font-bold">5.9 Can any of your services be packaged into fixed-price offers?</Label>
             <RadioGroup value={data.fixedPricePackagePotential} onValueChange={(v) => onChange('fixedPricePackagePotential', v)} disabled={isLocked} className="flex gap-6">
               {['yes', 'no', 'unsure'].map(val => (
@@ -308,6 +317,7 @@ export function OfferMenu({ data, onChange, isLocked }: OfferMenuProps) {
                 </div>
               ))}
             </RadioGroup>
+            {errorFor('offer-fixed-price-potential') && <p className="text-sm text-destructive">{errorFor('offer-fixed-price-potential')}</p>}
           </div>
 
           <div className="space-y-6">
@@ -365,7 +375,7 @@ export function OfferMenu({ data, onChange, isLocked }: OfferMenuProps) {
                     const row = offerMenu[key] || { status: 'help_needed' };
                     const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
                     return (
-                      <tr key={key}>
+                      <tr key={key} id={`offer-menu-${key}`}>
                         <td className="p-4 font-bold text-slate-700 text-sm">{label}</td>
                         <td className="p-4">
                           <Input 
@@ -419,15 +429,16 @@ export function OfferMenu({ data, onChange, isLocked }: OfferMenuProps) {
         </div>
 
         <div className="space-y-8">
-          <div className="space-y-2">
+          <div id="offer-general-delivery-speed" className="space-y-2">
             <Label className="text-base font-bold">5.12 How quickly can you usually deliver your main services?</Label>
             <p className="text-sm text-muted-foreground italic">Include turnaround options, waiting periods, booking requirements.</p>
-            <Textarea value={data.generalDeliverySpeed || ''} onChange={(e) => onChange('generalDeliverySpeed', e.target.value)} disabled={isLocked} className="rounded-xl min-h-[80px]" />
+            <Textarea value={data.generalDeliverySpeed || ''} onChange={(e) => onChange('generalDeliverySpeed', e.target.value)} disabled={isLocked} className={invalidClass('offer-general-delivery-speed', 'rounded-xl min-h-[80px]')} />
+            {errorFor('offer-general-delivery-speed') && <p className="text-sm text-destructive">{errorFor('offer-general-delivery-speed')}</p>}
           </div>
 
-          <div className="space-y-4">
+          <div id="offer-business-delivery-modes" className="space-y-4">
             <Label className="text-base font-bold">5.13 Are your services delivered in person, remotely or both?</Label>
-            <div className="flex flex-wrap gap-6 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+            <div className={`flex flex-wrap gap-6 bg-slate-50 p-4 rounded-2xl border ${errorFor('offer-business-delivery-modes') ? 'border-destructive' : 'border-slate-100'}`}>
               {deliveryMethodOptions.map(opt => (
                 <div key={opt.value} className="flex items-center gap-2">
                   <Checkbox 
@@ -444,18 +455,21 @@ export function OfferMenu({ data, onChange, isLocked }: OfferMenuProps) {
                 </div>
               ))}
             </div>
+            {errorFor('offer-business-delivery-modes') && <p className="text-sm text-destructive">{errorFor('offer-business-delivery-modes')}</p>}
           </div>
 
-          <div className="space-y-2">
+          <div id="offer-service-areas" className="space-y-2">
             <Label className="text-base font-bold">5.14 What locations, regions or service areas can you cover?</Label>
             <p className="text-sm text-muted-foreground">Include suburbs, cities, regions, states, or travel limits.</p>
-            <Textarea value={data.serviceAreas || ''} onChange={(e) => onChange('serviceAreas', e.target.value)} disabled={isLocked} className="rounded-xl min-h-[80px]" />
+            <Textarea value={data.serviceAreas || ''} onChange={(e) => onChange('serviceAreas', e.target.value)} disabled={isLocked} className={invalidClass('offer-service-areas', 'rounded-xl min-h-[80px]')} />
+            {errorFor('offer-service-areas') && <p className="text-sm text-destructive">{errorFor('offer-service-areas')}</p>}
           </div>
 
-          <div className="space-y-2">
+          <div id="offer-client-responsibilities" className="space-y-2">
             <Label className="text-base font-bold">5.15 What does the client or customer need to provide or do for you to deliver successfully?</Label>
             <p className="text-sm text-muted-foreground">Examples: site access, approvals, documents, photos, deposits, briefing calls.</p>
-            <Textarea value={data.clientResponsibilities || ''} onChange={(e) => onChange('clientResponsibilities', e.target.value)} disabled={isLocked} className="rounded-xl min-h-[80px]" />
+            <Textarea value={data.clientResponsibilities || ''} onChange={(e) => onChange('clientResponsibilities', e.target.value)} disabled={isLocked} className={invalidClass('offer-client-responsibilities', 'rounded-xl min-h-[80px]')} />
+            {errorFor('offer-client-responsibilities') && <p className="text-sm text-destructive">{errorFor('offer-client-responsibilities')}</p>}
           </div>
 
           <div className="space-y-2">
