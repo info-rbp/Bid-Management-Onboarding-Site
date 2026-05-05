@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { detectAuthorityConflicts } from '@/lib/conflict_detector';
+import { type AuthorityConflict, detectAuthorityConflicts } from '@/lib/conflict_detector';
 import { Label } from '@/components/ui/label';
 
 interface Acknowledgement {
@@ -44,6 +44,19 @@ export function FinalSubmission({ data, onChange, isLocked, allData, onSubmit }:
   const visibleStepKeys: string[] = allData?.visibleStepKeys || [];
 
   const authorityConflicts = detectAuthorityConflicts(allData);
+
+  const normalisedConflicts = authorityConflicts.map((conflict: string | AuthorityConflict) =>
+    typeof conflict === 'string'
+      ? ({
+          id: conflict,
+          severity: 'warning' as const,
+          title: 'Potential conflict',
+          message: conflict,
+          sourceSections: [],
+          recommendedAction: 'Review related sections and authority settings.'
+        })
+      : conflict
+  );
 
   const statusLabelMap: Record<string, string> = {
     complete: 'Complete',
@@ -93,15 +106,20 @@ export function FinalSubmission({ data, onChange, isLocked, allData, onSubmit }:
         </div>
       </div>
 
-      {authorityConflicts.length > 0 && (
+      {normalisedConflicts.length > 0 && (
         <Alert variant="destructive" className="border-2 border-orange-500/50 bg-orange-50 rounded-2xl">
           <AlertTriangle className="h-5 w-5 !text-orange-500" />
           <AlertTitle className="font-bold text-lg text-orange-800">Potential Authority Conflicts Detected</AlertTitle>
           <AlertDescription className="text-orange-700 space-y-2 mt-2">
             <p>We noticed some inconsistencies between your service selections, workflow rules, and authority matrix. Please review these items before submitting:</p>
             <ul className="list-disc pl-5 text-xs font-mono space-y-1">
-              {authorityConflicts.map((conflict, index) => (
-                <li key={index}>{conflict}</li>
+              {normalisedConflicts.map((conflict) => (
+                <li key={conflict.id}>
+                  <p className="font-semibold">{conflict.title} ({conflict.severity})</p>
+                  <p>{conflict.message}</p>
+                  {conflict.sourceSections.length > 0 && <p>Source: {conflict.sourceSections.join(' ↔ ')}</p>}
+                  <p>Recommended action: {conflict.recommendedAction}</p>
+                </li>
               ))}
             </ul>
             <p className="text-xs pt-2">You can still submit, but resolving these conflicts will ensure a smoother workflow.</p>
