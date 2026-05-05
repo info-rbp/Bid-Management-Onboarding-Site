@@ -32,7 +32,14 @@ describe('service_modules quote request prerequisites validation', () => {
     );
 
     expect(result.isValid).toBe(false);
-    expect(result.missingFields).toContain('12E.3 Prerequisites');
+
+    expect(result.missingFields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldLabel: '12E.3 Prerequisites',
+        }),
+      ])
+    );
   });
 
   it('passes 12E.3 requirement when quotePrerequisites is provided', () => {
@@ -42,6 +49,12 @@ describe('service_modules quote request prerequisites validation', () => {
       allDataWithQuoteRequests
     );
 
-    expect(result.missingFields).not.toContain('12E.3 Prerequisites');
+    expect(result.missingFields).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldLabel: '12E.3 Prerequisites',
+        }),
+      ])
+    );
   });
 });
