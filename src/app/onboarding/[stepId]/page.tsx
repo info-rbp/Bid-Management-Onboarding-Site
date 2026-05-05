@@ -674,7 +674,7 @@ function StepContent({ stepId, data, allData, onChange, isLocked, submissionId, 
     case 'platform_setup':
       return <PlatformSetup data={data} onChange={onChange} isLocked={isLocked} allData={allData} />;
     case 'document_upload_library':
-      return <DocumentUploadLibrary data={data} onChange={onChange} isLocked={isLocked} submissionId={submissionId} />;
+      return <DocumentUploadLibrary data={data} onChange={onChange} isLocked={isLocked} submissionId={submissionId} allData={allData} />;
     case 'authority_matrix':
       return <AuthorityMatrix data={data} allData={allData} onChange={onChange} isLocked={isLocked} />;
     case 'opportunity_triage':
