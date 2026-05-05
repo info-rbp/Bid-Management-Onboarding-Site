@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Plus, Trash2, CheckCircle2, Info, AlertTriangle, Users, GitMerge, BarChart3, ShieldCheck, PlusCircle, MoveUp, MoveDown } from 'lucide-react';
 import { deriveTeamReadiness } from '@/lib/onboarding-steps';
+import { ClientDocumentUploader } from './client_document_uploader';
 
 interface TeamCapacityProps {
   data: any;
@@ -113,6 +114,11 @@ export function TeamCapacity({ data, onChange, isLocked }: TeamCapacityProps) {
         <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6 text-blue-800 text-sm leading-relaxed">
           “Buyers and funders often need to understand who will deliver the work and whether the business has enough capacity, experience and systems to deliver successfully. This section helps us prepare team profiles, capability summaries, resourcing statements and delivery methodology content.”
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <ClientDocumentUploader documentCategory="staff_cvs_bios_qualifications_tickets" sourceSection="section_6_team_capacity" linkedSections={["section_6_team_capacity"]} linkedRequirementIds={["staff_cvs_bios_qualifications_tickets"]} label="Upload staff CVs, bios and qualifications" disabled={isLocked} />
+        <ClientDocumentUploader documentCategory="licences_registrations_certifications_checks" sourceSection="section_6_team_capacity" linkedSections={["section_6_team_capacity"]} linkedRequirementIds={["licences_registrations_certifications_checks"]} label="Upload licences and registrations" disabled={isLocked} />
       </div>
 
       {/* GROUP 1: KEY PEOPLE */}

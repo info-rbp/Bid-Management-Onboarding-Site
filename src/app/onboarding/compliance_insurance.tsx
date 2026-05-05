@@ -12,6 +12,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, Trash2, CheckCircle2, Info, AlertTriangle, ShieldCheck, ClipboardCheck, FileText, Gavel, FileWarning, HelpCircle } from 'lucide-react';
 import { deriveComplianceReadiness } from '@/lib/onboarding-steps';
+import { ClientDocumentUploader } from './client_document_uploader';
 
 interface ComplianceInsuranceProps {
   data: any;
@@ -130,6 +131,12 @@ export function ComplianceInsurance({ data, onChange, isLocked }: ComplianceInsu
         <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6 text-blue-800 text-sm leading-relaxed">
           “Many opportunities require current insurance, licences, policies, registrations or documented procedures. This section helps us understand what you already have and what may need to be created, updated or clarified before particular opportunities are pursued.”
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <ClientDocumentUploader documentCategory="insurance_certificates" sourceSection="section_11_compliance_insurance" linkedSections={["section_11_compliance_insurance"]} linkedRequirementIds={["insurance_certificates"]} label="Upload insurance certificates" disabled={isLocked} />
+        <ClientDocumentUploader documentCategory="licences_registrations_certifications_checks" sourceSection="section_11_compliance_insurance" linkedSections={["section_11_compliance_insurance"]} linkedRequirementIds={["licences_registrations_certifications_checks"]} label="Upload licences/certifications" disabled={isLocked} />
+        <ClientDocumentUploader documentCategory="policies_and_procedures" sourceSection="section_11_compliance_insurance" linkedSections={["section_11_compliance_insurance"]} linkedRequirementIds={["policies_and_procedures"]} label="Upload policies/procedures" disabled={isLocked} />
       </div>
 
       {/* GROUP 1: DOCUMENT READINESS CHECKLIST */}

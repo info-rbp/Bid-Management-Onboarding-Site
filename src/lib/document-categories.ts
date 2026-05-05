@@ -60,7 +60,11 @@ export const DOCUMENT_CATEGORIES = {
 export type DocumentCategory = keyof typeof DOCUMENT_CATEGORIES;
 
 export const SOURCE_SECTIONS = {
+  section_6_team_capacity: 'Section 6',
+  section_7_proof_evidence: 'Section 7',
+  section_9_pricing_commercial: 'Section 9',
   section_11_compliance_insurance: 'Section 11',
+  section_12_service_modules: 'Section 12',
   section_14_documents: 'Section 14'
 } as const;
 
@@ -81,15 +85,17 @@ export function buildDocumentMetadata(params: {
   downloadUrl: string;
   documentCategory: DocumentCategory;
   sourceSection: SourceSection;
+  linkedSections?: string[];
+  linkedRequirementIds?: string[];
 }) {
-  const { sourceSection, documentCategory, ...rest } = params;
+  const { sourceSection, documentCategory, linkedSections, linkedRequirementIds, ...rest } = params;
 
   return {
     ...rest,
     documentCategory,
     sourceSection,
-    linkedSections: [sourceSection],
-    linkedRequirementIds: [documentCategory],
+    linkedSections: linkedSections?.length ? linkedSections : [sourceSection],
+    linkedRequirementIds: linkedRequirementIds?.length ? linkedRequirementIds : [documentCategory],
     status: 'received' as const,
     approvedForUse: false
   };
