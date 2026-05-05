@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
@@ -42,10 +42,25 @@ interface DocumentUploadProps {
 
 const baseCategories = Object.values(DOCUMENT_CATEGORIES);
 
+const defaultDocumentReadiness = {
+  hasBusinessProfileDocs: false,
+  hasInsuranceCertificates: false,
+  hasPoliciesProcedures: false,
+  hasStaffDocuments: false,
+  hasProofDocuments: false,
+  hasPricingDocuments: false,
+  tenderDocumentReady: false,
+  grantDocumentReady: false,
+  marketplaceDocumentReady: false,
+  quoteDocumentReady: false,
+};
+
 export function DocumentUploadLibrary({ data, onChange, isLocked, submissionId, allData }: DocumentUploadProps) {
   const { user } = useUser();
   const db = useFirestore();
   const { toast } = useToast();
+  const lastSyncedDocumentStateRef = useRef<string>('');
+
   // Explicitly query only the current user's documents
   const docsQuery = useMemoFirebase(() => {
     if (!user || !db) return null;
@@ -91,44 +106,117 @@ export function DocumentUploadLibrary({ data, onChange, isLocked, submissionId, 
   }, [categories, data?.categories, clientDocuments, selectedServices]);
 
   useEffect(() => {
-    if (!clientDocuments) return;
+    if (!user || !db || !clientDocuments) return;
 
     const computedCategories = categories.reduce((acc, cat) => {
-      const categoryDocs = (clientDocuments || []).filter((d: any) => d.documentCategory === cat.id && d.status !== 'do_not_use');
-      const receivedDocumentIds = categoryDocs.map((d: any) => d.documentId || d.id).filter(Boolean);
+      const categoryDocs = (clientDocuments || []).filter(
+        (d: any) => d.documentCategory === cat.id && d.status !== 'do_not_use'
+      );
+
+      const receivedDocumentIds = categoryDocs
+        .map((d: any) => d.documentId || d.id)
+        .filter(Boolean)
+        .sort();
+
       acc[cat.id] = {
         receivedDocumentIds,
         status: receivedDocumentIds.length > 0 ? 'received' : 'pending',
-        updatedAt: new Date().toISOString()
       };
+
       return acc;
-    }, {} as Record<string, { receivedDocumentIds: string[]; status: string; updatedAt: string }>);
+    }, {} as Record<string, { receivedDocumentIds: string[]; status: string }>);
+
+    const receivedDocumentIds = Object.values(computedCategories)
+      .flatMap((entry) => entry.receivedDocumentIds)
+      .filter(Boolean)
+      .sort();
 
     const nextPayload = {
       categories: computedCategories,
-      receivedDocumentIds: Object.values(computedCategories).flatMap((entry) => entry.receivedDocumentIds),
-      derivedDocumentReadiness: deriveDocumentReadiness([], clientDocuments || [], selectedServices)
+      receivedDocumentIds,
+      derivedDocumentReadiness: deriveDocumentReadiness(
+        [],
+        clientDocuments || [],
+        selectedServices
+      ),
     };
 
-    const existingComparable = JSON.stringify({
-      categories: data?.categories || {},
-      receivedDocumentIds: data?.receivedDocumentIds || [],
-      derivedDocumentReadiness: data?.derivedDocumentReadiness || {}
-    });
-    const nextComparable = JSON.stringify(nextPayload);
+    const existingCategories = categories.reduce((acc, cat) => {
+      const existing = data?.categories?.[cat.id] || {};
+      const existingReceivedDocumentIds = Array.isArray(existing.receivedDocumentIds)
+        ? [...existing.receivedDocumentIds].filter(Boolean).sort()
+        : [];
 
-    if (existingComparable !== nextComparable) {
-      onChange('categories', nextPayload.categories);
-      onChange('receivedDocumentIds', nextPayload.receivedDocumentIds);
-      onChange('derivedDocumentReadiness', nextPayload.derivedDocumentReadiness);
+      acc[cat.id] = {
+        receivedDocumentIds: existingReceivedDocumentIds,
+        status:
+          existing.status ||
+          (existingReceivedDocumentIds.length > 0 ? 'received' : 'pending'),
+      };
+
+      return acc;
+    }, {} as Record<string, { receivedDocumentIds: string[]; status: string }>);
+
+    const existingPayload = {
+      categories: existingCategories,
+      receivedDocumentIds: Array.isArray(data?.receivedDocumentIds)
+        ? [...data.receivedDocumentIds].filter(Boolean).sort()
+        : [],
+      derivedDocumentReadiness: data?.derivedDocumentReadiness || {},
+    };
+
+    const nextComparable = JSON.stringify(nextPayload);
+    const existingComparable = JSON.stringify(existingPayload);
+
+    if (
+      lastSyncedDocumentStateRef.current === nextComparable ||
+      existingComparable === nextComparable
+    ) {
+      lastSyncedDocumentStateRef.current = nextComparable;
+      return;
     }
-  }, [categories, clientDocuments, data?.categories, data?.derivedDocumentReadiness, data?.receivedDocumentIds, onChange, selectedServices]);
+
+    lastSyncedDocumentStateRef.current = nextComparable;
+
+    onChange('categories', nextPayload.categories);
+    onChange('receivedDocumentIds', nextPayload.receivedDocumentIds);
+    onChange('derivedDocumentReadiness', nextPayload.derivedDocumentReadiness);
+  }, [
+    categories,
+    clientDocuments,
+    data?.categories,
+    data?.derivedDocumentReadiness,
+    data?.receivedDocumentIds,
+    db,
+    onChange,
+    selectedServices,
+    user,
+  ]);
 
   const getFilesForCategory = (categoryId: string) => {
     return (clientDocuments || []).filter((doc: any) => doc.documentCategory === categoryId);
   };
 
-  const readiness = data?.derivedDocumentReadiness || persistedCategoryState.derivedDocumentReadiness;
+  const readiness = {
+    ...defaultDocumentReadiness,
+    ...(persistedCategoryState.derivedDocumentReadiness || {}),
+    ...(data?.derivedDocumentReadiness || {}),
+  };
+
+  if (!user || !db) {
+    return (
+      <div className="space-y-6">
+        <div className="space-y-4">
+          <h2 className="text-3xl font-bold tracking-tight text-slate-900">
+            Document Upload Library
+          </h2>
+          <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6 text-blue-800 text-sm leading-relaxed">
+            Loading your document library. If this takes longer than expected, refresh the page.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-16">
