@@ -508,8 +508,9 @@ export function validateOnboardingSection(stepId: string, data: any, allData?: a
     }
     case 'final_submission': {
         const declarations = ['confirmInformationAccurate', 'confirmAuthorisedToSubmit', 'acknowledgeInformationUse', 'acknowledgeReviewApprovalResponsibility', 'acknowledgeTermsApply'];
-        declarations.forEach(dec => {
-            if(!data[dec]) missingFields.push(dec);
+        const acknowledgementState = data?.acknowledgements || {};
+        declarations.forEach((dec) => {
+            if (!acknowledgementState[dec]) missingFields.push(`acknowledgements.${dec}`);
         });
         break;
     }
