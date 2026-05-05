@@ -1,10 +1,10 @@
 
 "use client";
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { collection, query, where, doc, updateDoc, serverTimestamp, addDoc } from 'firebase/firestore';
+import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { collection, serverTimestamp, setDoc, doc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -55,6 +55,11 @@ export function DocumentUploadLibrary({ data, onChange, isLocked, submissionId, 
   const { user } = useUser();
   const db = useFirestore();
   const { toast } = useToast();
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
+  const [uploadingCategory, setUploadingCategory] = useState<string | null>(null);
+
+  const ALLOWED_EXTENSIONS = ['pdf', 'docx', 'xlsx', 'png', 'jpg', 'jpeg'];
+  const MAX_FILE_SIZE = 25 * 1024 * 1024;
 
   // Explicitly query only the current user's documents
   const docsQuery = useMemoFirebase(() => {
@@ -80,39 +85,63 @@ export function DocumentUploadLibrary({ data, onChange, isLocked, submissionId, 
   const handleFileUpload = async (category: string, files: FileList | null) => {
     if (!files || !user || !db) return;
     const storage = getStorage();
+    setUploadingCategory(category);
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const docId = Math.random().toString(36).substr(2, 9);
-      const storagePath = `clients/${user.uid}/documents/${category}/${docId}_${file.name}`;
+      const extension = file.name.split('.').pop()?.toLowerCase() || '';
+      if (!ALLOWED_EXTENSIONS.includes(extension)) {
+        toast({ variant: "destructive", title: `Upload failed: Unsupported file type .${extension || 'unknown'}` });
+        continue;
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        toast({ variant: "destructive", title: "Upload failed: File is too large (max 25MB)" });
+        continue;
+      }
+      const documentId = crypto.randomUUID();
+      const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const storagePath = `clients/${user.uid}/documents/${category}/${documentId}_${safeFileName}`;
       const fileRef = ref(storage, storagePath);
 
       try {
-        const snapshot = await uploadBytes(fileRef, file);
+        const uploadTask = uploadBytesResumable(fileRef, file);
+        const snapshot = await new Promise<any>((resolve, reject) => {
+          uploadTask.on('state_changed', (snap) => {
+            const progress = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
+            setUploadProgress((prev) => ({ ...prev, [category]: progress }));
+          }, reject, () => resolve(uploadTask.snapshot));
+        });
         const downloadUrl = await getDownloadURL(snapshot.ref);
 
-        await addDoc(collection(db, 'clients', user.uid, 'documents'), {
-          documentId: docId,
+        await setDoc(doc(db, 'clients', user.uid, 'documents', documentId), {
+          documentId,
           clientId: user.uid,
           originalFileName: file.name,
+          storedFileName: `${documentId}_${safeFileName}`,
           fileType: file.type,
+          fileExtension: extension,
           fileSize: file.size,
           storagePath,
           downloadUrl,
           documentCategory: category,
           sourceSection: 'section_14_documents',
+          linkedSections: ['section_14_documents'],
+          linkedRequirementIds: [category],
           status: 'received',
           uploadedAt: serverTimestamp(),
+          uploadedBy: user.uid,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           approvedForUse: false
         });
-
-        toast({ title: "File uploaded successfully" });
+        setUploadProgress((prev) => ({ ...prev, [category]: 100 }));
+        toast({ title: `Upload complete: ${file.name}` });
       } catch (e) {
-        toast({ variant: "destructive", title: "Upload failed" });
+        console.error({ stage: 'documents', action: 'upload', documentCategory: category, fileName: file.name, fileSize: file.size, storagePath, error: e });
+        toast({ variant: "destructive", title: `Upload failed: ${(e as Error)?.message || 'Unknown error'}` });
       }
     }
+    setUploadingCategory(null);
   };
 
   const getFilesForCategory = (categoryId: string) => {
@@ -157,7 +186,7 @@ export function DocumentUploadLibrary({ data, onChange, isLocked, submissionId, 
                         multiple 
                         onChange={(e) => handleFileUpload(cat.id, e.target.files)} 
                       />
-                      <Button asChild variant="outline" size="sm" className="rounded-xl border-2 hover:bg-primary hover:text-white hover:border-primary transition-all">
+                      <Button asChild variant="outline" size="sm" disabled={uploadingCategory === cat.id} className="rounded-xl border-2 hover:bg-primary hover:text-white hover:border-primary transition-all">
                         <label htmlFor={`upload-${cat.id}`} className="gap-2 cursor-pointer">
                           <UploadCloud className="w-4 h-4" /> Upload
                         </label>
@@ -190,6 +219,9 @@ export function DocumentUploadLibrary({ data, onChange, isLocked, submissionId, 
                   <div className="text-center py-8 border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/50">
                     <p className="text-sm text-slate-400 font-medium italic">No documents received for this category yet.</p>
                   </div>
+                )}
+                {uploadingCategory === cat.id && (
+                  <p className="text-xs text-slate-500">Uploading... {uploadProgress[cat.id] || 0}%</p>
                 )}
               </CardContent>
             </Card>

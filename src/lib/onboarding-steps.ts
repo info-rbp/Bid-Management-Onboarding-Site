@@ -201,14 +201,7 @@ export const allSteps: OnboardingStep[] = [
 export function getVisibleOnboardingSteps(
   enabledModules?: EnabledModules
 ): OnboardingStep[] {
-  return allSteps.filter(step => {
-    if (step.key === 'service_modules') {
-      if (!enabledModules) return true;
-      const anyEnabled = Object.values(enabledModules).some(v => v);
-      return anyEnabled;
-    }
-    return true;
-  });
+  return allSteps;
 }
 
 export function deriveServiceModules(selectedServices: string[]) {

@@ -41,6 +41,7 @@ export default function ServiceModules({ data, onChange, isLocked, allData }: Se
   const activeModules = deriveActiveServiceModules(selectedServices);
   const contacts = allData?.sections?.business_snapshot?.contacts || [];
   const offers = allData?.sections?.offer_menu?.offerItems || [];
+  const hasActiveModules = Object.values(activeModules).some(Boolean);
 
   const [expanded, setExpanded] = useState<string[]>(
     Object.entries(activeModules).filter(([_, v]) => v).map(([k]) => k)
@@ -92,6 +93,19 @@ export default function ServiceModules({ data, onChange, isLocked, allData }: Se
       </div>
 
       <div className="space-y-6">
+        {!hasActiveModules && (
+          <Card className="border-2 border-dashed border-slate-200 bg-slate-50">
+            <CardContent className="p-6 space-y-2">
+              <div className="flex items-center gap-2 text-slate-700 font-semibold">
+                <Clock className="w-4 h-4" />
+                <span>Pending service selection</span>
+              </div>
+              <p className="text-sm text-slate-500">
+                Service-specific modules will appear here once services are selected in Section 3.
+              </p>
+            </CardContent>
+          </Card>
+        )}
         {/* 12A: TENDER & SUPPLIER READINESS */}
         {activeModules.tenderSupplierReadiness && (
           <ModuleCard 
