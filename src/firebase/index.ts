@@ -1,36 +1,38 @@
 'use client';
 
-import { firebaseConfig } from '@/firebase/config';
-import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import { firebaseConfig, hasExplicitFirebaseConfig } from '@/firebase/config';
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore'
+import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
-// IMPORTANT: DO NOT MODIFY THIS FUNCTION
 export function initializeFirebase() {
-  if (!getApps().length) {
-    // Important! initializeApp() is called without any arguments because Firebase App Hosting
-    // integrates with the initializeApp() function to provide the environment variables needed to
-    // populate the FirebaseOptions in production. It is critical that we attempt to call initializeApp()
-    // without arguments.
-    let firebaseApp;
-    try {
-      // Attempt to initialize via Firebase App Hosting environment variables
-      firebaseApp = initializeApp();
-    } catch (e) {
-      // Only warn in production because it's normal to use the firebaseConfig to initialize
-      // during development
-      if (process.env.NODE_ENV === "production") {
-        console.warn('Automatic initialization failed. Falling back to firebase config object.', e);
-      }
-      firebaseApp = initializeApp(firebaseConfig);
+  const firebaseApp = getApps().length ? getApp() : initializeFirebaseApp();
+  return getSdks(firebaseApp);
+}
+
+function initializeFirebaseApp(): FirebaseApp {
+  try {
+    // Preferred on Firebase App Hosting.
+    // App Hosting can automatically provide FIREBASE_WEBAPP_CONFIG.
+    return initializeApp();
+  } catch (error) {
+    // Fallback for local dev, GitHub builds, or non-App-Hosting deployments.
+    if (!hasExplicitFirebaseConfig()) {
+      throw new Error(
+        [
+          'Firebase client config is missing.',
+          'For Firebase App Hosting, make sure the backend is linked to a Firebase Web App.',
+          'For local or GitHub-based builds, set NEXT_PUBLIC_FIREBASE_API_KEY,',
+          'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN, NEXT_PUBLIC_FIREBASE_PROJECT_ID,',
+          'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET, NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,',
+          'and NEXT_PUBLIC_FIREBASE_APP_ID.',
+        ].join(' ')
+      );
     }
 
-    return getSdks(firebaseApp);
+    return initializeApp(firebaseConfig);
   }
-
-  // If already initialized, return the SDKs with the already initialized App
-  return getSdks(getApp());
 }
 
 export function getSdks(firebaseApp: FirebaseApp) {
@@ -38,7 +40,7 @@ export function getSdks(firebaseApp: FirebaseApp) {
     firebaseApp,
     auth: getAuth(firebaseApp),
     firestore: getFirestore(firebaseApp),
-    storage: getStorage(firebaseApp)
+    storage: getStorage(firebaseApp),
   };
 }
 
