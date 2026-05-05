@@ -1,33 +1,20 @@
-
 "use client";
 
-import { 
-  getFirestore, 
-  doc, 
-  getDoc, 
-  getDocs, 
-  collection, 
-  query, 
-  where, 
-  onSnapshot, 
-  addDoc,
-  updateDoc,
-  serverTimestamp,
-} from 'firebase/firestore';
-import { app } from './config';
+import { collection, type FirestoreDataConverter } from 'firebase/firestore';
+import { initializeFirebase } from './index';
 import { UserProfile, OnboardingSubmission } from './types';
 
-const db = getFirestore(app);
+const { firestore: db } = initializeFirebase();
 
-const getConverter = <T,>() => ({
-  toFirestore: (data: any) => data,
-  fromFirestore: (snap: any) => snap.data() as T,
+const getConverter = <T,>(): FirestoreDataConverter<T> => ({
+  toFirestore: (data) => data as Record<string, unknown>,
+  fromFirestore: (snap) => snap.data() as T,
 });
 
-const getCollection = <T,>(collectionName: string) => collection(db, collectionName).withConverter(getConverter<T>());
+const getCollection = <T,>(collectionName: string) =>
+  collection(db, collectionName).withConverter(getConverter<T>());
 
 export { db, getCollection, getConverter };
 
-// Specific collection helpers
 export const usersCollection = getCollection<UserProfile>('users');
 export const submissionsCollection = getCollection<OnboardingSubmission>('onboardingSubmissions');
