@@ -28,6 +28,13 @@ import {
   FolderOpen
 } from 'lucide-react';
 import { deriveDocumentReadiness } from '@/lib/onboarding-steps';
+import {
+  DOCUMENT_CATEGORIES,
+  SOURCE_SECTIONS,
+  buildDocumentMetadata,
+  getSourceSectionLabel,
+  type DocumentCategory
+} from '@/lib/document-categories';
 
 interface DocumentUploadProps {
   data: any;
@@ -37,19 +44,7 @@ interface DocumentUploadProps {
   allData?: any;
 }
 
-const baseCategories = [
-  { id: 'business_profile_capability_brochures', label: 'Business Profile & Capability', description: 'Business profiles, capability statements, or brochures.' },
-  { id: 'logos_brand_assets_style_guides', label: 'Logos & Brand Assets', description: 'Logos, style guides, and brand identity files.' },
-  { id: 'insurance_certificates', label: 'Insurance Certificates', description: 'Public liability, indemnity, and workers compensation certificates.' },
-  { id: 'licences_registrations_certifications_checks', label: 'Licences & Certifications', description: 'Industry licences, staff tickets, and business registrations.' },
-  { id: 'policies_and_procedures', label: 'Policies & Procedures', description: 'WHS, Quality, Environmental, and Privacy policies.' },
-  { id: 'staff_cvs_bios_qualifications_tickets', label: 'Staff Documentation', description: 'CVs, staff bios, and qualification records.' },
-  { id: 'project_examples_case_studies_photos_reports_testimonials', label: 'Proof & Evidence', description: 'Case studies, project photos, and testimonials.' },
-  { id: 'previous_tenders_grants_proposals_quotes_feedback', label: 'Previous Submissions', description: 'Past tender responses, grant applications, and feedback.' },
-  { id: 'pricing_schedules_rate_cards_package_lists_budget_templates', label: 'Pricing & Budgets', description: 'Rate cards, pricing schedules, and budget templates.' },
-  { id: 'grant_project_documents_budgets_supplier_quotes_support_letters', label: 'Grant Specific Files', description: 'Project plans, supplier quotes, and support letters for grants.', conditional: true },
-  { id: 'other_relevant_documents', label: 'Other Documents', description: 'Any other files that support your application.' },
-];
+const baseCategories = Object.values(DOCUMENT_CATEGORIES);
 
 export function DocumentUploadLibrary({ data, onChange, isLocked, submissionId, allData }: DocumentUploadProps) {
   const { user } = useUser();
@@ -59,6 +54,7 @@ export function DocumentUploadLibrary({ data, onChange, isLocked, submissionId, 
   const [uploadingCategory, setUploadingCategory] = useState<string | null>(null);
 
   const ALLOWED_EXTENSIONS = ['pdf', 'docx', 'xlsx', 'png', 'jpg', 'jpeg'];
+  const DOCUMENT_LIBRARY_SOURCE_SECTION = 'section_14_documents' satisfies keyof typeof SOURCE_SECTIONS;
   const MAX_FILE_SIZE = 25 * 1024 * 1024;
 
   // Explicitly query only the current user's documents
@@ -139,7 +135,7 @@ export function DocumentUploadLibrary({ data, onChange, isLocked, submissionId, 
     }
   }, [categories, clientDocuments, data?.categories, data?.derivedDocumentReadiness, data?.receivedDocumentIds, onChange, selectedServices]);
 
-  const handleFileUpload = async (category: string, files: FileList | null) => {
+  const handleFileUpload = async (category: DocumentCategory, files: FileList | null) => {
     if (!files || !user || !db) return;
     const storage = getStorage();
     setUploadingCategory(category);
@@ -171,25 +167,23 @@ export function DocumentUploadLibrary({ data, onChange, isLocked, submissionId, 
         const downloadUrl = await getDownloadURL(snapshot.ref);
 
         await setDoc(doc(db, 'clients', user.uid, 'documents', documentId), {
-          documentId,
-          clientId: user.uid,
-          originalFileName: file.name,
-          storedFileName: `${documentId}_${safeFileName}`,
-          fileType: file.type,
-          fileExtension: extension,
-          fileSize: file.size,
-          storagePath,
-          downloadUrl,
-          documentCategory: category,
-          sourceSection: 'section_14_documents',
-          linkedSections: ['section_14_documents'],
-          linkedRequirementIds: [category],
-          status: 'received',
+          ...buildDocumentMetadata({
+            documentId,
+            clientId: user.uid,
+            originalFileName: file.name,
+            storedFileName: `${documentId}_${safeFileName}`,
+            fileType: file.type,
+            fileExtension: extension,
+            fileSize: file.size,
+            storagePath,
+            downloadUrl,
+            documentCategory: category,
+            sourceSection: DOCUMENT_LIBRARY_SOURCE_SECTION
+          }),
           uploadedAt: serverTimestamp(),
           uploadedBy: user.uid,
           createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          approvedForUse: false
+          updatedAt: serverTimestamp()
         });
         setUploadProgress((prev) => ({ ...prev, [category]: 100 }));
         toast({ title: `Upload complete: ${file.name}` });
@@ -243,7 +237,7 @@ export function DocumentUploadLibrary({ data, onChange, isLocked, submissionId, 
                         id={`upload-${cat.id}`} 
                         className="sr-only" 
                         multiple 
-                        onChange={(e) => handleFileUpload(cat.id, e.target.files)} 
+                        onChange={(e) => handleFileUpload(cat.id as DocumentCategory, e.target.files)} 
                       />
                       <Button asChild variant="outline" size="sm" disabled={uploadingCategory === cat.id} className="rounded-xl border-2 hover:bg-primary hover:text-white hover:border-primary transition-all">
                         <label htmlFor={`upload-${cat.id}`} className="gap-2 cursor-pointer">
@@ -265,7 +259,7 @@ export function DocumentUploadLibrary({ data, onChange, isLocked, submissionId, 
                           </div>
                           <div className="truncate">
                             <p className="text-xs font-bold text-slate-700 truncate">{file.originalFileName}</p>
-                            <p className="text-[10px] text-slate-400 uppercase font-bold tracking-tight">Source: {file.sourceSection?.replace(/_/g, ' ')}</p>
+                            <p className="text-[10px] text-slate-400 uppercase font-bold tracking-tight">Source: {getSourceSectionLabel(file.sourceSection)}</p>
                           </div>
                         </div>
                         <a href={file.downloadUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-primary hover:underline px-2 py-1 bg-primary/5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
