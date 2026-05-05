@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { collection, serverTimestamp, setDoc, doc } from 'firebase/firestore';
@@ -82,6 +82,63 @@ export function DocumentUploadLibrary({ data, onChange, isLocked, submissionId, 
     });
   }, [selectedServices, activeModules]);
 
+  const persistedCategoryState = useMemo(() => {
+    const byCategory = categories.reduce((acc, cat) => {
+      const existing = data?.categories?.[cat.id] || {};
+      const receivedDocumentIds = Array.isArray(existing.receivedDocumentIds) ? existing.receivedDocumentIds : [];
+      const status = existing.status || (receivedDocumentIds.length > 0 ? 'received' : 'pending');
+      acc[cat.id] = {
+        receivedDocumentIds,
+        status,
+        updatedAt: existing.updatedAt || null
+      };
+      return acc;
+    }, {} as Record<string, { receivedDocumentIds: string[]; status: string; updatedAt?: any }>);
+
+    const allReceivedDocumentIds = Object.values(byCategory).flatMap((entry) => entry.receivedDocumentIds);
+    const derivedDocumentReadiness = deriveDocumentReadiness([], clientDocuments || [], selectedServices);
+
+    return {
+      categories: byCategory,
+      receivedDocumentIds: allReceivedDocumentIds,
+      derivedDocumentReadiness
+    };
+  }, [categories, data?.categories, clientDocuments, selectedServices]);
+
+  useEffect(() => {
+    if (!clientDocuments) return;
+
+    const computedCategories = categories.reduce((acc, cat) => {
+      const categoryDocs = (clientDocuments || []).filter((d: any) => d.documentCategory === cat.id && d.status !== 'do_not_use');
+      const receivedDocumentIds = categoryDocs.map((d: any) => d.documentId || d.id).filter(Boolean);
+      acc[cat.id] = {
+        receivedDocumentIds,
+        status: receivedDocumentIds.length > 0 ? 'received' : 'pending',
+        updatedAt: new Date().toISOString()
+      };
+      return acc;
+    }, {} as Record<string, { receivedDocumentIds: string[]; status: string; updatedAt: string }>);
+
+    const nextPayload = {
+      categories: computedCategories,
+      receivedDocumentIds: Object.values(computedCategories).flatMap((entry) => entry.receivedDocumentIds),
+      derivedDocumentReadiness: deriveDocumentReadiness([], clientDocuments || [], selectedServices)
+    };
+
+    const existingComparable = JSON.stringify({
+      categories: data?.categories || {},
+      receivedDocumentIds: data?.receivedDocumentIds || [],
+      derivedDocumentReadiness: data?.derivedDocumentReadiness || {}
+    });
+    const nextComparable = JSON.stringify(nextPayload);
+
+    if (existingComparable !== nextComparable) {
+      onChange('categories', nextPayload.categories);
+      onChange('receivedDocumentIds', nextPayload.receivedDocumentIds);
+      onChange('derivedDocumentReadiness', nextPayload.derivedDocumentReadiness);
+    }
+  }, [categories, clientDocuments, data?.categories, data?.derivedDocumentReadiness, data?.receivedDocumentIds, onChange, selectedServices]);
+
   const handleFileUpload = async (category: string, files: FileList | null) => {
     if (!files || !user || !db) return;
     const storage = getStorage();
@@ -148,7 +205,7 @@ export function DocumentUploadLibrary({ data, onChange, isLocked, submissionId, 
     return (clientDocuments || []).filter((doc: any) => doc.documentCategory === categoryId);
   };
 
-  const readiness = deriveDocumentReadiness([], clientDocuments || [], selectedServices);
+  const readiness = data?.derivedDocumentReadiness || persistedCategoryState.derivedDocumentReadiness;
 
   return (
     <div className="space-y-16">
@@ -162,7 +219,9 @@ export function DocumentUploadLibrary({ data, onChange, isLocked, submissionId, 
       <div className="space-y-8">
         {categories.map((cat) => {
           const files = getFilesForCategory(cat.id);
-          const hasFiles = files.length > 0;
+          const persistedCategory = persistedCategoryState.categories[cat.id];
+          const isReceived = persistedCategory?.status === 'received';
+          const hasFiles = isReceived || files.length > 0;
 
           return (
             <Card key={cat.id} className={`border-2 rounded-[2rem] overflow-hidden transition-all ${hasFiles ? 'border-green-100 bg-green-50/10' : 'border-slate-100'}`}>

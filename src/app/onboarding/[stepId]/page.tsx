@@ -182,6 +182,15 @@ export default function OnboardingStepPage() {
             processedFormData.completedAt = serverTimestamp();
           }
         }
+        if (sid === 'document_upload_library') {
+          processedFormData = {
+            ...processedFormData,
+            categories: processedFormData.categories || {},
+            receivedDocumentIds: processedFormData.receivedDocumentIds || [],
+            derivedDocumentReadiness: processedFormData.derivedDocumentReadiness || {},
+            updatedAt: serverTimestamp()
+          };
+        }
 
         updateData[`sections.${sid}`] = processedFormData;
         updateData[`sectionStatuses.${sid}`] = buildSectionStatus(submission.sectionStatuses[sid], 'in_progress');
@@ -329,6 +338,15 @@ export default function OnboardingStepPage() {
       if (validation.isValid) {
         processedFormData.completedAt = serverTimestamp();
       }
+    }
+    if (stepId === 'document_upload_library') {
+      processedFormData = {
+        ...processedFormData,
+        categories: processedFormData.categories || {},
+        receivedDocumentIds: processedFormData.receivedDocumentIds || [],
+        derivedDocumentReadiness: processedFormData.derivedDocumentReadiness || {},
+        updatedAt: serverTimestamp()
+      };
     }
 
     setValidationResult(null);
