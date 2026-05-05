@@ -30,6 +30,7 @@ import { getVisibleOnboardingSteps, allSteps, EnabledModules, OnboardingStep, de
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { validateOnboardingSection, ValidationResult } from '@/lib/onboardingValidation';
 import { ValidationSummary } from '@/components/ValidationSummary';
+import { detectAuthorityConflicts } from '@/lib/conflict_detector';
 import { WelcomeExpectations } from '../welcome_expectations';
 import { BusinessSnapshot } from '../business_snapshot';
 import { ServiceSelection } from '../service_selection';
@@ -465,20 +466,44 @@ export default function OnboardingStepPage() {
   const handleSubmitPack = async () => {
     if (!submissionId || !db || !user || !submission) return;
 
+    const finalValidation = validateOnboardingSection('final_submission', formData, submission);
+    const incompleteRequiredSteps = visibleSteps.filter((step) => step.required && step.key !== 'final_submission' && submission?.sectionStatuses?.[step.key]?.status !== 'complete');
+
+    if (finalValidation.missingFields.length > 0 || incompleteRequiredSteps.length > 0 || isLocked) {
+      const warningMessages = [
+        ...finalValidation.missingFields.map((field) => field.fieldLabel || field.fieldKey),
+        ...incompleteRequiredSteps.map((step) => step.title),
+        ...(isLocked ? ['Submission is locked'] : []),
+      ];
+      toast({ variant: 'destructive', title: 'Unable to submit', description: `Please complete: ${warningMessages.join(', ')}` });
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      // 1. First, save current section data to Firestore
+      const submissionSnapshot = {
+        sections: submission.sections || {},
+        sectionStatuses: submission.sectionStatuses || {},
+        selectedServices: submission.selectedServices || [],
+        enabledModules: submission.enabledModules || {},
+        visibleStepKeys: submission.visibleStepKeys || visibleSteps.map((step) => step.key),
+        completionPercentage: submission.completionPercentage || 0,
+        derivedAuthorityReadiness: submission.sections?.authority_matrix?.derivedAuthorityReadiness || null,
+        authorityConflicts: detectAuthorityConflicts({ ...submission, sections: { ...(submission.sections || {}), final_submission: formData } }),
+      };
+
       const updateData: any = { 
         updatedAt: serverTimestamp(),
-        [`sections.final_submission`]: formData 
+        [`sections.final_submission`]: formData,
+        [`sectionStatuses.final_submission`]: buildSectionStatus(submission.sectionStatuses?.final_submission, 'complete'),
+        completionPercentage: 100,
       };
       await updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
 
-      // 2. Call the Finalize API which handles Google Drive and Status Updates
       const response = await fetch('/api/onboarding/finalize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ submissionId, userId: user.uid }),
+        body: JSON.stringify({ submissionId, userId: user.uid, finalSubmission: { acknowledgements: formData.acknowledgements || {}, finalComments: formData.finalComments || '', submissionSnapshot } }),
       });
 
       if (!response.ok) {
@@ -680,7 +705,7 @@ export default function OnboardingStepPage() {
                     <StepContent 
                       stepId={stepId as string} 
                       data={formData} 
-                      allData={submission}
+                      allData={{ ...submission, allSteps }}
                       onChange={handleFieldChange} 
                       isLocked={isLocked}
                       submissionId={submissionId}

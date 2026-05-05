@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getFirestore } from 'firebase-admin/firestore';
+import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { createFolder } from '@/lib/google-drive';
 
@@ -11,20 +11,20 @@ const db = getFirestore();
 
 export async function POST(req: Request) {
   try {
-    const { submissionId, userId } = await req.json();
+    const { submissionId, userId, finalSubmission } = await req.json();
 
     if (!submissionId || !userId) {
       return NextResponse.json({ error: 'Missing submissionId or userId' }, { status: 400 });
     }
 
     const submissionDoc = await db.collection('onboardingSubmissions').doc(submissionId).get();
-    
+
     if (!submissionDoc.exists) {
       return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
     }
 
     const submissionData = submissionDoc.data();
-    
+
     if (!submissionData) {
       return NextResponse.json({ error: 'Submission data is missing' }, { status: 404 });
     }
@@ -33,32 +33,43 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    // 1. Create Google Drive Folder
+    if (submissionData.status === 'submitted' && !submissionData.adminReopened) {
+      return NextResponse.json({ error: 'Submission is locked' }, { status: 409 });
+    }
+
     const folder = await createFolder(`Onboarding - ${submissionData.businessName}`);
-    
-    // 2. Update Submission with Drive Info
+
+    const submittedAt = new Date().toISOString();
+    const immutableSnapshot = {
+      ...(finalSubmission?.submissionSnapshot || {}),
+      generatedAt: submittedAt,
+      sourceStatus: submissionData.status || 'in_progress',
+    };
+
     await submissionDoc.ref.update({
       status: 'submitted',
-      submittedAt: new Date().toISOString(),
+      submittedAt,
+      completedAt: submittedAt,
       googleDriveFolderId: folder.id,
       googleDriveFolderUrl: folder.webViewLink,
-      updatedAt: new Date().toISOString(),
+      updatedAt: submittedAt,
+      adminReopened: false,
+      'sections.final_submission.acknowledgements': finalSubmission?.acknowledgements || {},
+      'sections.final_submission.finalComments': finalSubmission?.finalComments || '',
+      'sections.final_submission.submittedAt': submittedAt,
+      'sections.final_submission.completedAt': submittedAt,
+      'sections.final_submission.submissionSnapshot': immutableSnapshot,
+      submissionSnapshot: immutableSnapshot,
+      submissionSnapshotLockedAt: submittedAt,
+      submissionSnapshotVersion: FieldValue.increment(1),
     });
 
-    // 3. Update User Status
     await db.collection('users').doc(userId).update({
       onboardingStatus: 'submitted',
-      updatedAt: new Date().toISOString(),
+      updatedAt: submittedAt,
     });
 
-    // TODO: In a real app, you would trigger a background job to export all documents 
-    // and data to the newly created Drive folder.
-
-    return NextResponse.json({ 
-        success: true, 
-        driveFolderUrl: folder.webViewLink 
-    });
-
+    return NextResponse.json({ success: true, driveFolderUrl: folder.webViewLink });
   } catch (error: any) {
     console.error('Finalize onboarding error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
