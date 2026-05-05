@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 interface Contact {
   fullName: string;
@@ -78,6 +79,10 @@ const approvalLevelColumns = [
 export function AuthorityMatrix({ data, allData, onChange, isLocked }: AuthorityMatrixProps) {
   const authorityPreferences = data.authorityPreferences || {};
   const approvalLevels = data.approvalLevels || {};
+  const [prefBulkAction, setPrefBulkAction] = useState('');
+  const [prefBulkValue, setPrefBulkValue] = useState('');
+  const [levelBulkAction, setLevelBulkAction] = useState('');
+  const [levelBulkValue, setLevelBulkValue] = useState('');
 
   const handlePreferenceChange = (rowKey: string, value: string) => {
     onChange('authorityPreferences', { ...authorityPreferences, [rowKey]: value });
@@ -87,13 +92,44 @@ export function AuthorityMatrix({ data, allData, onChange, isLocked }: Authority
     onChange('approvalLevels', { ...approvalLevels, [rowKey]: value });
   };
 
-  // Get contacts from Section 2 (Business Snapshot)
+  const handleBulkApply = (
+    type: 'preferences' | 'levels',
+    action: string,
+    value?: string
+  ) => {
+    if (!action) return;
+
+    const apply = (currentData: any, rows: { key: string }[]) => {
+        let newData = { ...currentData };
+        if (action === 'apply_all' && value) {
+            rows.forEach(row => { newData[row.key] = value; });
+        } else if (action === 'apply_visible' && value) {
+            rows.forEach(row => { newData[row.key] = value; });
+        } else if (action === 'copy_first') {
+            const firstRowKey = rows[0].key;
+            const firstRowValue = newData[firstRowKey];
+            if (firstRowValue) {
+                rows.forEach(row => {
+                    if (!newData[row.key]) {
+                        newData[row.key] = firstRowValue;
+                    }
+                });
+            }
+        }
+        return newData;
+    };
+
+    if (type === 'preferences') {
+        onChange('authorityPreferences', apply(authorityPreferences, authorityPreferenceRows));
+    } else {
+        onChange('approvalLevels', apply(approvalLevels, approvalLevelRows));
+    }
+  };
+  
   const section2Contacts: Contact[] = allData?.sections?.business_snapshot?.contacts || [];
   
-  // Section 13 (Workflow) Contacts
   const section13FinalApprover = allData?.sections?.workflow_rules?.finalSubmissionApprover;
   
-  // Section 9 (Pricing) Contacts
   const section9PricingApprover = allData?.sections?.pricing_commercial?.pricingApprover;
 
   const getContactOptions = (type: 'submission' | 'pricing') => {
@@ -152,7 +188,6 @@ export function AuthorityMatrix({ data, allData, onChange, isLocked }: Authority
     }
   };
 
-  // Threshold Authority Visibility Logic
   const pricingSection = allData?.sections?.pricing_commercial || {};
   const marketplaceSection = allData?.sections?.service_modules?.marketplaceLeads || {};
   const quoteSection = allData?.sections?.service_modules?.quoteRequests || {};
@@ -195,15 +230,32 @@ export function AuthorityMatrix({ data, allData, onChange, isLocked }: Authority
         </div>
       </div>
 
-      {/* 1. Authority Preferences */}
       <section className="space-y-6">
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="bg-white">Group 1</Badge>
           <h3 className="text-2xl font-bold text-slate-800">Authority Preferences</h3>
         </div>
         <p className="text-sm text-slate-500">15.1 Complete the authority preferences matrix.</p>
-        
-        <Card className="border-none shadow-sm rounded-3xl overflow-hidden bg-white">
+        <Card className="border-none shadow-sm rounded-3xl bg-white">
+          <div className="p-4 bg-slate-50/50 flex items-center gap-2">
+            <Select value={prefBulkAction} onValueChange={setPrefBulkAction}>
+              <SelectTrigger className="w-[200px]"><SelectValue placeholder="Bulk Actions..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="apply_all">Apply to all rows</SelectItem>
+                <SelectItem value="apply_visible">Apply to all visible rows</SelectItem>
+                <SelectItem value="copy_first">Copy first row to blank rows</SelectItem>
+              </SelectContent>
+            </Select>
+            {prefBulkAction.startsWith('apply') && (
+              <Select value={prefBulkValue} onValueChange={setPrefBulkValue}>
+                <SelectTrigger className="w-[200px]"><SelectValue placeholder="Select a value..." /></SelectTrigger>
+                <SelectContent>
+                  {authorityPreferenceColumns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
+            <Button onClick={() => handleBulkApply('preferences', prefBulkAction, prefBulkValue)} disabled={!prefBulkAction || (prefBulkAction.startsWith('apply') && !prefBulkValue)}>Apply</Button>
+          </div>
           <Table>
             <TableHeader className="bg-slate-50/50">
               <TableRow>
@@ -238,7 +290,6 @@ export function AuthorityMatrix({ data, allData, onChange, isLocked }: Authority
         </Card>
       </section>
 
-      {/* 2. Approval Levels */}
       <section className="space-y-6">
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="bg-white">Group 2</Badge>
@@ -246,7 +297,26 @@ export function AuthorityMatrix({ data, allData, onChange, isLocked }: Authority
         </div>
         <p className="text-sm text-slate-500">15.2 Complete the approval level matrix.</p>
 
-        <Card className="border-none shadow-sm rounded-3xl overflow-hidden bg-white">
+        <Card className="border-none shadow-sm rounded-3xl bg-white">
+        <div className="p-4 bg-slate-50/50 flex items-center gap-2">
+            <Select value={levelBulkAction} onValueChange={setLevelBulkAction}>
+              <SelectTrigger className="w-[200px]"><SelectValue placeholder="Bulk Actions..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="apply_all">Apply to all rows</SelectItem>
+                <SelectItem value="apply_visible">Apply to all visible rows</SelectItem>
+                <SelectItem value="copy_first">Copy first row to blank rows</SelectItem>
+              </SelectContent>
+            </Select>
+            {levelBulkAction.startsWith('apply') && (
+              <Select value={levelBulkValue} onValueChange={setLevelBulkValue}>
+                <SelectTrigger className="w-[200px]"><SelectValue placeholder="Select a value..." /></SelectTrigger>
+                <SelectContent>
+                  {approvalLevelColumns.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
+            <Button onClick={() => handleBulkApply('levels', levelBulkAction, levelBulkValue)} disabled={!levelBulkAction || (levelBulkAction.startsWith('apply') && !levelBulkValue)}>Apply</Button>
+          </div>
           <Table>
             <TableHeader className="bg-slate-50/50">
               <TableRow>
@@ -281,7 +351,6 @@ export function AuthorityMatrix({ data, allData, onChange, isLocked }: Authority
         </Card>
       </section>
 
-      {/* 3. Restrictions and Prohibited Actions */}
       <section className="space-y-6">
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="bg-white">Group 3</Badge>
@@ -316,7 +385,6 @@ export function AuthorityMatrix({ data, allData, onChange, isLocked }: Authority
         </div>
       </section>
 
-      {/* 4. Final Approval Contacts */}
       <section className="space-y-6">
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="bg-white">Group 4</Badge>
@@ -324,7 +392,6 @@ export function AuthorityMatrix({ data, allData, onChange, isLocked }: Authority
         </div>
 
         <div className="grid gap-8">
-          {/* Final Submission Contact */}
           <Card className="border-none shadow-sm rounded-3xl bg-white border border-slate-100">
             <CardHeader>
               <CardTitle className="text-lg">15.5 Who provides final approval for tenders, grants, supplier registrations, marketplace responses, quotes and proposals?</CardTitle>
@@ -392,7 +459,6 @@ export function AuthorityMatrix({ data, allData, onChange, isLocked }: Authority
             </CardContent>
           </Card>
 
-          {/* Pricing Approval Contact */}
           <Card className="border-none shadow-sm rounded-3xl bg-white border border-slate-100">
             <CardHeader>
               <CardTitle className="text-lg">15.6 Who provides final approval for pricing and commercial terms?</CardTitle>
@@ -462,7 +528,6 @@ export function AuthorityMatrix({ data, allData, onChange, isLocked }: Authority
         </div>
       </section>
 
-      {/* 5. Threshold Authority */}
       {showThreshold && (
         <section className="space-y-6">
           <div className="flex items-center gap-2">
@@ -491,7 +556,6 @@ export function AuthorityMatrix({ data, allData, onChange, isLocked }: Authority
         </section>
       )}
 
-      {/* Summary Card (Visible when complete or locked) */}
       {(isComplete || isLocked) && data.derivedAuthorityReadiness && (
         <Card className="border-2 border-primary/20 bg-primary/5 rounded-[2rem] overflow-hidden">
           <CardHeader className="bg-primary/10 border-b border-primary/10">

@@ -39,10 +39,8 @@ service cloud.firestore {
     }
 
     // Uploaded documents
-    match /uploadedDocuments/{id} {
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && (request.resource.data.userId == request.auth.uid || isAdmin());
-      allow update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+    match /clients/{userId}/documents/{documentId} {
+      allow read, write: if isOwner(userId) || isAdmin();
     }
 
     // Admins collection

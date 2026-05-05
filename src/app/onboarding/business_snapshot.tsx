@@ -127,10 +127,10 @@ export function BusinessSnapshot({ data, onChange, isLocked, fieldErrors = {} }:
                 {index > 0 && <Button variant="ghost" size="icon" onClick={() => handleRemoveContact(index)} disabled={isLocked}><Trash2 className="w-4 h-4 text-destructive" /></Button>}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2"><Label>Full Name</Label><Input id={index===0?'primaryContact.fullName':'secondaryContact.fullName'} className={cls(index===0?'primaryContact.fullName':'secondaryContact.fullName')} aria-invalid={!!err(index===0?'primaryContact.fullName':'secondaryContact.fullName')} value={contact.fullName} onChange={(e) => handleContactChange(index, 'fullName', e.target.value)} disabled={isLocked} /></div>
-                <div className="space-y-2"><Label>Role/Title</Label><Input id={index===0?'primaryContact.roleTitle':'secondaryContact.roleTitle'} className={cls(index===0?'primaryContact.roleTitle':'secondaryContact.roleTitle')} aria-invalid={!!err(index===0?'primaryContact.roleTitle':'secondaryContact.roleTitle')} value={contact.roleTitle || contact.role || ''} onChange={(e) => handleContactChange(index, 'roleTitle', e.target.value)} disabled={isLocked} /></div>
-                <div className="space-y-2"><Label>Email</Label><Input id={index===0?'primaryContact.email':'secondaryContact.email'} className={cls(index===0?'primaryContact.email':'secondaryContact.email')} aria-invalid={!!err(index===0?'primaryContact.email':'secondaryContact.email')} type="email" value={contact.email} onChange={(e) => handleContactChange(index, 'email', e.target.value)} disabled={isLocked} /></div>
-                <div className="space-y-2"><Label>Phone</Label><Input id={index===0?'primaryContact.phone':'secondaryContact.phone'} className={cls(index===0?'primaryContact.phone':'secondaryContact.phone')} aria-invalid={!!err(index===0?'primaryContact.phone':'secondaryContact.phone')} value={contact.phone} onChange={(e) => handleContactChange(index, 'phone', e.target.value)} disabled={isLocked} /></div>
+                <div className="space-y-2"><Label>Full Name</Label><Input id={`contacts.${index}.fullName`} className={cls(`contacts.${index}.fullName`)} aria-invalid={!!err(`contacts.${index}.fullName`)} value={contact.fullName} onChange={(e) => handleContactChange(index, 'fullName', e.target.value)} disabled={isLocked} /></div>
+                <div className="space-y-2"><Label>Role/Title</Label><Input id={`contacts.${index}.roleTitle`} className={cls(`contacts.${index}.roleTitle`)} aria-invalid={!!err(`contacts.${index}.roleTitle`)} value={contact.roleTitle} onChange={(e) => handleContactChange(index, 'roleTitle', e.target.value)} disabled={isLocked} /></div>
+                <div className="space-y-2"><Label>Email</Label><Input id={`contacts.${index}.email`} className={cls(`contacts.${index}.email`)} aria-invalid={!!err(`contacts.${index}.email`)} type="email" value={contact.email} onChange={(e) => handleContactChange(index, 'email', e.target.value)} disabled={isLocked} /></div>
+                <div className="space-y-2"><Label>Phone</Label><Input id={`contacts.${index}.phone`} className={cls(`contacts.${index}.phone`)} aria-invalid={!!err(`contacts.${index}.phone`)} value={contact.phone} onChange={(e) => handleContactChange(index, 'phone', e.target.value)} disabled={isLocked} /></div>
               </div>
               <div className="space-y-2">
                 <Label>Responsibilities</Label>
@@ -145,6 +145,19 @@ export function BusinessSnapshot({ data, onChange, isLocked, fieldErrors = {} }:
                     </div>
                   ))}
                 </div>
+                {(contact.responsibilities || []).includes('Other') && (
+                  <div className="mt-2 space-y-2">
+                    <Label>Other responsibility</Label>
+                    <Input
+                      id={`contacts.${index}.otherResponsibility`}
+                      value={contact.otherResponsibility || ''}
+                      onChange={(e) => handleContactChange(index, 'otherResponsibility', e.target.value)}
+                      disabled={isLocked}
+                      className={cls(`contacts.${index}.otherResponsibility`)}
+                    />
+                    {err(`contacts.${index}.otherResponsibility`) && <p className='text-destructive text-sm'>{err(`contacts.${index}.otherResponsibility`)}</p>}
+                  </div>
+                )}
               </div>
             </div>
           ))}

@@ -23,12 +23,13 @@ import {
   Briefcase,
   AlertTriangle,
   RefreshCw,
-  CloudOff
+  CloudOff,
+  ChevronsDown
 } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import { getVisibleOnboardingSteps, allSteps, EnabledModules, OnboardingStep, deriveServiceModules, deriveAuthorityReadiness, deriveActiveServiceModules } from '@/lib/onboarding-steps';
 import { AuthGuard } from '@/components/auth/AuthGuard';
-import { validateOnboardingSection, ValidationResult } from '@/lib/onboardingValidation';
+import { validateOnboardingSection, ValidationResult, ValidationError } from '@/lib/onboardingValidation';
 import { ValidationSummary } from '@/components/ValidationSummary';
 import { detectAuthorityConflicts } from '@/lib/conflict_detector';
 import { WelcomeExpectations } from '../welcome_expectations';
@@ -286,6 +287,23 @@ export default function OnboardingStepPage() {
     router.push(targetStep.route);
   };
 
+  const scrollToError = (error: ValidationError) => {
+    if (!error.anchorId) return;
+    const el = document.getElementById(error.anchorId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      (el as HTMLElement).focus?.();
+    }
+  };
+
+  const scrollToNextError = () => {
+    if (!validationResult || validationResult.isValid) return;
+    const allErrors = [...validationResult.missingFields, ...validationResult.invalidFields];
+    if (allErrors.length > 0) {
+      scrollToError(allErrors[0]);
+    }
+  };
+
   const handleSave = (direction: 'next' | 'prev' | 'stay' = 'stay') => {
     if (!submissionId || !db || !currentStep || isLocked) {
       if (direction === 'next' && currentVisibleIndex < visibleSteps.length - 1) {
@@ -306,12 +324,7 @@ export default function OnboardingStepPage() {
         
         updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
         
-        setTimeout(() => {
-          const first = [...validation.missingFields, ...validation.invalidFields].find((e) => e.anchorId);
-          if (!first?.anchorId) return;
-          const el = document.getElementById(first.anchorId);
-          if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); (el as HTMLElement).focus?.(); }
-        }, 0);
+        setTimeout(() => scrollToNextError(), 0);
         return;
       }
     }
@@ -663,6 +676,11 @@ export default function OnboardingStepPage() {
                 {!isLocked && stepId !== 'final_submission' && (
                   <>
                     <Button variant="outline" size="sm" onClick={() => handleSave('stay')} className="gap-2 rounded-lg border-2">Save Draft</Button>
+                    {validationResult && !validationResult.isValid && (
+                       <Button size="sm" variant="outline" onClick={scrollToNextError} className="gap-2 rounded-lg font-bold px-4 border-amber-400 text-amber-600 bg-amber-50 hover:bg-amber-100">
+                         Next incomplete field <ChevronsDown className="w-4 h-4" />
+                       </Button>
+                     )}
                     <Button size="sm" onClick={() => handleSave('next')} className="gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20" disabled={currentVisibleIndex === visibleSteps.length - 1}>Next Step <ChevronRight className="w-4 h-4" /></Button>
                   </>
                 )}
@@ -701,7 +719,7 @@ export default function OnboardingStepPage() {
                     </div>
                   ) : (
                     <>
-                    {validationResult && !validationResult.isValid && <ValidationSummary validationResult={validationResult} />}
+                    {validationResult && !validationResult.isValid && <ValidationSummary validationResult={validationResult} onJumpTo={scrollToError} />}
                     <StepContent 
                       stepId={stepId as string} 
                       data={formData} 

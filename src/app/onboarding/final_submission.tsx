@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ArrowRight } from 'lucide-react';
 import { type AuthorityConflict, detectAuthorityConflicts } from '@/lib/conflict_detector';
 import { Label } from '@/components/ui/label';
 
@@ -38,7 +38,7 @@ const acknowledgements: Acknowledgement[] = [
   },
 ];
 
-export function FinalSubmission({ data, onChange, isLocked, allData, onSubmit }: any) {
+export function FinalSubmission({ data, onChange, isLocked, allData, onSubmit, onEdit }: any) {
   const checkedState = data.acknowledgements || {};
   const statuses = allData?.sectionStatuses || {};
   const visibleStepKeys: string[] = allData?.visibleStepKeys || [];
@@ -69,12 +69,13 @@ export function FinalSubmission({ data, onChange, isLocked, allData, onSubmit }:
   const sectionSummary = useMemo(() => {
     return visibleStepKeys.map((stepKey: string) => {
       const step = (allData?.allSteps || []).find((s: any) => s.key === stepKey);
-      const status = statuses?.[stepKey]?.status || 'not_started';
+      const statusInfo = statuses?.[stepKey] || {};
       return {
         key: stepKey,
         title: step?.title || stepKey,
         required: Boolean(step?.required),
-        status,
+        status: statusInfo.status || 'not_started',
+        missingFields: statusInfo.missingFields || [],
       };
     });
   }, [allData, statuses, visibleStepKeys]);
@@ -87,14 +88,7 @@ export function FinalSubmission({ data, onChange, isLocked, allData, onSubmit }:
   };
 
   const allDeclarationsChecked = acknowledgements.every((ack) => checkedState[ack.id]);
-
-  const pendingRequirements = [
-    ...(!allDeclarationsChecked ? ['Check all required declarations.'] : []),
-    ...incompleteRequiredSections.map((section: any) => `Complete section: ${section.title}`),
-    ...(isLocked ? ['Submission is locked.'] : []),
-  ];
-
-  const canSubmit = pendingRequirements.length === 0;
+  const canSubmit = incompleteRequiredSections.length === 0 && allDeclarationsChecked && !isLocked;
 
   return (
     <div className="space-y-10">
@@ -170,39 +164,47 @@ export function FinalSubmission({ data, onChange, isLocked, allData, onSubmit }:
         </CardContent>
       </Card>
 
-      <Card className="border-slate-200 rounded-3xl">
-        <CardHeader>
-          <CardTitle>Section completion summary</CardTitle>
-          <CardDescription>Review completion status across all onboarding sections.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {sectionSummary.map((section: any) => (
-            <div key={section.key} className="flex items-center justify-between rounded-lg border p-3">
-              <span className="text-sm">{section.title}</span>
-              <span className="text-xs font-semibold">{statusLabelMap[section.status] || 'Not started'}</span>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      {pendingRequirements.length > 0 && (
-        <Alert variant="destructive" className="rounded-2xl">
-          <AlertTriangle className="h-5 w-5" />
-          <AlertTitle>Before you submit</AlertTitle>
-          <AlertDescription>
-            <ul className="list-disc pl-5 mt-2 space-y-1">
-              {pendingRequirements.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </AlertDescription>
+      {incompleteRequiredSections.length > 0 && (
+        <Card className="border-orange-200 bg-orange-50 rounded-3xl">
+          <CardHeader>
+            <CardTitle className="text-orange-800">Incomplete Sections</CardTitle>
+            <CardDescription className="text-orange-700">The following required sections must be completed before you can submit.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {incompleteRequiredSections.map((section) => (
+              <div key={section.key} className="p-4 border border-orange-200 bg-white rounded-xl">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-slate-800">{section.title}</h4>
+                  <Button variant="ghost" size="sm" onClick={() => onEdit(section.key)} className="gap-2 text-primary hover:text-primary">
+                    Go to Section <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </div>
+                {section.missingFields && section.missingFields.length > 0 && (
+                   <ul className="mt-2 list-disc list-inside text-xs text-slate-500 space-y-1">
+                    {section.missingFields.slice(0, 3).map((mf: any, i: number) => (
+                      <li key={i}>{typeof mf === 'string' ? mf : mf.message}</li>
+                    ))}
+                    {section.missingFields.length > 3 && <li>...and {section.missingFields.length - 3} more.</li>}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+      
+      {!allDeclarationsChecked && (
+        <Alert className="border-blue-200 bg-blue-50 text-blue-800 rounded-2xl">
+            <AlertTriangle className="w-5 h-5 text-blue-500" />
+            <AlertTitle>Confirm Acknowledgements</AlertTitle>
+            <AlertDescription>Please check all the boxes in the Acknowledgements section above.</AlertDescription>
         </Alert>
       )}
 
-      <div className="text-center space-y-4">
+      <div className="text-center space-y-4 pt-6 border-t border-slate-200">
         <Button 
           size="lg" 
-          className="rounded-full font-bold h-12 w-64 shadow-lg"
+          className="rounded-full font-bold h-12 w-64 shadow-lg bg-primary hover:bg-primary/90 disabled:bg-slate-300"
           disabled={!canSubmit}
           onClick={onSubmit}
         >
