@@ -13,6 +13,7 @@ interface BusinessSnapshotProps {
   data: any;
   onChange: (field: string, value: any) => void;
   isLocked: boolean;
+  fieldErrors?: Record<string, string>;
 }
 
 const contactResponsibilities = [
@@ -31,7 +32,7 @@ const contactResponsibilities = [
   "Other",
 ];
 
-export function BusinessSnapshot({ data, onChange, isLocked }: BusinessSnapshotProps) {
+export function BusinessSnapshot({ data, onChange, isLocked, fieldErrors = {} }: BusinessSnapshotProps) {
   const contacts = data.contacts || [];
 
   const handleContactChange = (index: number, field: string, value: any) => {
@@ -63,6 +64,9 @@ export function BusinessSnapshot({ data, onChange, isLocked }: BusinessSnapshotP
     }
   };
 
+  const err = (k: string) => fieldErrors[k];
+  const cls = (k: string) => err(k) ? 'border-destructive' : '';
+
   return (
     <div className="space-y-8">
       <div className="space-y-4">
@@ -75,13 +79,13 @@ export function BusinessSnapshot({ data, onChange, isLocked }: BusinessSnapshotP
           <CardTitle className="flex items-center gap-2 text-primary"><Building className="w-5 h-5" /> <span>Business Details</span></CardTitle>
         </CardHeader>
         <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2"><Label>Registered Business Name</Label><Input value={data.registeredName || ''} onChange={(e) => onChange('registeredName', e.target.value)} disabled={isLocked} /></div>
+          <div className="space-y-2"><Label>Registered Business Name</Label><Input id='registeredBusinessName' className={cls('registeredBusinessName')} aria-invalid={!!err('registeredBusinessName')} value={data.registeredBusinessName || ''} onChange={(e) => onChange('registeredBusinessName', e.target.value)} disabled={isLocked} />{err('registeredBusinessName') && <p className='text-destructive text-sm'>{err('registeredBusinessName')}</p>}</div>
           <div className="space-y-2"><Label>Trading Name</Label><Input value={data.tradingName || ''} onChange={(e) => onChange('tradingName', e.target.value)} disabled={isLocked} /></div>
-          <div className="space-y-2"><Label>ABN</Label><Input value={data.abn || ''} onChange={(e) => onChange('abn', e.target.value)} disabled={isLocked} /></div>
+          <div className="space-y-2"><Label>ABN</Label><Input id='abn' className={cls('abn')} aria-invalid={!!err('abn')} value={data.abn || ''} onChange={(e) => onChange('abn', e.target.value)} disabled={isLocked} />{err('abn') && <p className='text-destructive text-sm'>{err('abn')}</p>}</div>
           <div className="space-y-2"><Label>ACN</Label><Input value={data.acn || ''} onChange={(e) => onChange('acn', e.target.value)} disabled={isLocked} /></div>
           <div className="space-y-2">
             <Label>Business Structure</Label>
-            <Select value={data.structure || ''} onValueChange={(v) => onChange('structure', v)} disabled={isLocked}>
+            <Select value={data.businessStructure || ''} onValueChange={(v) => onChange('businessStructure', v)} disabled={isLocked}>
               <SelectTrigger><SelectValue placeholder="Select structure" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="sole_trader">Sole Trader</SelectItem>
@@ -92,7 +96,7 @@ export function BusinessSnapshot({ data, onChange, isLocked }: BusinessSnapshotP
             </Select>
           </div>
           <div className="space-y-2"><Label>Year Started</Label><Input type="number" value={data.yearStarted || ''} onChange={(e) => onChange('yearStarted', e.target.value)} disabled={isLocked} /></div>
-          <div className="md:col-span-2 space-y-2"><Label>Registered Address</Label><Input value={data.registeredAddress || ''} onChange={(e) => onChange('registeredAddress', e.target.value)} disabled={isLocked} /></div>
+          <div className="md:col-span-2 space-y-2"><Label>Registered Address</Label><Input id='registeredBusinessAddress' className={cls('registeredBusinessAddress')} aria-invalid={!!err('registeredBusinessAddress')} value={data.registeredBusinessAddress || ''} onChange={(e) => onChange('registeredBusinessAddress', e.target.value)} disabled={isLocked} />{err('registeredBusinessAddress') && <p className='text-destructive text-sm'>{err('registeredBusinessAddress')}</p>}</div>
           <div className="md:col-span-2 space-y-2"><Label>Operating Address</Label><Input value={data.operatingAddress || ''} onChange={(e) => onChange('operatingAddress', e.target.value)} disabled={isLocked} /></div>
           <div className="md:col-span-2 space-y-2"><Label>Postal Address</Label><Input value={data.postalAddress || ''} onChange={(e) => onChange('postalAddress', e.target.value)} disabled={isLocked} /></div>
           <div className="space-y-2"><Label>Business Phone</Label><Input value={data.businessPhone || ''} onChange={(e) => onChange('businessPhone', e.target.value)} disabled={isLocked} /></div>
@@ -123,10 +127,10 @@ export function BusinessSnapshot({ data, onChange, isLocked }: BusinessSnapshotP
                 {index > 0 && <Button variant="ghost" size="icon" onClick={() => handleRemoveContact(index)} disabled={isLocked}><Trash2 className="w-4 h-4 text-destructive" /></Button>}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2"><Label>Full Name</Label><Input value={contact.fullName} onChange={(e) => handleContactChange(index, 'fullName', e.target.value)} disabled={isLocked} /></div>
-                <div className="space-y-2"><Label>Role/Title</Label><Input value={contact.role} onChange={(e) => handleContactChange(index, 'role', e.target.value)} disabled={isLocked} /></div>
-                <div className="space-y-2"><Label>Email</Label><Input type="email" value={contact.email} onChange={(e) => handleContactChange(index, 'email', e.target.value)} disabled={isLocked} /></div>
-                <div className="space-y-2"><Label>Phone</Label><Input value={contact.phone} onChange={(e) => handleContactChange(index, 'phone', e.target.value)} disabled={isLocked} /></div>
+                <div className="space-y-2"><Label>Full Name</Label><Input id={index===0?'primaryContact.fullName':'secondaryContact.fullName'} className={cls(index===0?'primaryContact.fullName':'secondaryContact.fullName')} aria-invalid={!!err(index===0?'primaryContact.fullName':'secondaryContact.fullName')} value={contact.fullName} onChange={(e) => handleContactChange(index, 'fullName', e.target.value)} disabled={isLocked} /></div>
+                <div className="space-y-2"><Label>Role/Title</Label><Input id={index===0?'primaryContact.roleTitle':'secondaryContact.roleTitle'} className={cls(index===0?'primaryContact.roleTitle':'secondaryContact.roleTitle')} aria-invalid={!!err(index===0?'primaryContact.roleTitle':'secondaryContact.roleTitle')} value={contact.roleTitle || contact.role || ''} onChange={(e) => handleContactChange(index, 'roleTitle', e.target.value)} disabled={isLocked} /></div>
+                <div className="space-y-2"><Label>Email</Label><Input id={index===0?'primaryContact.email':'secondaryContact.email'} className={cls(index===0?'primaryContact.email':'secondaryContact.email')} aria-invalid={!!err(index===0?'primaryContact.email':'secondaryContact.email')} type="email" value={contact.email} onChange={(e) => handleContactChange(index, 'email', e.target.value)} disabled={isLocked} /></div>
+                <div className="space-y-2"><Label>Phone</Label><Input id={index===0?'primaryContact.phone':'secondaryContact.phone'} className={cls(index===0?'primaryContact.phone':'secondaryContact.phone')} aria-invalid={!!err(index===0?'primaryContact.phone':'secondaryContact.phone')} value={contact.phone} onChange={(e) => handleContactChange(index, 'phone', e.target.value)} disabled={isLocked} /></div>
               </div>
               <div className="space-y-2">
                 <Label>Responsibilities</Label>

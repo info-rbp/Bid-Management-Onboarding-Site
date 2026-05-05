@@ -28,7 +28,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { getVisibleOnboardingSteps, allSteps, EnabledModules, OnboardingStep, deriveServiceModules, deriveAuthorityReadiness } from '@/lib/onboarding-steps';
 import { AuthGuard } from '@/components/auth/AuthGuard';
-import { validateOnboardingSection } from '@/lib/onboardingValidation';
+import { validateOnboardingSection, ValidationResult } from '@/lib/onboardingValidation';
+import { ValidationSummary } from '@/components/ValidationSummary';
 import { WelcomeExpectations } from '../welcome_expectations';
 import { BusinessSnapshot } from '../business_snapshot';
 import { ServiceSelection } from '../service_selection';
@@ -69,6 +70,7 @@ export default function OnboardingStepPage() {
   const [formData, setFormData] = useState<any>({});
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
   
   const initialSyncDone = useRef<Record<string, boolean>>({});
@@ -265,18 +267,20 @@ export default function OnboardingStepPage() {
     
     if (direction === 'next' && stepId !== 'final_submission') {
       const validation = validateOnboardingSection(stepId as string, formData, submission);
+      setValidationResult(validation);
       if (!validation.isValid) {
         const updateData: any = { updatedAt: serverTimestamp() };
         updateData[`sections.${stepId}`] = formData;
-        updateData[`sectionStatuses.${stepId}`] = buildSectionStatus(submission.sectionStatuses[stepId as string], 'needs_attention', validation.missingFields);
+        updateData[`sectionStatuses.${stepId}`] = buildSectionStatus(submission.sectionStatuses[stepId as string], 'needs_attention', [...validation.missingFields, ...validation.invalidFields].map((e) => e.message));
         
         updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
         
-        toast({
-          variant: "destructive",
-          title: "Incomplete Section",
-          description: "Please fill in all required fields before proceeding."
-        });
+        setTimeout(() => {
+          const first = [...validation.missingFields, ...validation.invalidFields].find((e) => e.anchorId);
+          if (!first?.anchorId) return;
+          const el = document.getElementById(first.anchorId);
+          if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); (el as HTMLElement).focus?.(); }
+        }, 0);
         return;
       }
     }
@@ -306,6 +310,7 @@ export default function OnboardingStepPage() {
       }
     }
 
+    setValidationResult(null);
     updateData[`sections.${stepId}`] = processedFormData;
 
     let targetStepKey = stepId as string;
@@ -594,6 +599,10 @@ export default function OnboardingStepPage() {
 
           <div className="flex-1 overflow-y-auto bg-slate-50/30">
             <div className="max-w-4xl mx-auto p-8 lg:p-12">
+              {stepId === 'business_snapshot' && process.env.NODE_ENV !== 'production' && validationResult && (
+                <pre className="mb-6 rounded-xl border bg-slate-900 text-slate-100 p-4 text-xs overflow-auto">{JSON.stringify({ section: 'Snapshot', ...validationResult, raw: formData }, null, 2)}</pre>
+              )}
+
               {isLocked && stepId !== 'final_submission' && (
                 <div className="mb-8 p-4 bg-blue-50 border border-blue-100 rounded-2xl flex gap-3 text-blue-800 animate-in fade-in slide-in-from-top-2">
                   <Lock className="w-5 h-5 shrink-0" />
@@ -615,6 +624,8 @@ export default function OnboardingStepPage() {
                       </div>
                     </div>
                   ) : (
+                    <>
+                    {validationResult && !validationResult.isValid && <ValidationSummary validationResult={validationResult} />}
                     <StepContent 
                       stepId={stepId as string} 
                       data={formData} 
@@ -624,7 +635,9 @@ export default function OnboardingStepPage() {
                       submissionId={submissionId}
                       onEdit={handleNavigate}
                       onSubmit={handleSubmitPack}
+                      validationResult={validationResult}
                     />
+                    </>
                   )}
                 </CardContent>
               </Card>
@@ -636,14 +649,14 @@ export default function OnboardingStepPage() {
   );
 }
 
-function StepContent({ stepId, data, allData, onChange, isLocked, submissionId, onEdit, onSubmit }: { stepId: string, data: any, allData: any, onChange: (field: string, value: any) => void, isLocked: boolean, submissionId: string | null, onEdit: (step: string) => void, onSubmit: () => void }) {
+function StepContent({ stepId, data, allData, onChange, isLocked, submissionId, onEdit, onSubmit, validationResult }: { stepId: string, data: any, allData: any, onChange: (field: string, value: any) => void, isLocked: boolean, submissionId: string | null, onEdit: (step: string) => void, onSubmit: () => void, validationResult?: ValidationResult | null }) {
   if (!submissionId) return null;
 
   switch (stepId) {
     case 'welcome_expectations':
       return <WelcomeExpectations data={data} onChange={onChange} isLocked={isLocked} />;
     case 'business_snapshot':
-      return <BusinessSnapshot data={data} onChange={onChange} isLocked={isLocked} />;
+      return <BusinessSnapshot data={data} onChange={onChange} isLocked={isLocked} fieldErrors={Object.fromEntries([...(validationResult?.missingFields || []), ...(validationResult?.invalidFields || [])].map((e) => [e.fieldKey, e.message]))} />;
     case 'service_selection':
       return <ServiceSelection data={data} onChange={onChange} isLocked={isLocked} />;
     case 'business_profile':
