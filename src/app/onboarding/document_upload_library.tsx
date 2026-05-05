@@ -1,10 +1,9 @@
 
 "use client";
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { collection, serverTimestamp, setDoc, doc } from 'firebase/firestore';
+import { collection } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,7 +11,6 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { 
-  UploadCloud, 
   Trash2, 
   FileText, 
   Paperclip, 
@@ -30,11 +28,9 @@ import {
 import { deriveDocumentReadiness } from '@/lib/onboarding-steps';
 import {
   DOCUMENT_CATEGORIES,
-  SOURCE_SECTIONS,
-  buildDocumentMetadata,
-  getSourceSectionLabel,
-  type DocumentCategory
+  getSourceSectionLabel
 } from '@/lib/document-categories';
+import { ClientDocumentUploader } from './client_document_uploader';
 
 interface DocumentUploadProps {
   data: any;
@@ -50,13 +46,6 @@ export function DocumentUploadLibrary({ data, onChange, isLocked, submissionId, 
   const { user } = useUser();
   const db = useFirestore();
   const { toast } = useToast();
-  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
-  const [uploadingCategory, setUploadingCategory] = useState<string | null>(null);
-
-  const ALLOWED_EXTENSIONS = ['pdf', 'docx', 'xlsx', 'png', 'jpg', 'jpeg'];
-  const DOCUMENT_LIBRARY_SOURCE_SECTION = 'section_14_documents' satisfies keyof typeof SOURCE_SECTIONS;
-  const MAX_FILE_SIZE = 25 * 1024 * 1024;
-
   // Explicitly query only the current user's documents
   const docsQuery = useMemoFirebase(() => {
     if (!user || !db) return null;
@@ -135,66 +124,6 @@ export function DocumentUploadLibrary({ data, onChange, isLocked, submissionId, 
     }
   }, [categories, clientDocuments, data?.categories, data?.derivedDocumentReadiness, data?.receivedDocumentIds, onChange, selectedServices]);
 
-  const handleFileUpload = async (category: DocumentCategory, files: FileList | null) => {
-    if (!files || !user || !db) return;
-    const storage = getStorage();
-    setUploadingCategory(category);
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const extension = file.name.split('.').pop()?.toLowerCase() || '';
-      if (!ALLOWED_EXTENSIONS.includes(extension)) {
-        toast({ variant: "destructive", title: `Upload failed: Unsupported file type .${extension || 'unknown'}` });
-        continue;
-      }
-      if (file.size > MAX_FILE_SIZE) {
-        toast({ variant: "destructive", title: "Upload failed: File is too large (max 25MB)" });
-        continue;
-      }
-      const documentId = crypto.randomUUID();
-      const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const storagePath = `clients/${user.uid}/documents/${category}/${documentId}_${safeFileName}`;
-      const fileRef = ref(storage, storagePath);
-
-      try {
-        const uploadTask = uploadBytesResumable(fileRef, file);
-        const snapshot = await new Promise<any>((resolve, reject) => {
-          uploadTask.on('state_changed', (snap) => {
-            const progress = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
-            setUploadProgress((prev) => ({ ...prev, [category]: progress }));
-          }, reject, () => resolve(uploadTask.snapshot));
-        });
-        const downloadUrl = await getDownloadURL(snapshot.ref);
-
-        await setDoc(doc(db, 'clients', user.uid, 'documents', documentId), {
-          ...buildDocumentMetadata({
-            documentId,
-            clientId: user.uid,
-            originalFileName: file.name,
-            storedFileName: `${documentId}_${safeFileName}`,
-            fileType: file.type,
-            fileExtension: extension,
-            fileSize: file.size,
-            storagePath,
-            downloadUrl,
-            documentCategory: category,
-            sourceSection: DOCUMENT_LIBRARY_SOURCE_SECTION
-          }),
-          uploadedAt: serverTimestamp(),
-          uploadedBy: user.uid,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        });
-        setUploadProgress((prev) => ({ ...prev, [category]: 100 }));
-        toast({ title: `Upload complete: ${file.name}` });
-      } catch (e) {
-        console.error({ stage: 'documents', action: 'upload', documentCategory: category, fileName: file.name, fileSize: file.size, storagePath, error: e });
-        toast({ variant: "destructive", title: `Upload failed: ${(e as Error)?.message || 'Unknown error'}` });
-      }
-    }
-    setUploadingCategory(null);
-  };
-
   const getFilesForCategory = (categoryId: string) => {
     return (clientDocuments || []).filter((doc: any) => doc.documentCategory === categoryId);
   };
@@ -231,19 +160,15 @@ export function DocumentUploadLibrary({ data, onChange, isLocked, submissionId, 
                     </div>
                   </div>
                   {!isLocked && (
-                    <div className="relative">
-                      <input 
-                        type="file" 
-                        id={`upload-${cat.id}`} 
-                        className="sr-only" 
-                        multiple 
-                        onChange={(e) => handleFileUpload(cat.id as DocumentCategory, e.target.files)} 
+                    <div className="w-64">
+                      <ClientDocumentUploader
+                        documentCategory={cat.id}
+                        sourceSection="section_14_documents"
+                        linkedSections={["section_14_documents"]}
+                        linkedRequirementIds={[cat.id]}
+                        label="Upload files"
+                        disabled={isLocked}
                       />
-                      <Button asChild variant="outline" size="sm" disabled={uploadingCategory === cat.id} className="rounded-xl border-2 hover:bg-primary hover:text-white hover:border-primary transition-all">
-                        <label htmlFor={`upload-${cat.id}`} className="gap-2 cursor-pointer">
-                          <UploadCloud className="w-4 h-4" /> Upload
-                        </label>
-                      </Button>
                     </div>
                   )}
                 </div>
@@ -272,11 +197,7 @@ export function DocumentUploadLibrary({ data, onChange, isLocked, submissionId, 
                   <div className="text-center py-8 border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/50">
                     <p className="text-sm text-slate-400 font-medium italic">No documents received for this category yet.</p>
                   </div>
-                )}
-                {uploadingCategory === cat.id && (
-                  <p className="text-xs text-slate-500">Uploading... {uploadProgress[cat.id] || 0}%</p>
-                )}
-              </CardContent>
+                )}              </CardContent>
             </Card>
           );
         })}

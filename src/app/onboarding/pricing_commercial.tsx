@@ -12,6 +12,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, Trash2, CheckCircle2, Info, AlertTriangle, Calculator, CreditCard, UserCheck, ShieldCheck, DollarSign, Receipt, BadgePercent } from 'lucide-react';
 import { derivePricingReadiness } from '@/lib/onboarding-steps';
+import { ClientDocumentUploader } from './client_document_uploader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface PricingCommercialProps {
@@ -64,6 +65,8 @@ export function PricingCommercial({ data, onChange, isLocked, allData }: Pricing
           “This section provides the commercial guidance needed to prepare draft pricing, quotes, proposals and response assumptions. Final pricing authority is confirmed again in the Authority to Act section.”
         </div>
       </div>
+
+      <ClientDocumentUploader documentCategory="pricing_schedules_rate_cards_package_lists_budget_templates" sourceSection="section_9_pricing_commercial" linkedSections={["section_9_pricing_commercial"]} linkedRequirementIds={["pricing_schedules_rate_cards_package_lists_budget_templates"]} label="Upload pricing schedules and templates" disabled={isLocked} />
 
       {/* GROUP 1: PRICING METHODS */}
       <section className="space-y-8">

@@ -28,6 +28,7 @@ import {
   Rocket
 } from 'lucide-react';
 import { deriveActiveServiceModules } from '@/lib/onboarding-steps';
+import { ClientDocumentUploader } from './client_document_uploader';
 
 interface ServiceModulesProps {
   data: any;
@@ -411,6 +412,12 @@ export default function ServiceModules({ data, onChange, isLocked, allData }: Se
             </div>
           </div>
         )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <ClientDocumentUploader documentCategory="previous_tenders_grants_proposals_quotes_feedback" sourceSection="section_12_service_modules" linkedSections={["section_12_service_modules"]} linkedRequirementIds={["previous_tenders_grants_proposals_quotes_feedback"]} label="Upload tender readiness materials" disabled={isLocked} />
+        <ClientDocumentUploader documentCategory="grant_project_documents_budgets_supplier_quotes_support_letters" sourceSection="section_12_service_modules" linkedSections={["section_12_service_modules"]} linkedRequirementIds={["grant_project_documents_budgets_supplier_quotes_support_letters"]} label="Upload grant project and support files" disabled={isLocked} />
+        <ClientDocumentUploader documentCategory="pricing_schedules_rate_cards_package_lists_budget_templates" sourceSection="section_12_service_modules" linkedSections={["section_12_service_modules"]} linkedRequirementIds={["pricing_schedules_rate_cards_package_lists_budget_templates"]} label="Upload quote/pricing templates" disabled={isLocked} />
       </div>
 
       {/* Summary Card */}

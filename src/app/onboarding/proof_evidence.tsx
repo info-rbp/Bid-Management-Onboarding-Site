@@ -12,6 +12,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, Trash2, CheckCircle2, Info, AlertTriangle, FileCheck, Star, ShieldAlert, Award, Image, UserCheck, MessageSquareQuote } from 'lucide-react';
 import { deriveProofReadiness } from '@/lib/onboarding-steps';
+import { ClientDocumentUploader } from './client_document_uploader';
 
 interface ProofEvidenceProps {
   data: any;
@@ -99,6 +100,9 @@ export function ProofEvidence({ data, onChange, isLocked }: ProofEvidenceProps) 
           “This section helps us identify the strongest proof that your business can deliver. Where possible, provide specific examples, outcomes, photos, testimonials, reviews, completion evidence or referee details.”
         </div>
       </div>
+
+      <ClientDocumentUploader documentCategory="project_examples_case_studies_photos_reports_testimonials" sourceSection="section_7_proof_evidence" linkedSections={["section_7_proof_evidence"]} linkedRequirementIds={["project_examples_case_studies_photos_reports_testimonials"]} label="Upload proof and evidence files" disabled={isLocked} />
+      <ClientDocumentUploader documentCategory="previous_tenders_grants_proposals_quotes_feedback" sourceSection="section_7_proof_evidence" linkedSections={["section_7_proof_evidence"]} linkedRequirementIds={["previous_tenders_grants_proposals_quotes_feedback"]} label="Upload past tenders/proposals/feedback" disabled={isLocked} />
 
       {/* GROUP 1: PROOF OVERVIEW */}
       <section className="space-y-8">
