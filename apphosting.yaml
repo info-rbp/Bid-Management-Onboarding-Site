@@ -1,8 +1,31 @@
 # Settings for Backend (on Cloud Run).
-# See https://firebase.google.com/docs/app-hosting/configure#cloud-run
 runConfig:
   minInstances: 0
-  # maxInstances: 100
-  # concurrency: 80
   cpu: 2
   memoryMiB: 1024
+
+env:
+  - variable: GOOGLE_WORKSPACE_AUTH_EMAIL
+    value: info@remotebusinesspartner.com.au
+    availability:
+      - RUNTIME
+
+  - variable: GOOGLE_WORKSPACE_FROM_EMAIL
+    value: tenders@remotebusinesspartner.com.au
+    availability:
+      - RUNTIME
+
+  - variable: GOOGLE_WORKSPACE_FROM_NAME
+    value: Remote Business Partner Tenders
+    availability:
+      - RUNTIME
+
+  - variable: SIGNUP_NOTIFICATION_TO
+    value: tenders@remotebusinesspartner.com.au
+    availability:
+      - RUNTIME
+
+  - variable: ONBOARDING_SUBMISSION_NOTIFICATION_TO
+    value: tenders@remotebusinesspartner.com.au
+    availability:
+      - RUNTIME
