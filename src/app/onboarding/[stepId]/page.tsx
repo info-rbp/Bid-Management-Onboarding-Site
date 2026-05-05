@@ -703,17 +703,22 @@ export default function OnboardingStepPage() {
 function StepContent({ stepId, data, allData, onChange, isLocked, submissionId, onEdit, onSubmit, validationResult }: { stepId: string, data: any, allData: any, onChange: (field: string, value: any) => void, isLocked: boolean, submissionId: string | null, onEdit: (step: string) => void, onSubmit: () => void, validationResult?: ValidationResult | null }) {
   if (!submissionId) return null;
 
+  const fieldErrors = Object.fromEntries(
+    [...(validationResult?.missingFields || []), ...(validationResult?.invalidFields || [])]
+      .flatMap((e) => [[e.fieldKey, e.message], [e.anchorId || e.fieldKey, e.message]])
+  );
+
   switch (stepId) {
     case 'welcome_expectations':
       return <WelcomeExpectations data={data} onChange={onChange} isLocked={isLocked} />;
     case 'business_snapshot':
-      return <BusinessSnapshot data={data} onChange={onChange} isLocked={isLocked} fieldErrors={Object.fromEntries([...(validationResult?.missingFields || []), ...(validationResult?.invalidFields || [])].map((e) => [e.fieldKey, e.message]))} />;
+      return <BusinessSnapshot data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'service_selection':
       return <ServiceSelection data={data} onChange={onChange} isLocked={isLocked} />;
     case 'business_profile':
       return <BusinessProfile data={data} onChange={onChange} isLocked={isLocked} allData={allData} />;
     case 'offer_menu':
-      return <OfferMenu data={data} onChange={onChange} isLocked={isLocked} />;
+      return <OfferMenu data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'team_capacity':
       return <TeamCapacity data={data} onChange={onChange} isLocked={isLocked} />;
     case 'proof_evidence':

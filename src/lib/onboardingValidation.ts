@@ -126,43 +126,49 @@ export function validateOnboardingSection(stepId: string, data: any, allData?: a
         break;
     }
     case 'offer_menu': {
-        if (!data.mainServicesProducts) missingFields.push('mainServicesProducts');
-        if (!data.strategicOrProfitableServices) missingFields.push('strategicOrProfitableServices');
-        
+        const section = 'offer_menu';
+        const addMissing = (fieldKey: string, fieldLabel: string, message: string, anchorId: string) => {
+          result.missingFields.push({ fieldKey, fieldLabel, message, section, anchorId });
+        };
+
+        if (!data.mainServicesProducts) addMissing('mainServicesProducts', 'Main services or products', 'Main services or products is required.', 'offer-main-services-products');
+        if (!data.strategicOrProfitableServices) addMissing('strategicOrProfitableServices', 'Strategic or profitable services', 'Strategic or profitable services is required.', 'offer-strategic-services');
+
         const offerItems = data.offerItems || [];
         if (offerItems.length === 0) {
-            missingFields.push('at least one offerItem');
+          addMissing('offerItems', 'Service/product offer card', 'Add at least one service or product offer card.', 'offer-item-1-name');
         } else {
-            const first = offerItems[0];
-            if (!first.name) missingFields.push('Offer Item 1 Name');
-            if (!first.description) missingFields.push('Offer Item 1 Description');
-            if (!first.idealCustomer) missingFields.push('Offer Item 1 Ideal Customer');
-            if (!first.inclusions) missingFields.push('Offer Item 1 Inclusions');
-            if (!first.deliveryMethod || first.deliveryMethod.length === 0) missingFields.push('Offer Item 1 Delivery Method');
-            if (!first.deliveryTimeframe) missingFields.push('Offer Item 1 Delivery Timeframe');
-            if (!first.priceOrPricingMethod) missingFields.push('Offer Item 1 Price/Pricing Method');
-            if (!first.suitableOpportunityChannels || first.suitableOpportunityChannels.length === 0) missingFields.push('Offer Item 1 Channels');
+          const first = offerItems[0] || {};
+          if (!first.name) addMissing('offerItems.0.name', 'Offer item 1 name', 'Offer item 1 name is required.', 'offer-item-1-name');
+          if (!first.description) addMissing('offerItems.0.description', 'Offer item 1 description', 'Offer item 1 description is required.', 'offer-item-1-description');
+          if (!first.idealCustomer) addMissing('offerItems.0.idealCustomer', 'Offer item 1 ideal customer', 'Offer item 1 ideal customer is required.', 'offer-item-1-ideal-customer');
+          if (!first.inclusions) addMissing('offerItems.0.inclusions', 'Offer item 1 inclusions', 'Offer item 1 inclusions is required.', 'offer-item-1-inclusions');
+          if (!first.deliveryMethod || first.deliveryMethod.length === 0) addMissing('offerItems.0.deliveryMethod', 'Offer item 1 delivery method', 'Select at least one delivery method for offer item 1.', 'offer-item-1-delivery-method');
+          if (!first.deliveryTimeframe) addMissing('offerItems.0.deliveryTimeframe', 'Offer item 1 delivery timeframe', 'Offer item 1 delivery timeframe is required.', 'offer-item-1-delivery-timeframe');
+          if (!first.priceOrPricingMethod) addMissing('offerItems.0.priceOrPricingMethod', 'Offer item 1 pricing method', 'Offer item 1 price or pricing method is required.', 'offer-item-1-price-method');
+          if (!first.suitableOpportunityChannels || first.suitableOpportunityChannels.length === 0) addMissing('offerItems.0.suitableOpportunityChannels', 'Offer item 1 channels', 'Select at least one suitable opportunity channel for offer item 1.', 'offer-item-1-channels');
         }
 
-        if (!data.fixedPricePackagePotential) missingFields.push('fixedPricePackagePotential');
+        if (!data.fixedPricePackagePotential) addMissing('fixedPricePackagePotential', 'Fixed-price package potential', 'Select whether services can be packaged into fixed-price offers.', 'offer-fixed-price-potential');
 
         const menuKeys = ['entryLevel', 'core', 'premium', 'emergency', 'retainer', 'grantFunded', 'governmentReady'];
-        menuKeys.forEach(key => {
-            const row = data.offerMenu?.[key];
-            if (!row) {
-                missingFields.push(`Offer Menu: ${key} row missing`);
-            } else if (row.status !== 'help_needed' && row.status !== 'not_applicable') {
-                if (!row.offerNameOrIdea && !row.description) {
-                    missingFields.push(`Offer Menu: ${key} details or status`);
-                }
-            }
+        menuKeys.forEach((key) => {
+          const row = data.offerMenu?.[key];
+          const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+          if (!row) {
+            addMissing(`offerMenu.${key}`, `${label} offer row`, `${label} offer row is required.`, `offer-menu-${key}`);
+          } else if (row.status !== 'help_needed' && row.status !== 'not_applicable' && !row.offerNameOrIdea && !row.description) {
+            addMissing(`offerMenu.${key}.details`, `${label} offer details`, `Provide a name or description for ${label}.`, `offer-menu-${key}`);
+          }
         });
 
-        if (!data.generalDeliverySpeed) missingFields.push('generalDeliverySpeed');
-        if (!data.businessDeliveryModes || data.businessDeliveryModes.length === 0) missingFields.push('businessDeliveryModes');
-        if (!data.serviceAreas) missingFields.push('serviceAreas');
-        if (!data.clientResponsibilities) missingFields.push('clientResponsibilities');
-        break;
+        if (!data.generalDeliverySpeed) addMissing('generalDeliverySpeed', 'General delivery speed', 'General delivery speed is required.', 'offer-general-delivery-speed');
+        if (!data.businessDeliveryModes || data.businessDeliveryModes.length === 0) addMissing('businessDeliveryModes', 'Business delivery modes', 'Select at least one business delivery mode.', 'offer-business-delivery-modes');
+        if (!data.serviceAreas) addMissing('serviceAreas', 'Service areas', 'Service areas is required.', 'offer-service-areas');
+        if (!data.clientResponsibilities) addMissing('clientResponsibilities', 'Client responsibilities', 'Client responsibilities is required.', 'offer-client-responsibilities');
+
+        result.isValid = result.missingFields.length === 0 && result.invalidFields.length === 0;
+        return result;
     }
     case 'team_capacity': {
         const keyPeople = data.keyPeople || [];
