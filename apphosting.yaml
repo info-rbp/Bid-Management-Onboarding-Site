@@ -29,3 +29,13 @@ env:
     value: tenders@remotebusinesspartner.com.au
     availability:
       - RUNTIME
+
+  - variable: ONBOARDING_SUBMISSIONS_SPREADSHEET_ID
+    value: 18wC_QHcT9lZjezNpz_TstG6Yfcq_KwDHZiez3hdtsHY
+    availability:
+      - RUNTIME
+
+  - variable: ONBOARDING_SUBMISSIONS_SHEET_NAME
+    value: OnboardingSubmissions
+    availability:
+      - RUNTIME
