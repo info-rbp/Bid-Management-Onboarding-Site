@@ -1,6 +1,69 @@
-import { google } from 'googleapis';
+import { google, sheets_v4 } from 'googleapis';
 
 type OnboardingSubmissionData = Record<string, unknown>;
+
+type SheetAppendResult = {
+  skipped: boolean;
+  summaryRowsAppended?: number;
+  answerRowsAppended?: number;
+  reason?: string;
+};
+
+const SUMMARY_SHEET_NAME =
+  process.env.ONBOARDING_SUBMISSIONS_SHEET_NAME || 'OnboardingSubmissions';
+
+const ANSWERS_SHEET_NAME =
+  process.env.ONBOARDING_ANSWERS_SHEET_NAME || 'OnboardingAnswers';
+
+const SUMMARY_HEADERS = [
+  'Created At',
+  'Updated At',
+  'Submission ID',
+  'User ID',
+  'Business Name',
+  'Status',
+  'Current Step',
+  'Completion Percentage',
+  'Enabled Modules',
+  'Selected Services',
+  'Submitted At',
+  'Full JSON',
+];
+
+const ANSWER_HEADERS = [
+  'Created At',
+  'Updated At',
+  'Submission ID',
+  'User ID',
+  'Business Name',
+  'Status',
+  'Current Step',
+  'Section Key',
+  'Section Title',
+  'Field Path',
+  'Field Label',
+  'Answer',
+  'Answer Type',
+];
+
+const SECTION_TITLES: Record<string, string> = {
+  welcome_expectations: 'Welcome & Expectations',
+  business_snapshot: 'Business Snapshot',
+  service_selection: 'Service Selection & Engagement Scope',
+  business_profile: 'Business Profile, Positioning and Value Proposition',
+  offer_menu: 'Services, Products and Offer Menu',
+  team_capacity: 'Team, Capacity and Delivery Model',
+  proof_evidence: 'Proof, Case Studies, Reviews and Evidence',
+  goals_strategy: 'Goals, Opportunity Strategy and Bid/No-Bid Rules',
+  pricing_commercial: 'Pricing, Quoting and Commercial Rules',
+  platform_setup: 'Platform and Channel Setup',
+  compliance_insurance: 'Compliance, Insurance and Readiness',
+  service_modules: 'Service Modules',
+  workflow_rules: 'Communication, Review and Workflow Rules',
+  document_upload_library: 'Document Upload Library',
+  authority_matrix: 'Authority Matrix',
+  final_submission: 'Final Submission',
+};
 
 function hasToDate(value: unknown): value is { toDate: () => Date } {
   return (
@@ -9,6 +72,10 @@ function hasToDate(value: unknown): value is { toDate: () => Date } {
     'toDate' in value &&
     typeof (value as { toDate?: unknown }).toDate === 'function'
   );
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) && !hasToDate(value);
 }
 
 function toPlainJson(value: unknown): unknown {
@@ -20,7 +87,7 @@ function toPlainJson(value: unknown): unknown {
     return value.map(toPlainJson);
   }
 
-  if (typeof value === 'object' && value !== null) {
+  if (isPlainObject(value)) {
     const output: Record<string, unknown> = {};
 
     for (const [key, nestedValue] of Object.entries(value)) {
@@ -50,6 +117,10 @@ function toText(value: unknown): string {
     return '';
   }
 
+  if (hasToDate(value)) {
+    return value.toDate().toISOString();
+  }
+
   if (typeof value === 'string') {
     return value;
   }
@@ -61,8 +132,28 @@ function toText(value: unknown): string {
   return JSON.stringify(toPlainJson(value));
 }
 
+function getAnswerType(value: unknown): string {
+  if (value === null) {
+    return 'null';
+  }
+
+  if (value === undefined) {
+    return 'undefined';
+  }
+
+  if (hasToDate(value)) {
+    return 'timestamp';
+  }
+
+  if (Array.isArray(value)) {
+    return 'array';
+  }
+
+  return typeof value;
+}
+
 function getEnabledModules(value: unknown): string {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (!isPlainObject(value)) {
     return '';
   }
 
@@ -72,12 +163,386 @@ function getEnabledModules(value: unknown): string {
     .join(', ');
 }
 
+function getSelectedServices(data: OnboardingSubmissionData): string {
+  const sections = data.sections;
+
+  if (!isPlainObject(sections)) {
+    return '';
+  }
+
+  const serviceSelection = sections.service_selection;
+
+  if (!isPlainObject(serviceSelection)) {
+    return '';
+  }
+
+  const selectedServices = serviceSelection.selectedServices;
+
+  if (Array.isArray(selectedServices)) {
+    return selectedServices.map(toText).filter(Boolean).join(', ');
+  }
+
+  return toText(selectedServices);
+}
+
+function getSubmittedAt(data: OnboardingSubmissionData): string {
+  const sections = data.sections;
+
+  if (!isPlainObject(sections)) {
+    return '';
+  }
+
+  const finalSubmission = sections.final_submission;
+
+  if (!isPlainObject(finalSubmission)) {
+    return '';
+  }
+
+  return (
+    toSheetDate(finalSubmission.submittedAt) ||
+    toSheetDate(finalSubmission.completedAt) ||
+    toSheetDate(finalSubmission.finalSubmittedAt)
+  );
+}
+
+function getSectionTitle(sectionKey: string): string {
+  return SECTION_TITLES[sectionKey] || toReadableLabel(sectionKey);
+}
+
+function toReadableLabel(value: string): string {
+  const withoutArrayIndexes = value.replace(/\[\d+\]/g, '');
+  const finalSegment = withoutArrayIndexes.split('.').pop() || withoutArrayIndexes;
+
+  return finalSegment
+    .replace(/_/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^./, (char) => char.toUpperCase());
+}
+
+function columnLetter(columnNumber: number): string {
+  let dividend = columnNumber;
+  let columnName = '';
+
+  while (dividend > 0) {
+    const modulo = (dividend - 1) % 26;
+    columnName = String.fromCharCode(65 + modulo) + columnName;
+    dividend = Math.floor((dividend - modulo) / 26);
+  }
+
+  return columnName;
+}
+
+function quoteSheetName(sheetName: string): string {
+  return `'${sheetName.replace(/'/g, "''")}'`;
+}
+
+async function ensureSheetExists(params: {
+  sheets: sheets_v4.Sheets;
+  spreadsheetId: string;
+  sheetName: string;
+}) {
+  const { sheets, spreadsheetId, sheetName } = params;
+
+  const spreadsheet = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: 'sheets.properties.title',
+  });
+
+  const existingSheetTitles =
+    spreadsheet.data.sheets
+      ?.map((sheet) => sheet.properties?.title)
+      .filter(Boolean) || [];
+
+  if (existingSheetTitles.includes(sheetName)) {
+    return;
+  }
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          addSheet: {
+            properties: {
+              title: sheetName,
+            },
+          },
+        },
+      ],
+    },
+  });
+}
+
+async function ensureHeaders(params: {
+  sheets: sheets_v4.Sheets;
+  spreadsheetId: string;
+  sheetName: string;
+  headers: string[];
+}) {
+  const { sheets, spreadsheetId, sheetName, headers } = params;
+
+  await ensureSheetExists({
+    sheets,
+    spreadsheetId,
+    sheetName,
+  });
+
+  const lastColumn = columnLetter(headers.length);
+  const headerRange = `${quoteSheetName(sheetName)}!A1:${lastColumn}1`;
+
+  const existingHeaderResponse = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: headerRange,
+  });
+
+  const existingHeaderRow = existingHeaderResponse.data.values?.[0] || [];
+
+  const headersAlreadyMatch =
+    existingHeaderRow.length >= headers.length &&
+    headers.every((header, index) => existingHeaderRow[index] === header);
+
+  if (headersAlreadyMatch) {
+    return;
+  }
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: headerRange,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: {
+      values: [headers],
+    },
+  });
+}
+
+function buildSummaryRow(params: {
+  submissionId: string;
+  data: OnboardingSubmissionData;
+}): string[] {
+  const { submissionId, data } = params;
+
+  return [
+    toSheetDate(data.createdAt),
+    toSheetDate(data.updatedAt),
+    submissionId,
+    toText(data.userId),
+    toText(data.businessName),
+    toText(data.status),
+    toText(data.currentStep),
+    toText(data.completionPercentage),
+    getEnabledModules(data.enabledModules),
+    getSelectedServices(data),
+    getSubmittedAt(data),
+    JSON.stringify(toPlainJson(data)),
+  ];
+}
+
+function flattenAnswerValue(params: {
+  rows: string[][];
+  baseRow: string[];
+  sectionKey: string;
+  sectionTitle: string;
+  fieldPath: string;
+  value: unknown;
+}) {
+  const { rows, baseRow, sectionKey, sectionTitle, fieldPath, value } = params;
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      rows.push([
+        ...baseRow,
+        sectionKey,
+        sectionTitle,
+        fieldPath,
+        toReadableLabel(fieldPath),
+        '',
+        'array',
+      ]);
+      return;
+    }
+
+    const allItemsArePrimitive = value.every(
+      (item) => !Array.isArray(item) && !isPlainObject(item)
+    );
+
+    if (allItemsArePrimitive) {
+      rows.push([
+        ...baseRow,
+        sectionKey,
+        sectionTitle,
+        fieldPath,
+        toReadableLabel(fieldPath),
+        value.map(toText).filter(Boolean).join(', '),
+        'array',
+      ]);
+      return;
+    }
+
+    value.forEach((item, index) => {
+      flattenAnswerValue({
+        rows,
+        baseRow,
+        sectionKey,
+        sectionTitle,
+        fieldPath: `${fieldPath}[${index}]`,
+        value: item,
+      });
+    });
+
+    return;
+  }
+
+  if (isPlainObject(value)) {
+    const entries = Object.entries(value);
+
+    if (entries.length === 0) {
+      rows.push([
+        ...baseRow,
+        sectionKey,
+        sectionTitle,
+        fieldPath,
+        toReadableLabel(fieldPath),
+        '',
+        'object',
+      ]);
+      return;
+    }
+
+    for (const [key, nestedValue] of entries) {
+      flattenAnswerValue({
+        rows,
+        baseRow,
+        sectionKey,
+        sectionTitle,
+        fieldPath: fieldPath ? `${fieldPath}.${key}` : key,
+        value: nestedValue,
+      });
+    }
+
+    return;
+  }
+
+  rows.push([
+    ...baseRow,
+    sectionKey,
+    sectionTitle,
+    fieldPath,
+    toReadableLabel(fieldPath),
+    toText(value),
+    getAnswerType(value),
+  ]);
+}
+
+function buildAnswerRows(params: {
+  submissionId: string;
+  data: OnboardingSubmissionData;
+}): string[][] {
+  const { submissionId, data } = params;
+
+  const sections = data.sections;
+
+  if (!isPlainObject(sections)) {
+    return [];
+  }
+
+  const baseRow = [
+    toSheetDate(data.createdAt),
+    toSheetDate(data.updatedAt),
+    submissionId,
+    toText(data.userId),
+    toText(data.businessName),
+    toText(data.status),
+    toText(data.currentStep),
+  ];
+
+  const rows: string[][] = [];
+
+  for (const [sectionKey, sectionData] of Object.entries(sections)) {
+    const sectionTitle = getSectionTitle(sectionKey);
+
+    if (isPlainObject(sectionData)) {
+      const entries = Object.entries(sectionData);
+
+      if (entries.length === 0) {
+        rows.push([
+          ...baseRow,
+          sectionKey,
+          sectionTitle,
+          '',
+          sectionTitle,
+          '',
+          'object',
+        ]);
+        continue;
+      }
+
+      for (const [fieldKey, fieldValue] of entries) {
+        flattenAnswerValue({
+          rows,
+          baseRow,
+          sectionKey,
+          sectionTitle,
+          fieldPath: fieldKey,
+          value: fieldValue,
+        });
+      }
+
+      continue;
+    }
+
+    flattenAnswerValue({
+      rows,
+      baseRow,
+      sectionKey,
+      sectionTitle,
+      fieldPath: sectionKey,
+      value: sectionData,
+    });
+  }
+
+  return rows;
+}
+
+async function appendRows(params: {
+  sheets: sheets_v4.Sheets;
+  spreadsheetId: string;
+  sheetName: string;
+  headers: string[];
+  rows: string[][];
+}) {
+  const { sheets, spreadsheetId, sheetName, headers, rows } = params;
+
+  if (rows.length === 0) {
+    return;
+  }
+
+  await ensureHeaders({
+    sheets,
+    spreadsheetId,
+    sheetName,
+    headers,
+  });
+
+  const lastColumn = columnLetter(headers.length);
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: `${quoteSheetName(sheetName)}!A:${lastColumn}`,
+    valueInputOption: 'USER_ENTERED',
+    insertDataOption: 'INSERT_ROWS',
+    requestBody: {
+      values: rows,
+    },
+  });
+}
+
 export async function appendOnboardingSubmissionToSheet(params: {
   submissionId: string;
   data: OnboardingSubmissionData;
-}) {
+}): Promise<SheetAppendResult> {
   const spreadsheetId = process.env.ONBOARDING_SUBMISSIONS_SPREADSHEET_ID;
-  const sheetName = process.env.ONBOARDING_SUBMISSIONS_SHEET_NAME || 'OnboardingSubmissions';
 
   if (!spreadsheetId) {
     return {
@@ -95,32 +560,28 @@ export async function appendOnboardingSubmissionToSheet(params: {
     auth,
   });
 
-  const { submissionId, data } = params;
+  const summaryRow = buildSummaryRow(params);
+  const answerRows = buildAnswerRows(params);
 
-  const row = [
-    toSheetDate(data.createdAt),
-    toSheetDate(data.updatedAt),
-    submissionId,
-    toText(data.userId),
-    toText(data.businessName),
-    toText(data.status),
-    toText(data.currentStep),
-    toText(data.completionPercentage),
-    getEnabledModules(data.enabledModules),
-    JSON.stringify(toPlainJson(data)),
-  ];
-
-  await sheets.spreadsheets.values.append({
+  await appendRows({
+    sheets,
     spreadsheetId,
-    range: `${sheetName}!A:J`,
-    valueInputOption: 'USER_ENTERED',
-    insertDataOption: 'INSERT_ROWS',
-    requestBody: {
-      values: [row],
-    },
+    sheetName: SUMMARY_SHEET_NAME,
+    headers: SUMMARY_HEADERS,
+    rows: [summaryRow],
+  });
+
+  await appendRows({
+    sheets,
+    spreadsheetId,
+    sheetName: ANSWERS_SHEET_NAME,
+    headers: ANSWER_HEADERS,
+    rows: answerRows,
   });
 
   return {
     skipped: false,
+    summaryRowsAppended: 1,
+    answerRowsAppended: answerRows.length,
   };
 }
