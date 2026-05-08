@@ -3,9 +3,18 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, Loader2 } from 'lucide-react';
-import { useAuth, useUser, useFirestore } from '@/firebase';
+import { useUser, useFirestore } from '@/firebase';
 import { useRouter } from 'next/navigation';
-import { collection, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  getDoc,
+  setDoc,
+  serverTimestamp,
+} from 'firebase/firestore';
 import { getVisibleOnboardingSteps } from '@/lib/onboarding-steps';
 
 export function StartOnboardingButton() {
@@ -24,13 +33,18 @@ export function StartOnboardingButton() {
     }
 
     setLoading(true);
+
     try {
       // 2. Check for existing submission
-      const q = query(collection(db, 'onboardingSubmissions'), where('userId', '==', user.uid));
+      const q = query(
+        collection(db, 'onboardingSubmissions'),
+        where('userId', '==', user.uid)
+      );
+
       const querySnapshot = await getDocs(q);
 
       if (!querySnapshot.empty) {
-        // Submission exists (either in_progress or submitted)
+        // Submission exists, either in_progress or submitted
         router.push('/dashboard');
         return;
       }
@@ -42,8 +56,8 @@ export function StartOnboardingButton() {
       const userData = userSnap.exists() ? userSnap.data() : {};
 
       const newSubmissionId = doc(collection(db, 'onboardingSubmissions')).id;
-      const initialVisibleSteps = getVisibleOnboardingSteps(); // Default steps when no services selected
-      
+      const initialVisibleSteps = getVisibleOnboardingSteps();
+
       const newSubmission = {
         id: newSubmissionId,
         userId: user.uid,
@@ -57,28 +71,62 @@ export function StartOnboardingButton() {
           grants: false,
           marketplaceStrategy: false,
           directOutreachStrategy: false,
-          quoteSupport: false
+          quoteSupport: false,
         },
-        visibleStepKeys: initialVisibleSteps.map(s => s.key),
+        visibleStepKeys: initialVisibleSteps.map((step) => step.key),
         completionPercentage: 0,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         lastSavedAt: serverTimestamp(),
       };
 
-      await setDoc(doc(db, 'onboardingSubmissions', newSubmissionId), newSubmission);
-      
+      await setDoc(
+        doc(db, 'onboardingSubmissions', newSubmissionId),
+        newSubmission
+      );
+
+      // 4. Sync the new onboarding submission to Google Sheets.
+      // This is intentionally non-blocking for the user journey:
+      // if the Sheet sync fails, the onboarding document still exists.
+      try {
+        const idToken = await user.getIdToken();
+
+        const syncResponse = await fetch(
+          '/api/onboarding-submissions/sync-sheet',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({
+              submissionId: newSubmissionId,
+            }),
+          }
+        );
+
+        if (!syncResponse.ok) {
+          const syncError = await syncResponse.json().catch(() => null);
+          console.warn('Google Sheets sync did not complete:', syncError);
+        }
+      } catch (syncError) {
+        console.warn(
+          'Google Sheets sync failed, but onboarding was created:',
+          syncError
+        );
+      }
+
       router.push('/onboarding/welcome_expectations');
     } catch (error) {
-      console.error("Error initiating onboarding:", error);
+      console.error('Error initiating onboarding:', error);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Button 
-      size="lg" 
+    <Button
+      size="lg"
       onClick={handleClick}
       className="bg-primary text-white h-14 px-10 rounded-xl text-lg group shadow-lg shadow-primary/20"
       disabled={loading || isUserLoading}
@@ -87,7 +135,8 @@ export function StartOnboardingButton() {
         <Loader2 className="animate-spin w-5 h-5" />
       ) : (
         <>
-          Start Your Onboarding <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+          Start Your Onboarding{' '}
+          <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
         </>
       )}
     </Button>
