@@ -1,60 +1,154 @@
 import { NextResponse } from 'next/server';
-import { FieldValue, getFirestore } from 'firebase-admin/firestore';
-import { initializeApp, getApps } from 'firebase-admin/app';
+import { FieldValue } from 'firebase-admin/firestore';
+import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { createFolder } from '@/lib/google-drive';
 
-if (!getApps().length) {
-  initializeApp();
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+const REQUIRED_ACKNOWLEDGEMENTS = [
+  'confirmInformationAccurate',
+  'confirmAuthorisedToSubmit',
+  'acknowledgeInformationUse',
+  'acknowledgeReviewApprovalResponsibility',
+  'acknowledgeTermsApply',
+];
+
+function getBearerToken(req: Request) {
+  const authorization = req.headers.get('authorization') || '';
+
+  if (!authorization.startsWith('Bearer ')) {
+    return null;
+  }
+
+  const token = authorization.replace('Bearer ', '').trim();
+  return token || null;
 }
 
-const db = getFirestore();
+function allAcknowledgementsChecked(acknowledgements: Record<string, unknown>) {
+  return REQUIRED_ACKNOWLEDGEMENTS.every((key) => acknowledgements?.[key] === true);
+}
+
+function getIncompleteRequiredSections(submissionData: any) {
+  const visibleStepKeys: string[] = Array.isArray(submissionData.visibleStepKeys)
+    ? submissionData.visibleStepKeys
+    : [];
+
+  const sectionStatuses = submissionData.sectionStatuses || {};
+
+  return visibleStepKeys.filter((stepKey) => {
+    if (stepKey === 'final_submission') return false;
+
+    const status = sectionStatuses?.[stepKey]?.status;
+    return status !== 'complete' && status !== 'skipped';
+  });
+}
 
 export async function POST(req: Request) {
   try {
-    const { submissionId, userId, finalSubmission } = await req.json();
+    const idToken = getBearerToken(req);
 
-    if (!submissionId || !userId) {
-      return NextResponse.json({ error: 'Missing submissionId or userId' }, { status: 400 });
+    if (!idToken) {
+      return NextResponse.json(
+        { error: 'Missing Firebase ID token.' },
+        { status: 401 }
+      );
     }
 
-    const submissionDoc = await db.collection('onboardingSubmissions').doc(submissionId).get();
+    const decodedToken = await getAdminAuth().verifyIdToken(idToken);
+    const { submissionId, finalSubmission } = await req.json();
+
+    if (!submissionId || typeof submissionId !== 'string') {
+      return NextResponse.json(
+        { error: 'Missing submissionId.' },
+        { status: 400 }
+      );
+    }
+
+    const db = getAdminDb();
+    const submissionRef = db.collection('onboardingSubmissions').doc(submissionId);
+    const submissionDoc = await submissionRef.get();
 
     if (!submissionDoc.exists) {
-      return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Submission not found.' }, { status: 404 });
     }
 
     const submissionData = submissionDoc.data();
 
     if (!submissionData) {
-      return NextResponse.json({ error: 'Submission data is missing' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Submission data is missing.' },
+        { status: 404 }
+      );
     }
 
-    if (submissionData.userId !== userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    if (submissionData.userId !== decodedToken.uid) {
+      return NextResponse.json({ error: 'Unauthorized.' }, { status: 403 });
     }
 
     if (submissionData.status === 'submitted' && !submissionData.adminReopened) {
-      return NextResponse.json({ error: 'Submission is locked' }, { status: 409 });
+      return NextResponse.json({ error: 'Submission is locked.' }, { status: 409 });
     }
 
-    const folder = await createFolder(`Onboarding - ${submissionData.businessName}`);
+    const acknowledgements = finalSubmission?.acknowledgements || {};
+
+    if (!allAcknowledgementsChecked(acknowledgements)) {
+      return NextResponse.json(
+        { error: 'Required acknowledgements are incomplete.' },
+        { status: 400 }
+      );
+    }
+
+    const incompleteRequiredSections = getIncompleteRequiredSections(submissionData);
+
+    if (incompleteRequiredSections.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'Required sections are incomplete.',
+          incompleteRequiredSections,
+        },
+        { status: 400 }
+      );
+    }
 
     const submittedAt = new Date().toISOString();
+
+    let driveFolderId = submissionData.googleDriveFolderId || null;
+    let driveFolderUrl = submissionData.googleDriveFolderUrl || null;
+
+    if (!driveFolderId || !driveFolderUrl) {
+      const parentFolderId = process.env.GOOGLE_DRIVE_ONBOARDING_PARENT_FOLDER_ID;
+      const folder = await createFolder(
+        `Onboarding - ${submissionData.businessName || submissionId}`,
+        parentFolderId
+      );
+
+      driveFolderId = folder.id || null;
+      driveFolderUrl = folder.webViewLink || null;
+    }
+
+    if (!driveFolderId || !driveFolderUrl) {
+      return NextResponse.json(
+        { error: 'Google Drive folder could not be created.' },
+        { status: 500 }
+      );
+    }
+
     const immutableSnapshot = {
       ...(finalSubmission?.submissionSnapshot || {}),
       generatedAt: submittedAt,
       sourceStatus: submissionData.status || 'in_progress',
     };
 
-    await submissionDoc.ref.update({
+    await submissionRef.update({
       status: 'submitted',
       submittedAt,
       completedAt: submittedAt,
-      googleDriveFolderId: folder.id,
-      googleDriveFolderUrl: folder.webViewLink,
+      googleDriveFolderId: driveFolderId,
+      googleDriveFolderUrl: driveFolderUrl,
       updatedAt: submittedAt,
       adminReopened: false,
-      'sections.final_submission.acknowledgements': finalSubmission?.acknowledgements || {},
+      'sections.final_submission.acknowledgements': acknowledgements,
       'sections.final_submission.finalComments': finalSubmission?.finalComments || '',
       'sections.final_submission.submittedAt': submittedAt,
       'sections.final_submission.completedAt': submittedAt,
@@ -64,14 +158,23 @@ export async function POST(req: Request) {
       submissionSnapshotVersion: FieldValue.increment(1),
     });
 
-    await db.collection('users').doc(userId).update({
+    await db.collection('users').doc(decodedToken.uid).update({
       onboardingStatus: 'submitted',
       updatedAt: submittedAt,
     });
 
-    return NextResponse.json({ success: true, driveFolderUrl: folder.webViewLink });
+    return NextResponse.json({
+      success: true,
+      driveFolderId,
+      driveFolderUrl,
+      submittedAt,
+    });
   } catch (error: any) {
     console.error('Finalize onboarding error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+
+    return NextResponse.json(
+      { error: error?.message || 'Failed to finalize submission.' },
+      { status: 500 }
+    );
   }
 }
