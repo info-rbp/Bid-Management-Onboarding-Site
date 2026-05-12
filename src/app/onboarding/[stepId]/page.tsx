@@ -513,30 +513,32 @@ export default function OnboardingStepPage() {
       };
       await updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
 
+      const idToken = await user.getIdToken();
+
       const response = await fetch('/api/onboarding/finalize', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ submissionId, userId: user.uid, finalSubmission: { acknowledgements: formData.acknowledgements || {}, finalComments: formData.finalComments || '', submissionSnapshot } }),
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          submissionId,
+          finalSubmission: {
+            acknowledgements: formData.acknowledgements || {},
+            finalComments: formData.finalComments || '',
+            submissionSnapshot,
+          },
+        }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to finalize submission');
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || 'Failed to finalize submission');
       }
-      
-      // 3. NEW: Call the notification API
-      await fetch('/api/notifications/submission', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-              submissionId: submissionId,
-              businessName: submission.businessName || 'N/A',
-          }),
-      });
 
-      toast({ 
-        title: "Submission Successful", 
-        description: "Your onboarding pack has been submitted and a notification has been sent." 
+      toast({
+        title: "Submission Successful",
+        description: "Your onboarding pack has been submitted."
       });
 
       // 4. Redirect to a confirmation page
