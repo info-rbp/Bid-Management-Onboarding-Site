@@ -1,0 +1,6 @@
+
+> nextn@0.1.0 typecheck
+> tsc --noEmit
+
+src/app/onboarding/[stepId]/page.tsx(722,126): error TS2322: Type '{ validationResult: ValidationResult; onJumpTo: (error: ValidationError) => void; }' is not assignable to type 'IntrinsicAttributes & Props'.
+  Property 'onJumpTo' does not exist on type 'IntrinsicAttributes & Props'.
