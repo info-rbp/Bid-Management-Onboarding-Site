@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Logo } from '@/components/brand/Logo';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,16 +22,18 @@ import { Input } from '@/components/ui/input';
 import { useAuth, useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
 import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-import { doc, query, collection, where, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, query, collection, where, addDoc } from 'firebase/firestore';
 import Link from 'next/link';
-import { getVisibleOnboardingSteps, allSteps, deriveServiceModules } from '@/lib/onboarding-steps';
+import { getVisibleOnboardingSteps } from '@/lib/onboarding-steps';
 import { AuthGuard } from '@/components/auth/AuthGuard';
+import { buildInitialSubmission } from '@/lib/onboarding-submission';
 
 export default function DashboardPage() {
   const auth = useAuth();
   const { user } = useUser();
   const db = useFirestore();
   const router = useRouter();
+  const [isStartingOnboarding, setIsStartingOnboarding] = useState(false);
 
   const userDocRef = useMemoFirebase(() => {
     if (!user || !db) return null;
@@ -58,43 +60,24 @@ export default function DashboardPage() {
   };
 
   const handleStartOnboarding = async () => {
-    if (!user || !db) return;
-    const newSubmission = {
-      userId: user.uid,
-      businessName: userData?.businessName || 'My Business',
-      status: 'in_progress',
-      currentStep: 'welcome_expectations',
-      visibleStepKeys: getVisibleOnboardingSteps().map(s => s.key),
-      completionPercentage: 0,
-      selectedServices: [],
-      enabledModules: {
-        tenderReadiness: false,
-        grants: false,
-        marketplaceStrategy: false,
-        outreachStrategy: false,
-        quoteSupport: false,
-      },
-      sections: {},
-      sectionStatuses: allSteps.reduce((acc, step) => {
-        acc[step.key] = {
-          sectionKey: step.key,
-          status: 'not_started',
-          required: step.required,
-          missingFields: [],
-          lastUpdatedAt: null
-        };
-        return acc;
-      }, {} as { [key: string]: any }),
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      lastSavedAt: serverTimestamp(),
-      submittedAt: null,
-      adminReopened: false,
-      googleDriveFolderId: null,
-      googleDriveFolderUrl: null,
-    };
-    const newDocRef = await addDoc(collection(db, 'onboardingSubmissions'), newSubmission);
-    router.push('/onboarding/welcome_expectations');
+    if (!user || !db || isStartingOnboarding) return;
+
+    setIsStartingOnboarding(true);
+
+    try {
+      const newSubmission = buildInitialSubmission({
+        userId: user.uid,
+        businessName: userData?.businessName || 'My Business',
+        currentStep: 'welcome_expectations',
+      });
+
+      await addDoc(collection(db, 'onboardingSubmissions'), newSubmission);
+      router.push('/onboarding/welcome_expectations');
+    } catch (error) {
+      console.error('Failed to start onboarding:', error);
+    } finally {
+      setIsStartingOnboarding(false);
+    }
   }
 
   const enabledModules = submission?.enabledModules;
@@ -192,8 +175,13 @@ export default function DashboardPage() {
                       </Link>
                     </Button>
                   ) : (
-                    <Button size="sm" onClick={handleStartOnboarding} className="gap-2 rounded-xl font-bold bg-primary shadow-lg shadow-primary/20">
-                      Start Onboarding <ArrowRight className="w-4 h-4" />
+                    <Button
+                      size="sm"
+                      onClick={handleStartOnboarding}
+                      disabled={isStartingOnboarding}
+                      className="gap-2 rounded-xl font-bold bg-primary shadow-lg shadow-primary/20"
+                    >
+                      {isStartingOnboarding ? 'Starting...' : 'Start Onboarding'} <ArrowRight className="w-4 h-4" />
                     </Button>
                   )}
                 </div>

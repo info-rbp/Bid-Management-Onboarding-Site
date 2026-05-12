@@ -13,9 +13,8 @@ import {
   doc,
   getDoc,
   setDoc,
-  serverTimestamp,
 } from 'firebase/firestore';
-import { getVisibleOnboardingSteps } from '@/lib/onboarding-steps';
+import { buildInitialSubmission } from '@/lib/onboarding-submission';
 
 export function StartOnboardingButton() {
   const { user, isUserLoading } = useUser();
@@ -56,28 +55,13 @@ export function StartOnboardingButton() {
       const userData = userSnap.exists() ? userSnap.data() : {};
 
       const newSubmissionId = doc(collection(db, 'onboardingSubmissions')).id;
-      const initialVisibleSteps = getVisibleOnboardingSteps();
-
       const newSubmission = {
         id: newSubmissionId,
-        userId: user.uid,
-        businessName: userData.businessName || 'My Business',
-        status: 'in_progress',
-        currentStep: 'welcome_expectations',
-        completedSteps: [],
-        sections: {},
-        enabledModules: {
-          tenderReadiness: false,
-          grants: false,
-          marketplaceStrategy: false,
-          directOutreachStrategy: false,
-          quoteSupport: false,
-        },
-        visibleStepKeys: initialVisibleSteps.map((step) => step.key),
-        completionPercentage: 0,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        lastSavedAt: serverTimestamp(),
+        ...buildInitialSubmission({
+          userId: user.uid,
+          businessName: userData.businessName || 'My Business',
+          currentStep: 'welcome_expectations',
+        }),
       };
 
       await setDoc(

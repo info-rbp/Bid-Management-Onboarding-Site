@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
-import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, addDoc, getDoc, writeBatch } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -27,7 +27,7 @@ import {
   ChevronsDown
 } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
-import { getVisibleOnboardingSteps, allSteps, EnabledModules, OnboardingStep, deriveServiceModules, deriveAuthorityReadiness, deriveActiveServiceModules } from '@/lib/onboarding-steps';
+import { getVisibleOnboardingSteps, allSteps, EnabledModules, deriveServiceModules, deriveAuthorityReadiness, deriveActiveServiceModules } from '@/lib/onboarding-steps';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { validateOnboardingSection, ValidationResult, ValidationError } from '@/lib/onboardingValidation';
 import { ValidationSummary } from '@/components/ValidationSummary';
@@ -54,13 +54,7 @@ import { OutreachStrategy } from '../outreach_strategy';
 import { QuoteSupport } from '../quote_support';
 import { FinalSubmission } from '../final_submission';
 import ServiceModules from '../service_modules';
-
-const buildSectionStatus = (currentStatus: any, newStatus: 'in_progress' | 'needs_attention' | 'complete' | 'skipped' | 'not_started', missingFields: string[] = []) => ({
-  ...(currentStatus || {}),
-  status: newStatus,
-  missingFields,
-  lastUpdatedAt: serverTimestamp(),
-});
+import { buildInitialSubmission, buildSectionStatus } from '@/lib/onboarding-submission';
 
 export default function OnboardingStepPage() {
   const { stepId } = useParams();
@@ -70,10 +64,11 @@ export default function OnboardingStepPage() {
   const { toast } = useToast();
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [formData, setFormData] = useState<any>({});
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error' | 'validation_blocked'>('idle');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
+  const [initError, setInitError] = useState<string | null>(null);
   
   const initialSyncDone = useRef<Record<string, boolean>>({});
   const lastSavedDataRef = useRef<string>("{}");
@@ -195,7 +190,11 @@ export default function OnboardingStepPage() {
         }
 
         updateData[`sections.${sid}`] = processedFormData;
-        updateData[`sectionStatuses.${sid}`] = buildSectionStatus(submission.sectionStatuses[sid], 'in_progress');
+
+        const currentSectionStatus = submission.sectionStatuses?.[sid];
+        if (currentSectionStatus?.status !== 'needs_attention') {
+          updateData[`sectionStatuses.${sid}`] = buildSectionStatus(currentSectionStatus, 'in_progress');
+        }
 
         await updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
         
@@ -224,42 +223,34 @@ export default function OnboardingStepPage() {
   useEffect(() => {
     async function initSubmission() {
       if (!user || !db || submissionId) return;
-      const q = query(collection(db, 'onboardingSubmissions'), where('userId', '==', user.uid));
-      const querySnapshot = await getDocs(q);
-      if (!querySnapshot.empty) {
-        setSubmissionId(querySnapshot.docs[0].id);
-      } else {
-        const newDoc = await addDoc(collection(db, 'onboardingSubmissions'), {
-          userId: user.uid,
-          businessName: user.displayName || 'My Business',
-          status: 'in_progress',
-          currentStep: stepId,
-          visibleStepKeys: allSteps.map(s => s.key),
-          completionPercentage: 0,
-          selectedServices: [],
-          enabledModules: {
-            tenderReadiness: false,
-            grants: false,
-            marketplaceStrategy: false,
-            outreachStrategy: false,
-            quoteSupport: false,
-          },
-          sections: {},
-          sectionStatuses: allSteps.reduce((acc, step) => {
-            acc[step.key] = buildSectionStatus(null, 'not_started');
-            return acc;
-          }, {} as { [key: string]: any }),
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          lastSavedAt: serverTimestamp(),
-          submittedAt: null,
-          adminReopened: false,
-          googleDriveFolderId: null,
-          googleDriveFolderUrl: null,
-        });
+
+      setInitError(null);
+
+      try {
+        const q = query(collection(db, 'onboardingSubmissions'), where('userId', '==', user.uid));
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+          setSubmissionId(querySnapshot.docs[0].id);
+          return;
+        }
+
+        const newDoc = await addDoc(
+          collection(db, 'onboardingSubmissions'),
+          buildInitialSubmission({
+            userId: user.uid,
+            businessName: user.displayName || 'My Business',
+            currentStep: stepId as string,
+          })
+        );
+
         setSubmissionId(newDoc.id);
+      } catch (error) {
+        console.error('Failed to initialise onboarding submission:', error);
+        setInitError((error as Error)?.message || 'Unable to initialise onboarding.');
       }
     }
+
     initSubmission();
   }, [user, db, submissionId, stepId]);
 
@@ -267,22 +258,41 @@ export default function OnboardingStepPage() {
     setFormData((prev: any) => ({ ...prev, [field]: value }));
   };
 
-  const handleNavigate = (targetStepKey: string) => {
-    if (targetStepKey === stepId) return;
+  const handleNavigate = async (targetStepKey: string) => {
+    if (targetStepKey === stepId || saveStatus === 'saving') return;
+
     const targetStep = visibleSteps.find(s => s.key === targetStepKey);
     if (!targetStep) return;
 
     if (submissionId && db && !isLocked) {
-      const updateData: any = { 
-        updatedAt: serverTimestamp(), 
+      const updateData: any = {
+        updatedAt: serverTimestamp(),
         lastSavedAt: serverTimestamp(),
-        currentStep: targetStepKey 
+        currentStep: targetStepKey,
       };
+
       updateData[`sections.${stepId}`] = formData;
-      updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData).catch((error: any) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `onboardingSubmissions/${submissionId}`, operation: 'update', requestResourceData: updateData }));
-      });
+
+      try {
+        setSaveStatus('saving');
+        await updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
+        setSaveStatus('saved');
+        setLastSavedTime(new Date());
+        lastSavedDataRef.current = JSON.stringify(formData);
+      } catch (error: any) {
+        setSaveStatus('error');
+        errorEmitter.emit(
+          'permission-error',
+          new FirestorePermissionError({
+            path: `onboardingSubmissions/${submissionId}`,
+            operation: 'update',
+            requestResourceData: updateData,
+          })
+        );
+        return;
+      }
     }
+
     initialSyncDone.current[targetStepKey] = false;
     router.push(targetStep.route);
   };
@@ -304,7 +314,9 @@ export default function OnboardingStepPage() {
     }
   };
 
-  const handleSave = (direction: 'next' | 'prev' | 'stay' = 'stay') => {
+  const handleSave = async (direction: 'next' | 'prev' | 'stay' = 'stay') => {
+    if (saveStatus === 'saving') return;
+
     if (!submissionId || !db || !currentStep || isLocked) {
       if (direction === 'next' && currentVisibleIndex < visibleSteps.length - 1) {
         router.push(visibleSteps[currentVisibleIndex + 1].route);
@@ -313,84 +325,122 @@ export default function OnboardingStepPage() {
       }
       return;
     }
-    
-    if (direction === 'next' && stepId !== 'final_submission') {
-      const validation = validateOnboardingSection(stepId as string, formData, submission);
+
+    const currentStepKey = stepId as string;
+
+    if (direction === 'next' && currentStepKey !== 'final_submission') {
+      const validation = validateOnboardingSection(currentStepKey, formData, submission);
       setValidationResult(validation);
+
       if (!validation.isValid) {
-        const updateData: any = { updatedAt: serverTimestamp() };
-        updateData[`sections.${stepId}`] = formData;
-        updateData[`sectionStatuses.${stepId}`] = buildSectionStatus(submission.sectionStatuses[stepId as string], 'needs_attention', [...validation.missingFields, ...validation.invalidFields].map((e) => e.message));
-        
-        updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
-        
-        setTimeout(() => scrollToNextError(), 0);
+        const allErrors = [...validation.missingFields, ...validation.invalidFields];
+        const updateData: any = {
+          updatedAt: serverTimestamp(),
+          lastSavedAt: serverTimestamp(),
+        };
+
+        updateData[`sections.${currentStepKey}`] = formData;
+        updateData[`sectionStatuses.${currentStepKey}`] = buildSectionStatus(
+          submission.sectionStatuses?.[currentStepKey],
+          'needs_attention',
+          allErrors.map((error) => error.message)
+        );
+
+        try {
+          setSaveStatus('saving');
+          await updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
+          setSaveStatus('validation_blocked');
+          setLastSavedTime(new Date());
+          lastSavedDataRef.current = JSON.stringify(formData);
+
+          if (allErrors[0]) {
+            setTimeout(() => scrollToError(allErrors[0]), 0);
+          }
+        } catch (error: any) {
+          setSaveStatus('error');
+          errorEmitter.emit(
+            'permission-error',
+            new FirestorePermissionError({
+              path: `onboardingSubmissions/${submissionId}`,
+              operation: 'update',
+              requestResourceData: updateData,
+            })
+          );
+        }
+
         return;
       }
     }
 
-    const updateData: any = { updatedAt: serverTimestamp(), lastSavedAt: serverTimestamp() };
-    
+    const updateData: any = {
+      updatedAt: serverTimestamp(),
+      lastSavedAt: serverTimestamp(),
+    };
+
     let processedFormData = { ...formData };
-    if (stepId === 'authority_matrix') {
+
+    if (currentStepKey === 'authority_matrix') {
       const readiness = deriveAuthorityReadiness(formData, {
         pricing: submission.sections?.pricing_commercial,
         serviceModules: submission.sections?.service_modules,
         platforms: submission.sections?.platform_setup,
-        workflow: submission.sections?.workflow_rules
+        workflow: submission.sections?.workflow_rules,
       });
+
       processedFormData.derivedAuthorityReadiness = readiness;
       processedFormData.updatedAt = serverTimestamp();
-      
-      const validation = validateOnboardingSection(stepId as string, formData, submission);
+
+      const validation = validateOnboardingSection(currentStepKey, formData, submission);
       processedFormData.sectionStatus = {
         isComplete: validation.isValid,
         requiredFieldsComplete: validation.isValid,
         validationErrors: validation.missingFields,
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
       };
+
       if (validation.isValid) {
         processedFormData.completedAt = serverTimestamp();
       }
     }
-    if (stepId === 'document_upload_library') {
+
+    if (currentStepKey === 'document_upload_library') {
       processedFormData = {
         ...processedFormData,
         categories: processedFormData.categories || {},
         receivedDocumentIds: processedFormData.receivedDocumentIds || [],
         derivedDocumentReadiness: processedFormData.derivedDocumentReadiness || {},
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
       };
     }
 
     setValidationResult(null);
-    updateData[`sections.${stepId}`] = processedFormData;
+    updateData[`sections.${currentStepKey}`] = processedFormData;
 
-    let targetStepKey = stepId as string;
+    let targetStepKey = currentStepKey;
     let postSaveNavigation = true;
     let tempEnabledModules = submission.enabledModules;
 
-    if (stepId === 'service_selection') {
+    if (currentStepKey === 'service_selection') {
       const services = formData.selectedServices || [];
       const newEnabledModules: EnabledModules = deriveServiceModules(services);
       tempEnabledModules = newEnabledModules;
 
       const newVisibleSteps = getVisibleOnboardingSteps(newEnabledModules);
       const newVisibleStepKeys = newVisibleSteps.map(s => s.key);
-      const currentStatuses = { ...submission.sectionStatuses };
+      const currentStatuses = { ...(submission.sectionStatuses || {}) };
       let shouldRedirect = false;
 
       for (const step of allSteps) {
         const isNowVisible = newVisibleStepKeys.includes(step.key);
-        const wasVisible = submission.visibleStepKeys.includes(step.key);
+        const wasVisible = (submission.visibleStepKeys || []).includes(step.key);
 
         if (isNowVisible && !wasVisible) {
-            currentStatuses[step.key] = buildSectionStatus(currentStatuses[step.key], 'not_started');
+          currentStatuses[step.key] = buildSectionStatus(currentStatuses[step.key], 'not_started');
         } else if (!isNowVisible && wasVisible) {
-            currentStatuses[step.key] = buildSectionStatus(currentStatuses[step.key], 'skipped');
-            if (stepId === step.key) {
-                shouldRedirect = true;
-            }
+          currentStatuses[step.key] = buildSectionStatus(currentStatuses[step.key], 'skipped');
+          if (currentStepKey === step.key) {
+            shouldRedirect = true;
+          }
         }
       }
 
@@ -399,40 +449,48 @@ export default function OnboardingStepPage() {
       updateData.selectedServices = services;
       updateData.sectionStatuses = currentStatuses;
 
-      if(shouldRedirect){
-        const nextPageIndex = visibleSteps.findIndex(s => s.key === stepId);
+      if (shouldRedirect) {
+        const nextPageIndex = visibleSteps.findIndex(s => s.key === currentStepKey);
         if (nextPageIndex !== -1 && nextPageIndex + 1 < newVisibleSteps.length) {
-            targetStepKey = newVisibleSteps[nextPageIndex + 1].key;
+          targetStepKey = newVisibleSteps[nextPageIndex + 1].key;
         } else {
-            targetStepKey = 'final_submission';
+          targetStepKey = 'final_submission';
         }
+
         postSaveNavigation = false;
-        toast({ title: "Section Hidden", description: "This section has been hidden because it is no longer in scope." });
-        router.push(allSteps.find(s => s.key === targetStepKey)!.route);
+        toast({
+          title: 'Section Hidden',
+          description: 'This section has been hidden because it is no longer in scope.',
+        });
       }
     }
 
     if (direction === 'next') {
       const finalVisibleSteps = getVisibleOnboardingSteps(tempEnabledModules);
       const finalVisibleRequiredSteps = finalVisibleSteps.filter(s => s.required);
-      
+
       if (finalVisibleRequiredSteps.length === 0) {
         updateData.completionPercentage = 100;
       } else {
         const completedRequiredStepsCount = finalVisibleRequiredSteps.reduce((count, step) => {
-          const isCurrentStep = step.key === stepId;
-          const isCompleted = submission.sectionStatuses[step.key]?.status === 'complete';
-          if ((!isCurrentStep && isCompleted) || (isCurrentStep)) {
-             return count + 1;
+          const isCurrentStep = step.key === currentStepKey;
+          const isCompleted = submission.sectionStatuses?.[step.key]?.status === 'complete';
+
+          if ((!isCurrentStep && isCompleted) || isCurrentStep) {
+            return count + 1;
           }
+
           return count;
         }, 0);
-        const completionPercentage = (completedRequiredStepsCount / finalVisibleRequiredSteps.length) * 100;
-        updateData.completionPercentage = completionPercentage;
+
+        updateData.completionPercentage = (completedRequiredStepsCount / finalVisibleRequiredSteps.length) * 100;
       }
-      
-      updateData[`sectionStatuses.${stepId}`] = buildSectionStatus(submission.sectionStatuses[stepId as string], 'complete');
-      
+
+      updateData[`sectionStatuses.${currentStepKey}`] = buildSectionStatus(
+        submission.sectionStatuses?.[currentStepKey],
+        'complete'
+      );
+
       if (currentVisibleIndex < visibleSteps.length - 1) {
         targetStepKey = visibleSteps[currentVisibleIndex + 1].key;
       }
@@ -441,12 +499,15 @@ export default function OnboardingStepPage() {
         targetStepKey = visibleSteps[currentVisibleIndex - 1].key;
       }
     } else {
-      updateData[`sectionStatuses.${stepId}`] = buildSectionStatus(submission.sectionStatuses[stepId as string], 'in_progress');
+      updateData[`sectionStatuses.${currentStepKey}`] = buildSectionStatus(
+        submission.sectionStatuses?.[currentStepKey],
+        'in_progress'
+      );
     }
 
     updateData.currentStep = targetStepKey;
 
-    if (stepId === 'service_selection') {
+    if (currentStepKey === 'service_selection') {
       setOptimisticServiceSelection({
         selectedServices: updateData.selectedServices ?? effectiveSelectedServices,
         enabledModules: updateData.enabledModules ?? enabledModules,
@@ -455,24 +516,39 @@ export default function OnboardingStepPage() {
       });
     }
 
-    setSaveStatus('saving');
-    updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData).then(() => {
+    try {
+      setSaveStatus('saving');
+      await updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
       setSaveStatus('saved');
       setLastSavedTime(new Date());
       lastSavedDataRef.current = JSON.stringify(formData);
-    }).catch((error: any) => {
+    } catch (error: any) {
       setSaveStatus('error');
-      errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `onboardingSubmissions/${submissionId}`, operation: 'update', requestResourceData: updateData }));
-    });
+      errorEmitter.emit(
+        'permission-error',
+        new FirestorePermissionError({
+          path: `onboardingSubmissions/${submissionId}`,
+          operation: 'update',
+          requestResourceData: updateData,
+        })
+      );
+      return;
+    }
 
     if (direction !== 'stay' && postSaveNavigation) {
       const nextStep = visibleSteps.find(s => s.key === targetStepKey);
-      if(nextStep) {
-        router.push(nextStep.route);
+      if (nextStep) {
         initialSyncDone.current[nextStep.key] = false;
+        router.push(nextStep.route);
       }
-    } else if(direction === 'stay') {
-      toast({ title: "Draft Saved", description: "Your progress has been saved." });
+    } else if (direction !== 'stay' && !postSaveNavigation) {
+      const nextStep = allSteps.find(s => s.key === targetStepKey);
+      if (nextStep) {
+        initialSyncDone.current[nextStep.key] = false;
+        router.push(nextStep.route);
+      }
+    } else {
+      toast({ title: 'Draft Saved', description: 'Your progress has been saved.' });
     }
   };
 
@@ -548,6 +624,21 @@ export default function OnboardingStepPage() {
     }
   };
 
+  if (initError) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center gap-4 bg-[#F8FAFC] p-6 text-center">
+        <CloudOff className="text-destructive w-10 h-10" />
+        <div className="space-y-2 max-w-md">
+          <h1 className="text-lg font-bold text-slate-900">Unable to prepare your workspace</h1>
+          <p className="text-sm text-muted-foreground">{initError}</p>
+        </div>
+        <Button onClick={() => window.location.reload()} className="rounded-xl">
+          Try Again
+        </Button>
+      </div>
+    );
+  }
+
   if (loadingSubmissions || !submission) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center gap-4 bg-[#F8FAFC]">
@@ -575,6 +666,13 @@ export default function OnboardingStepPage() {
           <div className="flex items-center gap-2 text-xs text-green-600">
             <CheckCircle2 className="w-3 h-3" />
             <span>Saved {lastSavedTime ? `at ${lastSavedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}</span>
+          </div>
+        );
+      case 'validation_blocked':
+        return (
+          <div className="flex items-center gap-2 text-xs text-amber-600">
+            <AlertTriangle className="w-3 h-3" />
+            <span>Saved, but section is incomplete</span>
           </div>
         );
       case 'error':
@@ -614,7 +712,7 @@ export default function OnboardingStepPage() {
               const derivedServiceModuleStatus = step.key === 'service_modules'
                 ? (Object.values(serviceModuleActivity).some(Boolean) ? 'in_progress' : 'not_started')
                 : null;
-              const status = derivedServiceModuleStatus || statusInfo?.status || 'not_started';
+              const status = statusInfo?.status || derivedServiceModuleStatus || 'not_started';
               const isCurrent = step.key === stepId;
               
               const getIcon = () => {
@@ -671,17 +769,40 @@ export default function OnboardingStepPage() {
               {renderSaveStatus()}
               <div className="flex items-center gap-3">
                 {currentVisibleIndex > 0 && (
-                  <Button variant="ghost" size="sm" onClick={() => handleSave('prev')} className="gap-2 rounded-lg text-muted-foreground"><ChevronLeft className="w-4 h-4" /> Previous</Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleSave('prev')}
+                    disabled={saveStatus === 'saving'}
+                    className="gap-2 rounded-lg text-muted-foreground"
+                  >
+                    <ChevronLeft className="w-4 h-4" /> Previous
+                  </Button>
                 )}
                 {!isLocked && stepId !== 'final_submission' && (
                   <>
-                    <Button variant="outline" size="sm" onClick={() => handleSave('stay')} className="gap-2 rounded-lg border-2">Save Draft</Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleSave('stay')}
+                      className="gap-2 rounded-lg border-2"
+                      disabled={saveStatus === 'saving'}
+                    >
+                      Save Draft
+                    </Button>
                     {validationResult && !validationResult.isValid && (
                        <Button size="sm" variant="outline" onClick={scrollToNextError} className="gap-2 rounded-lg font-bold px-4 border-amber-400 text-amber-600 bg-amber-50 hover:bg-amber-100">
                          Next incomplete field <ChevronsDown className="w-4 h-4" />
                        </Button>
                      )}
-                    <Button size="sm" onClick={() => handleSave('next')} className="gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20" disabled={currentVisibleIndex === visibleSteps.length - 1}>Next Step <ChevronRight className="w-4 h-4" /></Button>
+                    <Button
+                      size="sm"
+                      onClick={() => handleSave('next')}
+                      className="gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20"
+                      disabled={currentVisibleIndex === visibleSteps.length - 1 || saveStatus === 'saving'}
+                    >
+                      Next Step <ChevronRight className="w-4 h-4" />
+                    </Button>
                   </>
                 )}
                 {isLocked && currentVisibleIndex < visibleSteps.length - 1 && (
