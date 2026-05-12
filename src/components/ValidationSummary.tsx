@@ -14,7 +14,7 @@ export function ValidationSummary({ validationResult }: Props) {
   };
 
   return (
-    <div className="mb-6 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+    <div data-validation-summary="true" className="mb-6 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
       <h3 className="font-bold text-destructive mb-2">Please complete the following before continuing</h3>
       {validationResult.missingFields.length > 0 && <div className="mb-2"><p className="font-semibold">Missing information:</p><ul className="list-disc ml-6">{validationResult.missingFields.map((e) => <li key={e.fieldKey}><button className="underline text-left" onClick={() => scrollTo(e.anchorId)}>{e.fieldLabel}</button></li>)}</ul></div>}
       {validationResult.invalidFields.length > 0 && <div><p className="font-semibold">Invalid information:</p><ul className="list-disc ml-6">{validationResult.invalidFields.map((e) => <li key={e.fieldKey}><button className="underline text-left" onClick={() => scrollTo(e.anchorId)}>{e.message}</button></li>)}</ul></div>}

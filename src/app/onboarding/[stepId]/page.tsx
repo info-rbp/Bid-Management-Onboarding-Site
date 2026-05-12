@@ -289,10 +289,25 @@ export default function OnboardingStepPage() {
 
   const scrollToError = (error: ValidationError) => {
     if (!error.anchorId) return;
-    const el = document.getElementById(error.anchorId);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      (el as HTMLElement).focus?.();
+
+    const candidates = [
+      error.anchorId,
+      error.fieldKey,
+      error.fieldKey?.replace(/\./g, '-'),
+    ].filter(Boolean) as string[];
+
+    for (const candidate of candidates) {
+      const el = document.getElementById(candidate);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        (el as HTMLElement).focus?.();
+        return;
+      }
+    }
+
+    const firstValidationSummary = document.querySelector('[data-validation-summary="true"]');
+    if (firstValidationSummary) {
+      firstValidationSummary.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
 
