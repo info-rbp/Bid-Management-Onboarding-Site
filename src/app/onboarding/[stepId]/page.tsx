@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
-import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, addDoc, getDoc, writeBatch } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, collection, query, where, orderBy, limit, getDocs, setDoc, getDoc, writeBatch } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -32,6 +32,7 @@ import { AuthGuard } from '@/components/auth/AuthGuard';
 import { validateOnboardingSection, ValidationResult, ValidationError } from '@/lib/onboardingValidation';
 import { ValidationSummary } from '@/components/ValidationSummary';
 import { detectAuthorityConflicts } from '@/lib/conflict_detector';
+import { buildInitialSubmission } from '@/lib/onboarding-submission';
 import { WelcomeExpectations } from '../welcome_expectations';
 import { BusinessSnapshot } from '../business_snapshot';
 import { ServiceSelection } from '../service_selection';
@@ -224,27 +225,19 @@ export default function OnboardingStepPage() {
   useEffect(() => {
     async function initSubmission() {
       if (!user || !db || submissionId) return;
-      const q = query(collection(db, 'onboardingSubmissions'), where('userId', '==', user.uid));
+      const q = query(collection(db, 'onboardingSubmissions'), where('userId', '==', user.uid), orderBy('updatedAt', 'desc'), limit(1));
       const querySnapshot = await getDocs(q);
       if (!querySnapshot.empty) {
         setSubmissionId(querySnapshot.docs[0].id);
       } else {
-        const newDoc = await addDoc(collection(db, 'onboardingSubmissions'), {
-          userId: user.uid,
-          businessName: user.displayName || 'My Business',
-          status: 'in_progress',
-          currentStep: stepId,
-          visibleStepKeys: allSteps.map(s => s.key),
-          completionPercentage: 0,
-          selectedServices: [],
-          enabledModules: {
-            tenderReadiness: false,
-            grants: false,
-            marketplaceStrategy: false,
-            outreachStrategy: false,
-            quoteSupport: false,
-          },
-          sections: {},
+        const newId = doc(collection(db, 'onboardingSubmissions')).id;
+        await setDoc(doc(db, 'onboardingSubmissions', newId), {
+          id: newId,
+          ...buildInitialSubmission({
+            userId: user.uid,
+            businessName: user.displayName || 'My Business',
+            currentStep: typeof stepId === 'string' ? stepId : 'welcome_expectations',
+          }),
           sectionStatuses: allSteps.reduce((acc, step) => {
             acc[step.key] = buildSectionStatus(null, 'not_started');
             return acc;
@@ -252,12 +245,8 @@ export default function OnboardingStepPage() {
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           lastSavedAt: serverTimestamp(),
-          submittedAt: null,
-          adminReopened: false,
-          googleDriveFolderId: null,
-          googleDriveFolderUrl: null,
         });
-        setSubmissionId(newDoc.id);
+        setSubmissionId(newId);
       }
     }
     initSubmission();
