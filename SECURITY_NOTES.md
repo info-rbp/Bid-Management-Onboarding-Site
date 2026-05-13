@@ -43,7 +43,7 @@ Final audit after remediation:
 - 2 moderate
 - 8 high
 
-The remaining vulnerabilities are either reported by npm as having no fix available, or would require unsafe/breaking remediation that is not appropriate for this batch.
+The remaining vulnerabilities are either reported by npm as having no fix available, or would require unsafe or breaking remediation that is not appropriate for this batch.
 
 ## Remaining vulnerabilities
 
@@ -56,7 +56,7 @@ The remaining vulnerabilities are either reported by npm as having no fix availa
 - Runtime exposure: server-side dependency chain
 - Status: npm reports no safe fix available for part of this chain
 - Reason not fully fixed in this batch: latest compatible Genkit package updates were applied, but the transitive OpenTelemetry advisory remains
-- Follow-up: revisit when Genkit/OpenTelemetry publish patched compatible releases
+- Recommended follow-up: revisit when Genkit/OpenTelemetry publish patched compatible releases
 
 ### Google Cloud / Firebase Admin transitive chain
 
@@ -67,7 +67,7 @@ The remaining vulnerabilities are either reported by npm as having no fix availa
 - Runtime exposure: server-side Firebase Admin / Google Cloud dependency chain
 - Status: npm reports no fix available
 - Reason not fixed in this batch: dependency is transitive and no safe patched parent chain is currently available through compatible package updates
-- Follow-up: revisit after Firebase Admin / Google Cloud dependency chain updates are released
+- Recommended follow-up: revisit after Firebase Admin / Google Cloud dependency chain updates are released
 
 ### Next.js bundled PostCSS advisory
 
@@ -76,9 +76,9 @@ The remaining vulnerabilities are either reported by npm as having no fix availa
 - Advisory: XSS via unescaped `</style>` in CSS stringify output
 - Dependency path: bundled through `next`
 - Runtime exposure: framework build/runtime dependency
-- Status: npm suggests `npm audit fix --force`, but that would install an unsafe/breaking Next.js version according to the audit output
-- Reason not fixed in this batch: Next.js was updated to `15.5.18`; npm still reports the advisory through the bundled dependency and suggests an invalid/breaking remediation path
-- Follow-up: monitor Next.js patch releases and update again when the advisory is resolved safely
+- Status: npm suggests `npm audit fix --force`, but that would install an unsafe or breaking Next.js version according to the audit output
+- Reason not fixed in this batch: Next.js was updated to `15.5.18`; npm still reports the advisory through the bundled dependency and suggests an invalid remediation path
+- Recommended follow-up: monitor Next.js patch releases and update again when the advisory is resolved safely
 
 ## Verification performed
 
