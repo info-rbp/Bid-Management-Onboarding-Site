@@ -49,7 +49,7 @@ export const findFolderByName = async (folderName: string, parentId?: string) =>
   const drive = getDriveService();
 
   const queryParts = [
-    `name = '${folderName.replace(/'/g, "\\'")}'`,
+    `name = '${folderName.replace(/'/g, "''")}'`,
     "mimeType = 'application/vnd.google-apps.folder'",
     'trashed = false',
   ];
