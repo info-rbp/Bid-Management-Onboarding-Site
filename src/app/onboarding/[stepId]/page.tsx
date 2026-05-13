@@ -1,38 +1,54 @@
-
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Logo } from '@/components/brand/Logo';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
-import { doc, updateDoc, serverTimestamp, collection, query, where, orderBy, limit, getDocs, setDoc, getDoc, writeBatch } from 'firebase/firestore';
+import {
+  doc,
+  updateDoc,
+  serverTimestamp,
+  collection,
+  query,
+  where,
+  orderBy,
+  limit,
+  getDocs,
+} from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
-import { 
-  ChevronRight, 
+import {
+  ChevronRight,
   ChevronLeft,
   LayoutDashboard,
   CheckCircle2,
   Lock,
-  Files,
   Loader2,
-  Briefcase,
   AlertTriangle,
   RefreshCw,
   CloudOff,
-  ChevronsDown
+  ChevronsDown,
 } from 'lucide-react';
-import { Badge } from "@/components/ui/badge";
-import { getVisibleOnboardingSteps, allSteps, EnabledModules, OnboardingStep, deriveServiceModules, deriveAuthorityReadiness, deriveActiveServiceModules } from '@/lib/onboarding-steps';
+import {
+  getVisibleOnboardingSteps,
+  allSteps,
+  EnabledModules,
+  deriveServiceModules,
+  deriveAuthorityReadiness,
+  deriveActiveServiceModules,
+} from '@/lib/onboarding-steps';
 import { AuthGuard } from '@/components/auth/AuthGuard';
-import { validateOnboardingSection, ValidationResult, ValidationError } from '@/lib/onboardingValidation';
+import {
+  validateOnboardingSection,
+  ValidationResult,
+  ValidationError,
+} from '@/lib/onboardingValidation';
 import { ValidationSummary } from '@/components/ValidationSummary';
 import { detectAuthorityConflicts } from '@/lib/conflict_detector';
-import { buildInitialSubmission } from '@/lib/onboarding-submission';
 import { WelcomeExpectations } from '../welcome_expectations';
 import { BusinessSnapshot } from '../business_snapshot';
 import { ServiceSelection } from '../service_selection';
@@ -56,7 +72,11 @@ import { QuoteSupport } from '../quote_support';
 import { FinalSubmission } from '../final_submission';
 import ServiceModules from '../service_modules';
 
-const buildSectionStatus = (currentStatus: any, newStatus: 'in_progress' | 'needs_attention' | 'complete' | 'skipped' | 'not_started', missingFields: string[] = []) => ({
+const buildSectionStatus = (
+  currentStatus: any,
+  newStatus: 'in_progress' | 'needs_attention' | 'complete' | 'skipped' | 'not_started',
+  missingFields: string[] = []
+) => ({
   ...(currentStatus || {}),
   status: newStatus,
   missingFields,
@@ -69,13 +89,14 @@ export default function OnboardingStepPage() {
   const { user } = useUser();
   const db = useFirestore();
   const { toast } = useToast();
+
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [formData, setFormData] = useState<any>({});
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
-  
+
   const initialSyncDone = useRef<Record<string, boolean>>({});
   const lastSavedDataRef = useRef<string>("{}");
 
@@ -93,26 +114,41 @@ export default function OnboardingStepPage() {
     sectionStatuses: Record<string, any>;
   } | null>(null);
 
-  const effectiveSelectedServices = optimisticServiceSelection?.selectedServices ?? submission?.selectedServices ?? [];
-  const enabledModules = optimisticServiceSelection?.enabledModules ?? submission?.enabledModules;
+  const effectiveSelectedServices =
+    optimisticServiceSelection?.selectedServices ?? submission?.selectedServices ?? [];
+
+  const enabledModules =
+    optimisticServiceSelection?.enabledModules ?? submission?.enabledModules;
 
   const visibleSteps = useMemo(() => {
     return getVisibleOnboardingSteps(enabledModules);
   }, [enabledModules]);
 
-  const currentStep = useMemo(() => visibleSteps.find(s => s.key === stepId), [visibleSteps, stepId]);
-  const currentVisibleIndex = useMemo(() => visibleSteps.findIndex(s => s.key === stepId), [visibleSteps, stepId]);
+  const currentStep = useMemo(
+    () => visibleSteps.find((s) => s.key === stepId),
+    [visibleSteps, stepId]
+  );
+
+  const currentVisibleIndex = useMemo(
+    () => visibleSteps.findIndex((s) => s.key === stepId),
+    [visibleSteps, stepId]
+  );
 
   const isLocked = submission?.status === 'submitted' && !submission?.adminReopened;
 
-  const serviceModuleActivity = useMemo(() => deriveActiveServiceModules(effectiveSelectedServices), [effectiveSelectedServices]);
+  const serviceModuleActivity = useMemo(
+    () => deriveActiveServiceModules(effectiveSelectedServices),
+    [effectiveSelectedServices]
+  );
 
-  // Initial Data Sync
   useEffect(() => {
     if (optimisticServiceSelection && submission) {
       const matches =
-        JSON.stringify(optimisticServiceSelection.selectedServices) === JSON.stringify(submission.selectedServices || []) &&
-        JSON.stringify(optimisticServiceSelection.enabledModules) === JSON.stringify(submission.enabledModules || {});
+        JSON.stringify(optimisticServiceSelection.selectedServices) ===
+          JSON.stringify(submission.selectedServices || []) &&
+        JSON.stringify(optimisticServiceSelection.enabledModules) ===
+          JSON.stringify(submission.enabledModules || {});
+
       if (matches) {
         setOptimisticServiceSelection(null);
       }
@@ -121,34 +157,42 @@ export default function OnboardingStepPage() {
 
   useEffect(() => {
     const sid = stepId as string;
+
     if (submission && !initialSyncDone.current[sid]) {
       const savedData = submission.sections?.[sid] || {};
       setFormData(savedData);
       lastSavedDataRef.current = JSON.stringify(savedData);
       initialSyncDone.current[sid] = true;
-      
+
       if (submission.lastSavedAt?.toDate) {
         setLastSavedTime(submission.lastSavedAt.toDate());
       }
     }
   }, [submission, stepId]);
 
-  // Update current step in DB on mount
   useEffect(() => {
     if (submissionId && db && stepId && submission && !isLocked) {
       if (submission.currentStep !== stepId) {
         updateDoc(doc(db, 'onboardingSubmissions', submissionId), {
           currentStep: stepId,
-          updatedAt: serverTimestamp()
+          updatedAt: serverTimestamp(),
         });
       }
     }
   }, [stepId, submissionId, db, submission, isLocked]);
 
-  // Autosave Logic
   useEffect(() => {
     const sid = stepId as string;
-    if (isLocked || !submissionId || !db || !initialSyncDone.current[sid] || sid === 'final_submission') return;
+
+    if (
+      isLocked ||
+      !submissionId ||
+      !db ||
+      !initialSyncDone.current[sid] ||
+      sid === 'final_submission'
+    ) {
+      return;
+    }
 
     const dataString = JSON.stringify(formData);
     if (dataString === lastSavedDataRef.current) return;
@@ -160,46 +204,54 @@ export default function OnboardingStepPage() {
         const updateData: any = {
           updatedAt: serverTimestamp(),
           lastSavedAt: serverTimestamp(),
-          currentStep: sid
+          currentStep: sid,
         };
 
         let processedFormData = { ...formData };
+
         if (sid === 'authority_matrix') {
           const readiness = deriveAuthorityReadiness(formData, {
             pricing: submission.sections?.pricing_commercial,
             serviceModules: submission.sections?.service_modules,
             platforms: submission.sections?.platform_setup,
-            workflow: submission.sections?.workflow_rules
+            workflow: submission.sections?.workflow_rules,
           });
+
           processedFormData.derivedAuthorityReadiness = readiness;
           processedFormData.updatedAt = serverTimestamp();
-          
+
           const validation = validateOnboardingSection(sid, formData, submission);
+
           processedFormData.sectionStatus = {
             isComplete: validation.isValid,
             requiredFieldsComplete: validation.isValid,
             validationErrors: validation.missingFields,
-            updatedAt: serverTimestamp()
+            updatedAt: serverTimestamp(),
           };
+
           if (validation.isValid) {
             processedFormData.completedAt = serverTimestamp();
           }
         }
+
         if (sid === 'document_upload_library') {
           processedFormData = {
             ...processedFormData,
             categories: processedFormData.categories || {},
             receivedDocumentIds: processedFormData.receivedDocumentIds || [],
             derivedDocumentReadiness: processedFormData.derivedDocumentReadiness || {},
-            updatedAt: serverTimestamp()
+            updatedAt: serverTimestamp(),
           };
         }
 
         updateData[`sections.${sid}`] = processedFormData;
-        updateData[`sectionStatuses.${sid}`] = buildSectionStatus(submission.sectionStatuses[sid], 'in_progress');
+        updateData[`sectionStatuses.${sid}`] = buildSectionStatus(
+          submission.sectionStatuses[sid],
+          'in_progress'
+        );
 
         await updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
-        
+
         lastSavedDataRef.current = dataString;
         setSaveStatus('saved');
         setLastSavedTime(new Date());
@@ -215,8 +267,14 @@ export default function OnboardingStepPage() {
   useEffect(() => {
     if (!loadingSubmissions && submission && !currentStep && stepId) {
       const firstValidStep = visibleSteps[0];
+
       if (firstValidStep) {
-        toast({ title: "Section Hidden", description: "This section is no longer in your scope based on your service selections." });
+        toast({
+          title: "Section Hidden",
+          description:
+            "This section is no longer in your scope based on your service selections.",
+        });
+
         router.push(firstValidStep.route);
       }
     }
@@ -225,32 +283,58 @@ export default function OnboardingStepPage() {
   useEffect(() => {
     async function initSubmission() {
       if (!user || !db || submissionId) return;
-      const q = query(collection(db, 'onboardingSubmissions'), where('userId', '==', user.uid), orderBy('updatedAt', 'desc'), limit(1));
-      const querySnapshot = await getDocs(q);
-      if (!querySnapshot.empty) {
-        setSubmissionId(querySnapshot.docs[0].id);
-      } else {
-        const newId = doc(collection(db, 'onboardingSubmissions')).id;
-        await setDoc(doc(db, 'onboardingSubmissions', newId), {
-          id: newId,
-          ...buildInitialSubmission({
-            userId: user.uid,
-            businessName: user.displayName || 'My Business',
-            currentStep: typeof stepId === 'string' ? stepId : 'welcome_expectations',
-          }),
-          sectionStatuses: allSteps.reduce((acc, step) => {
-            acc[step.key] = buildSectionStatus(null, 'not_started');
-            return acc;
-          }, {} as { [key: string]: any }),
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          lastSavedAt: serverTimestamp(),
+
+      try {
+        const existingSubmissionQuery = query(
+          collection(db, 'onboardingSubmissions'),
+          where('userId', '==', user.uid),
+          orderBy('updatedAt', 'desc'),
+          limit(1)
+        );
+
+        const querySnapshot = await getDocs(existingSubmissionQuery);
+
+        if (!querySnapshot.empty) {
+          setSubmissionId(querySnapshot.docs[0].id);
+          return;
+        }
+
+        const idToken = await user.getIdToken();
+
+        const response = await fetch('/api/onboarding-submissions/start', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+            'Content-Type': 'application/json',
+          },
         });
-        setSubmissionId(newId);
+
+        const result = await response.json().catch(() => null);
+
+        if (!response.ok) {
+          throw new Error(result?.error || 'Unable to start onboarding.');
+        }
+
+        if (!result?.submissionId) {
+          throw new Error('Start onboarding response did not include a submissionId.');
+        }
+
+        setSubmissionId(result.submissionId);
+      } catch (error: any) {
+        console.error('Failed to initialise onboarding submission:', error);
+
+        toast({
+          variant: 'destructive',
+          title: 'Unable to start onboarding',
+          description:
+            error?.message ||
+            'We could not create or resume your onboarding record. Please try again.',
+        });
       }
     }
+
     initSubmission();
-  }, [user, db, submissionId, stepId]);
+  }, [user, db, submissionId, toast]);
 
   const handleFieldChange = (field: string, value: any) => {
     setFormData((prev: any) => ({ ...prev, [field]: value }));
@@ -258,20 +342,33 @@ export default function OnboardingStepPage() {
 
   const handleNavigate = (targetStepKey: string) => {
     if (targetStepKey === stepId) return;
-    const targetStep = visibleSteps.find(s => s.key === targetStepKey);
+
+    const targetStep = visibleSteps.find((s) => s.key === targetStepKey);
     if (!targetStep) return;
 
     if (submissionId && db && !isLocked) {
-      const updateData: any = { 
-        updatedAt: serverTimestamp(), 
+      const updateData: any = {
+        updatedAt: serverTimestamp(),
         lastSavedAt: serverTimestamp(),
-        currentStep: targetStepKey 
+        currentStep: targetStepKey,
       };
+
       updateData[`sections.${stepId}`] = formData;
-      updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData).catch((error: any) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `onboardingSubmissions/${submissionId}`, operation: 'update', requestResourceData: updateData }));
-      });
+
+      updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData).catch(
+        () => {
+          errorEmitter.emit(
+            'permission-error',
+            new FirestorePermissionError({
+              path: `onboardingSubmissions/${submissionId}`,
+              operation: 'update',
+              requestResourceData: updateData,
+            })
+          );
+        }
+      );
     }
+
     initialSyncDone.current[targetStepKey] = false;
     router.push(targetStep.route);
   };
@@ -285,6 +382,7 @@ export default function OnboardingStepPage() {
 
     for (const candidate of candidates) {
       const el = document.getElementById(candidate);
+
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         (el as HTMLElement).focus?.();
@@ -298,7 +396,12 @@ export default function OnboardingStepPage() {
 
   const scrollToNextError = () => {
     if (!validationResult || validationResult.isValid) return;
-    const allErrors = [...validationResult.missingFields, ...validationResult.invalidFields];
+
+    const allErrors = [
+      ...validationResult.missingFields,
+      ...validationResult.invalidFields,
+    ];
+
     if (allErrors.length > 0) {
       scrollToError(allErrors[0]);
     }
@@ -311,55 +414,76 @@ export default function OnboardingStepPage() {
       } else if (direction === 'prev' && currentVisibleIndex > 0) {
         router.push(visibleSteps[currentVisibleIndex - 1].route);
       }
+
       return;
     }
-    
+
     if (direction === 'next' && stepId !== 'final_submission') {
       const validation = validateOnboardingSection(stepId as string, formData, submission);
       setValidationResult(validation);
+
       if (!validation.isValid) {
         const updateData: any = { updatedAt: serverTimestamp() };
+
         updateData[`sections.${stepId}`] = formData;
-        updateData[`sectionStatuses.${stepId}`] = buildSectionStatus(submission.sectionStatuses[stepId as string], 'needs_attention', [...validation.missingFields, ...validation.invalidFields].map((e) => e.message));
-        
+        updateData[`sectionStatuses.${stepId}`] = buildSectionStatus(
+          submission.sectionStatuses[stepId as string],
+          'needs_attention',
+          [...validation.missingFields, ...validation.invalidFields].map(
+            (e) => e.message
+          )
+        );
+
         updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
-        
+
         setTimeout(() => scrollToNextError(), 0);
         return;
       }
     }
 
-    const updateData: any = { updatedAt: serverTimestamp(), lastSavedAt: serverTimestamp() };
-    
+    const updateData: any = {
+      updatedAt: serverTimestamp(),
+      lastSavedAt: serverTimestamp(),
+    };
+
     let processedFormData = { ...formData };
+
     if (stepId === 'authority_matrix') {
       const readiness = deriveAuthorityReadiness(formData, {
         pricing: submission.sections?.pricing_commercial,
         serviceModules: submission.sections?.service_modules,
         platforms: submission.sections?.platform_setup,
-        workflow: submission.sections?.workflow_rules
+        workflow: submission.sections?.workflow_rules,
       });
+
       processedFormData.derivedAuthorityReadiness = readiness;
       processedFormData.updatedAt = serverTimestamp();
-      
-      const validation = validateOnboardingSection(stepId as string, formData, submission);
+
+      const validation = validateOnboardingSection(
+        stepId as string,
+        formData,
+        submission
+      );
+
       processedFormData.sectionStatus = {
         isComplete: validation.isValid,
         requiredFieldsComplete: validation.isValid,
         validationErrors: validation.missingFields,
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
       };
+
       if (validation.isValid) {
         processedFormData.completedAt = serverTimestamp();
       }
     }
+
     if (stepId === 'document_upload_library') {
       processedFormData = {
         ...processedFormData,
         categories: processedFormData.categories || {},
         receivedDocumentIds: processedFormData.receivedDocumentIds || [],
         derivedDocumentReadiness: processedFormData.derivedDocumentReadiness || {},
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
       };
     }
 
@@ -376,7 +500,7 @@ export default function OnboardingStepPage() {
       tempEnabledModules = newEnabledModules;
 
       const newVisibleSteps = getVisibleOnboardingSteps(newEnabledModules);
-      const newVisibleStepKeys = newVisibleSteps.map(s => s.key);
+      const newVisibleStepKeys = newVisibleSteps.map((s) => s.key);
       const currentStatuses = { ...submission.sectionStatuses };
       let shouldRedirect = false;
 
@@ -385,12 +509,19 @@ export default function OnboardingStepPage() {
         const wasVisible = submission.visibleStepKeys.includes(step.key);
 
         if (isNowVisible && !wasVisible) {
-            currentStatuses[step.key] = buildSectionStatus(currentStatuses[step.key], 'not_started');
+          currentStatuses[step.key] = buildSectionStatus(
+            currentStatuses[step.key],
+            'not_started'
+          );
         } else if (!isNowVisible && wasVisible) {
-            currentStatuses[step.key] = buildSectionStatus(currentStatuses[step.key], 'skipped');
-            if (stepId === step.key) {
-                shouldRedirect = true;
-            }
+          currentStatuses[step.key] = buildSectionStatus(
+            currentStatuses[step.key],
+            'skipped'
+          );
+
+          if (stepId === step.key) {
+            shouldRedirect = true;
+          }
         }
       }
 
@@ -399,40 +530,60 @@ export default function OnboardingStepPage() {
       updateData.selectedServices = services;
       updateData.sectionStatuses = currentStatuses;
 
-      if(shouldRedirect){
-        const nextPageIndex = visibleSteps.findIndex(s => s.key === stepId);
+      if (shouldRedirect) {
+        const nextPageIndex = visibleSteps.findIndex((s) => s.key === stepId);
+
         if (nextPageIndex !== -1 && nextPageIndex + 1 < newVisibleSteps.length) {
-            targetStepKey = newVisibleSteps[nextPageIndex + 1].key;
+          targetStepKey = newVisibleSteps[nextPageIndex + 1].key;
         } else {
-            targetStepKey = 'final_submission';
+          targetStepKey = 'final_submission';
         }
+
         postSaveNavigation = false;
-        toast({ title: "Section Hidden", description: "This section has been hidden because it is no longer in scope." });
-        router.push(allSteps.find(s => s.key === targetStepKey)!.route);
+
+        toast({
+          title: "Section Hidden",
+          description:
+            "This section has been hidden because it is no longer in scope.",
+        });
+
+        router.push(allSteps.find((s) => s.key === targetStepKey)!.route);
       }
     }
 
     if (direction === 'next') {
       const finalVisibleSteps = getVisibleOnboardingSteps(tempEnabledModules);
-      const finalVisibleRequiredSteps = finalVisibleSteps.filter(s => s.required);
-      
+      const finalVisibleRequiredSteps = finalVisibleSteps.filter((s) => s.required);
+
       if (finalVisibleRequiredSteps.length === 0) {
         updateData.completionPercentage = 100;
       } else {
-        const completedRequiredStepsCount = finalVisibleRequiredSteps.reduce((count, step) => {
-          const isCurrentStep = step.key === stepId;
-          const isCompleted = submission.sectionStatuses[step.key]?.status === 'complete';
-          if ((!isCurrentStep && isCompleted) || (isCurrentStep)) {
-             return count + 1;
-          }
-          return count;
-        }, 0);
-        const completionPercentage = (completedRequiredStepsCount / finalVisibleRequiredSteps.length) * 100;
+        const completedRequiredStepsCount = finalVisibleRequiredSteps.reduce(
+          (count, step) => {
+            const isCurrentStep = step.key === stepId;
+            const isCompleted =
+              submission.sectionStatuses[step.key]?.status === 'complete';
+
+            if ((!isCurrentStep && isCompleted) || isCurrentStep) {
+              return count + 1;
+            }
+
+            return count;
+          },
+          0
+        );
+
+        const completionPercentage =
+          (completedRequiredStepsCount / finalVisibleRequiredSteps.length) * 100;
+
         updateData.completionPercentage = completionPercentage;
       }
-      
-      updateData[`sectionStatuses.${stepId}`] = buildSectionStatus(submission.sectionStatuses[stepId as string], 'complete');
-      
+
+      updateData[`sectionStatuses.${stepId}`] = buildSectionStatus(
+        submission.sectionStatuses[stepId as string],
+        'complete'
+      );
+
       if (currentVisibleIndex < visibleSteps.length - 1) {
         targetStepKey = visibleSteps[currentVisibleIndex + 1].key;
       }
@@ -441,7 +592,10 @@ export default function OnboardingStepPage() {
         targetStepKey = visibleSteps[currentVisibleIndex - 1].key;
       }
     } else {
-      updateData[`sectionStatuses.${stepId}`] = buildSectionStatus(submission.sectionStatuses[stepId as string], 'in_progress');
+      updateData[`sectionStatuses.${stepId}`] = buildSectionStatus(
+        submission.sectionStatuses[stepId as string],
+        'in_progress'
+      );
     }
 
     updateData.currentStep = targetStepKey;
@@ -456,61 +610,111 @@ export default function OnboardingStepPage() {
     }
 
     setSaveStatus('saving');
-    updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData).then(() => {
-      setSaveStatus('saved');
-      setLastSavedTime(new Date());
-      lastSavedDataRef.current = JSON.stringify(formData);
-    }).catch((error: any) => {
-      setSaveStatus('error');
-      errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `onboardingSubmissions/${submissionId}`, operation: 'update', requestResourceData: updateData }));
-    });
+
+    updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData)
+      .then(() => {
+        setSaveStatus('saved');
+        setLastSavedTime(new Date());
+        lastSavedDataRef.current = JSON.stringify(formData);
+      })
+      .catch(() => {
+        setSaveStatus('error');
+
+        errorEmitter.emit(
+          'permission-error',
+          new FirestorePermissionError({
+            path: `onboardingSubmissions/${submissionId}`,
+            operation: 'update',
+            requestResourceData: updateData,
+          })
+        );
+      });
 
     if (direction !== 'stay' && postSaveNavigation) {
-      const nextStep = visibleSteps.find(s => s.key === targetStepKey);
-      if(nextStep) {
+      const nextStep = visibleSteps.find((s) => s.key === targetStepKey);
+
+      if (nextStep) {
         router.push(nextStep.route);
         initialSyncDone.current[nextStep.key] = false;
       }
-    } else if(direction === 'stay') {
-      toast({ title: "Draft Saved", description: "Your progress has been saved." });
+    } else if (direction === 'stay') {
+      toast({
+        title: "Draft Saved",
+        description: "Your progress has been saved.",
+      });
     }
   };
 
   const handleSubmitPack = async () => {
     if (!submissionId || !db || !user || !submission) return;
 
-    const finalValidation = validateOnboardingSection('final_submission', formData, submission);
-    const incompleteRequiredSteps = visibleSteps.filter((step) => step.required && step.key !== 'final_submission' && submission?.sectionStatuses?.[step.key]?.status !== 'complete');
+    const finalValidation = validateOnboardingSection(
+      'final_submission',
+      formData,
+      submission
+    );
 
-    if (finalValidation.missingFields.length > 0 || incompleteRequiredSteps.length > 0 || isLocked) {
+    const incompleteRequiredSteps = visibleSteps.filter(
+      (step) =>
+        step.required &&
+        step.key !== 'final_submission' &&
+        submission?.sectionStatuses?.[step.key]?.status !== 'complete'
+    );
+
+    if (
+      finalValidation.missingFields.length > 0 ||
+      incompleteRequiredSteps.length > 0 ||
+      isLocked
+    ) {
       const warningMessages = [
-        ...finalValidation.missingFields.map((field) => field.fieldLabel || field.fieldKey),
+        ...finalValidation.missingFields.map(
+          (field) => field.fieldLabel || field.fieldKey
+        ),
         ...incompleteRequiredSteps.map((step) => step.title),
         ...(isLocked ? ['Submission is locked'] : []),
       ];
-      toast({ variant: 'destructive', title: 'Unable to submit', description: `Please complete: ${warningMessages.join(', ')}` });
+
+      toast({
+        variant: 'destructive',
+        title: 'Unable to submit',
+        description: `Please complete: ${warningMessages.join(', ')}`,
+      });
+
       return;
     }
 
     setIsSubmitting(true);
+
     try {
       const submissionSnapshot = {
         sections: submission.sections || {},
         sectionStatuses: submission.sectionStatuses || {},
         selectedServices: submission.selectedServices || [],
         enabledModules: submission.enabledModules || {},
-        visibleStepKeys: submission.visibleStepKeys || visibleSteps.map((step) => step.key),
+        visibleStepKeys:
+          submission.visibleStepKeys || visibleSteps.map((step) => step.key),
         completionPercentage: submission.completionPercentage || 0,
-        derivedAuthorityReadiness: submission.sections?.authority_matrix?.derivedAuthorityReadiness || null,
-        authorityConflicts: detectAuthorityConflicts({ ...submission, sections: { ...(submission.sections || {}), final_submission: formData } }),
+        derivedAuthorityReadiness:
+          submission.sections?.authority_matrix?.derivedAuthorityReadiness || null,
+        authorityConflicts: detectAuthorityConflicts({
+          ...submission,
+          sections: {
+            ...(submission.sections || {}),
+            final_submission: formData,
+          },
+        }),
       };
 
-      const updateData: any = { 
+      const updateData: any = {
         updatedAt: serverTimestamp(),
         [`sections.final_submission`]: formData,
-        [`sectionStatuses.final_submission`]: buildSectionStatus(submission.sectionStatuses?.final_submission, 'complete'),
+        [`sectionStatuses.final_submission`]: buildSectionStatus(
+          submission.sectionStatuses?.final_submission,
+          'complete'
+        ),
         completionPercentage: 100,
       };
+
       await updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
 
       const idToken = await user.getIdToken();
@@ -541,12 +745,15 @@ export default function OnboardingStepPage() {
         description: 'Your onboarding pack has been submitted successfully.',
       });
 
-      // 4. Redirect to a confirmation page
       router.push(`/onboarding/submitted?id=${submissionId}`);
-      
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Submission Failed", description: error.message });
-      setIsSubmitting(false); // Only set this on failure
+      toast({
+        variant: "destructive",
+        title: "Submission Failed",
+        description: error.message,
+      });
+
+      setIsSubmitting(false);
     }
   };
 
@@ -554,7 +761,9 @@ export default function OnboardingStepPage() {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center gap-4 bg-[#F8FAFC]">
         <Loader2 className="animate-spin text-primary w-10 h-10" />
-        <p className="text-sm font-medium text-muted-foreground">Preparing your workspace...</p>
+        <p className="text-sm font-medium text-muted-foreground">
+          Preparing your workspace...
+        </p>
       </div>
     );
   }
@@ -563,7 +772,7 @@ export default function OnboardingStepPage() {
 
   const renderSaveStatus = () => {
     if (isLocked) return null;
-    
+
     switch (saveStatus) {
       case 'saving':
         return (
@@ -572,13 +781,23 @@ export default function OnboardingStepPage() {
             <span>Saving draft...</span>
           </div>
         );
+
       case 'saved':
         return (
           <div className="flex items-center gap-2 text-xs text-green-600">
             <CheckCircle2 className="w-3 h-3" />
-            <span>Saved {lastSavedTime ? `at ${lastSavedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}</span>
+            <span>
+              Saved{' '}
+              {lastSavedTime
+                ? `at ${lastSavedTime.toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}`
+                : ''}
+            </span>
           </div>
         );
+
       case 'error':
         return (
           <div className="flex items-center gap-2 text-xs text-destructive">
@@ -586,11 +805,18 @@ export default function OnboardingStepPage() {
             <span>Save failed</span>
           </div>
         );
+
       default:
         return lastSavedTime ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <CheckCircle2 className="w-3 h-3 opacity-50" />
-            <span>Last saved {lastSavedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            <span>
+              Last saved{' '}
+              {lastSavedTime.toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </span>
           </div>
         ) : null;
     }
@@ -607,21 +833,40 @@ export default function OnboardingStepPage() {
                 <span>Overall Progress</span>
                 <span>{Math.round(submission?.completionPercentage || 0)}%</span>
               </div>
-              <Progress value={submission?.completionPercentage || 0} className="h-2 bg-slate-100" />
+              <Progress
+                value={submission?.completionPercentage || 0}
+                className="h-2 bg-slate-100"
+              />
             </div>
           </div>
+
           <div className="flex-1 overflow-y-auto p-4 space-y-1">
             {visibleSteps.map((step, idx) => {
-              const statusInfo = (optimisticServiceSelection?.sectionStatuses ?? submission?.sectionStatuses)?.[step.key];
-              const derivedServiceModuleStatus = step.key === 'service_modules'
-                ? (Object.values(serviceModuleActivity).some(Boolean) ? 'in_progress' : 'not_started')
-                : null;
-              const status = derivedServiceModuleStatus || statusInfo?.status || 'not_started';
+              const statusInfo =
+                (optimisticServiceSelection?.sectionStatuses ??
+                  submission?.sectionStatuses)?.[step.key];
+
+              const derivedServiceModuleStatus =
+                step.key === 'service_modules'
+                  ? Object.values(serviceModuleActivity).some(Boolean)
+                    ? 'in_progress'
+                    : 'not_started'
+                  : null;
+
+              const status =
+                derivedServiceModuleStatus || statusInfo?.status || 'not_started';
+
               const isCurrent = step.key === stepId;
-              
+
               const getIcon = () => {
-                if (status === 'complete') return <CheckCircle2 className="w-3.5 h-3.5" />;
-                if (status === 'needs_attention') return <AlertTriangle className="w-3.5 h-3.5" />;
+                if (status === 'complete') {
+                  return <CheckCircle2 className="w-3.5 h-3.5" />;
+                }
+
+                if (status === 'needs_attention') {
+                  return <AlertTriangle className="w-3.5 h-3.5" />;
+                }
+
                 return <step.icon className="w-3.5 h-3.5" />;
               };
 
@@ -642,52 +887,113 @@ export default function OnboardingStepPage() {
               };
 
               return (
-                <div 
+                <div
                   key={step.key}
                   onClick={() => handleNavigate(step.key)}
                   className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer group ${getColors()}`}
                 >
-                  <div className={`shrink-0 flex items-center justify-center w-6 h-6 rounded-full ${getDotColor()}`}>
+                  <div
+                    className={`shrink-0 flex items-center justify-center w-6 h-6 rounded-full ${getDotColor()}`}
+                  >
                     {getIcon()}
                   </div>
-                  <span className="text-xs font-medium truncate">{idx + 1}. {step.shortTitle}</span>
+                  <span className="text-xs font-medium truncate">
+                    {idx + 1}. {step.shortTitle}
+                  </span>
                 </div>
               );
             })}
           </div>
-          <div className="p-4 border-t"><Button variant="ghost" className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground rounded-xl transition-colors" onClick={() => router.push('/dashboard')}><LayoutDashboard className="w-4 h-4" /><span className="text-sm font-medium">Return to Dashboard</span></Button></div>
+
+          <div className="p-4 border-t">
+            <Button
+              variant="ghost"
+              className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground rounded-xl transition-colors"
+              onClick={() => router.push('/dashboard')}
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              <span className="text-sm font-medium">Return to Dashboard</span>
+            </Button>
+          </div>
         </aside>
 
         <main className="flex-1 flex flex-col h-screen overflow-hidden">
           <header className="h-16 bg-white border-b flex items-center justify-between px-8 shrink-0 z-10 shadow-sm">
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard')} className="gap-2 rounded-lg text-muted-foreground"><LayoutDashboard className="w-4 h-4" /> Dashboard</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push('/dashboard')}
+                className="gap-2 rounded-lg text-muted-foreground"
+              >
+                <LayoutDashboard className="w-4 h-4" /> Dashboard
+              </Button>
               <div className="h-4 w-px bg-slate-200" />
               <div className="flex items-center gap-2">
-                <span className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center"><currentStep.icon className="w-3.5 h-3.5 text-primary" /></span>
-                <h1 className="text-sm font-bold text-slate-900">{currentVisibleIndex + 1}. {currentStep.title}</h1>
+                <span className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <currentStep.icon className="w-3.5 h-3.5 text-primary" />
+                </span>
+                <h1 className="text-sm font-bold text-slate-900">
+                  {currentVisibleIndex + 1}. {currentStep.title}
+                </h1>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-6">
               {renderSaveStatus()}
               <div className="flex items-center gap-3">
                 {currentVisibleIndex > 0 && (
-                  <Button variant="ghost" size="sm" onClick={() => handleSave('prev')} className="gap-2 rounded-lg text-muted-foreground"><ChevronLeft className="w-4 h-4" /> Previous</Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleSave('prev')}
+                    className="gap-2 rounded-lg text-muted-foreground"
+                  >
+                    <ChevronLeft className="w-4 h-4" /> Previous
+                  </Button>
                 )}
+
                 {!isLocked && stepId !== 'final_submission' && (
                   <>
-                    <Button variant="outline" size="sm" onClick={() => handleSave('stay')} className="gap-2 rounded-lg border-2">Save Draft</Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleSave('stay')}
+                      className="gap-2 rounded-lg border-2"
+                    >
+                      Save Draft
+                    </Button>
+
                     {validationResult && !validationResult.isValid && (
-                       <Button size="sm" variant="outline" onClick={scrollToNextError} className="gap-2 rounded-lg font-bold px-4 border-amber-400 text-amber-600 bg-amber-50 hover:bg-amber-100">
-                         Next incomplete field <ChevronsDown className="w-4 h-4" />
-                       </Button>
-                     )}
-                    <Button size="sm" onClick={() => handleSave('next')} className="gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20" disabled={currentVisibleIndex === visibleSteps.length - 1}>Next Step <ChevronRight className="w-4 h-4" /></Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={scrollToNextError}
+                        className="gap-2 rounded-lg font-bold px-4 border-amber-400 text-amber-600 bg-amber-50 hover:bg-amber-100"
+                      >
+                        Next incomplete field <ChevronsDown className="w-4 h-4" />
+                      </Button>
+                    )}
+
+                    <Button
+                      size="sm"
+                      onClick={() => handleSave('next')}
+                      className="gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20"
+                      disabled={currentVisibleIndex === visibleSteps.length - 1}
+                    >
+                      Next Step <ChevronRight className="w-4 h-4" />
+                    </Button>
                   </>
                 )}
+
                 {isLocked && currentVisibleIndex < visibleSteps.length - 1 && (
-                  <Button size="sm" onClick={() => handleSave('next')} className="gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20">Next Step <ChevronRight className="w-4 h-4" /></Button>
+                  <Button
+                    size="sm"
+                    onClick={() => handleSave('next')}
+                    className="gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20"
+                  >
+                    Next Step <ChevronRight className="w-4 h-4" />
+                  </Button>
                 )}
               </div>
             </div>
@@ -695,16 +1001,28 @@ export default function OnboardingStepPage() {
 
           <div className="flex-1 overflow-y-auto bg-slate-50/30">
             <div className="max-w-4xl mx-auto p-8 lg:p-12">
-              {stepId === 'business_snapshot' && process.env.NODE_ENV !== 'production' && validationResult && (
-                <pre className="mb-6 rounded-xl border bg-slate-900 text-slate-100 p-4 text-xs overflow-auto">{JSON.stringify({ section: 'Snapshot', ...validationResult, raw: formData }, null, 2)}</pre>
-              )}
+              {stepId === 'business_snapshot' &&
+                process.env.NODE_ENV !== 'production' &&
+                validationResult && (
+                  <pre className="mb-6 rounded-xl border bg-slate-900 text-slate-100 p-4 text-xs overflow-auto">
+                    {JSON.stringify(
+                      { section: 'Snapshot', ...validationResult, raw: formData },
+                      null,
+                      2
+                    )}
+                  </pre>
+                )}
 
               {isLocked && stepId !== 'final_submission' && (
                 <div className="mb-8 p-4 bg-blue-50 border border-blue-100 rounded-2xl flex gap-3 text-blue-800 animate-in fade-in slide-in-from-top-2">
                   <Lock className="w-5 h-5 shrink-0" />
                   <div className="space-y-1">
                     <p className="text-sm font-bold">Read-Only View</p>
-                    <p className="text-xs">Your onboarding pack has been submitted and is locked for review. You can navigate through your responses but edits are disabled.</p>
+                    <p className="text-xs">
+                      Your onboarding pack has been submitted and is locked for
+                      review. You can navigate through your responses but edits are
+                      disabled.
+                    </p>
                   </div>
                 </div>
               )}
@@ -716,23 +1034,30 @@ export default function OnboardingStepPage() {
                       <Loader2 className="animate-spin text-primary w-12 h-12" />
                       <div className="text-center">
                         <h3 className="text-lg font-bold">Finalizing Onboarding</h3>
-                        <p className="text-sm text-muted-foreground">Creating your Google Drive workspace and locking files...</p>
+                        <p className="text-sm text-muted-foreground">
+                          Creating your Google Drive workspace and locking files...
+                        </p>
                       </div>
                     </div>
                   ) : (
                     <>
-                    {validationResult && !validationResult.isValid && <ValidationSummary validationResult={validationResult} onJumpTo={scrollToError} />}
-                    <StepContent 
-                      stepId={stepId as string} 
-                      data={formData} 
-                      allData={{ ...submission, allSteps }}
-                      onChange={handleFieldChange} 
-                      isLocked={isLocked}
-                      submissionId={submissionId}
-                      onEdit={handleNavigate}
-                      onSubmit={handleSubmitPack}
-                      validationResult={validationResult}
-                    />
+                      {validationResult && !validationResult.isValid && (
+                        <ValidationSummary
+                          validationResult={validationResult}
+                          onJumpTo={scrollToError}
+                        />
+                      )}
+                      <StepContent
+                        stepId={stepId as string}
+                        data={formData}
+                        allData={{ ...submission, allSteps }}
+                        onChange={handleFieldChange}
+                        isLocked={isLocked}
+                        submissionId={submissionId}
+                        onEdit={handleNavigate}
+                        onSubmit={handleSubmitPack}
+                        validationResult={validationResult}
+                      />
                     </>
                   )}
                 </CardContent>
@@ -745,64 +1070,254 @@ export default function OnboardingStepPage() {
   );
 }
 
-function StepContent({ stepId, data, allData, onChange, isLocked, submissionId, onEdit, onSubmit, validationResult }: { stepId: string, data: any, allData: any, onChange: (field: string, value: any) => void, isLocked: boolean, submissionId: string | null, onEdit: (step: string) => void, onSubmit: () => void, validationResult?: ValidationResult | null }) {
+function StepContent({
+  stepId,
+  data,
+  allData,
+  onChange,
+  isLocked,
+  submissionId,
+  onEdit,
+  onSubmit,
+  validationResult,
+}: {
+  stepId: string;
+  data: any;
+  allData: any;
+  onChange: (field: string, value: any) => void;
+  isLocked: boolean;
+  submissionId: string | null;
+  onEdit: (step: string) => void;
+  onSubmit: () => void;
+  validationResult?: ValidationResult | null;
+}) {
   if (!submissionId) return null;
 
   const fieldErrors = Object.fromEntries(
-    [...(validationResult?.missingFields || []), ...(validationResult?.invalidFields || [])]
-      .flatMap((e) => [[e.fieldKey, e.message], [e.anchorId || e.fieldKey, e.message]])
+    [...(validationResult?.missingFields || []), ...(validationResult?.invalidFields || [])].flatMap(
+      (e) => [
+        [e.fieldKey, e.message],
+        [e.anchorId || e.fieldKey, e.message],
+      ]
+    )
   );
 
   switch (stepId) {
     case 'welcome_expectations':
-      return <WelcomeExpectations data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
+      return (
+        <WelcomeExpectations
+          data={data}
+          onChange={onChange}
+          isLocked={isLocked}
+          fieldErrors={fieldErrors}
+        />
+      );
+
     case 'business_snapshot':
-      return <BusinessSnapshot data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
+      return (
+        <BusinessSnapshot
+          data={data}
+          onChange={onChange}
+          isLocked={isLocked}
+          fieldErrors={fieldErrors}
+        />
+      );
+
     case 'service_selection':
-      return <ServiceSelection data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
+      return (
+        <ServiceSelection
+          data={data}
+          onChange={onChange}
+          isLocked={isLocked}
+          fieldErrors={fieldErrors}
+        />
+      );
+
     case 'business_profile':
-      return <BusinessProfile data={data} onChange={onChange} isLocked={isLocked} allData={allData} fieldErrors={fieldErrors} />;
+      return (
+        <BusinessProfile
+          data={data}
+          onChange={onChange}
+          isLocked={isLocked}
+          allData={allData}
+          fieldErrors={fieldErrors}
+        />
+      );
+
     case 'offer_menu':
-      return <OfferMenu data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
+      return (
+        <OfferMenu
+          data={data}
+          onChange={onChange}
+          isLocked={isLocked}
+          fieldErrors={fieldErrors}
+        />
+      );
+
     case 'team_capacity':
-      return <TeamCapacity data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
+      return (
+        <TeamCapacity
+          data={data}
+          onChange={onChange}
+          isLocked={isLocked}
+          fieldErrors={fieldErrors}
+        />
+      );
+
     case 'proof_evidence':
-      return <ProofEvidence data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
+      return (
+        <ProofEvidence
+          data={data}
+          onChange={onChange}
+          isLocked={isLocked}
+          fieldErrors={fieldErrors}
+        />
+      );
+
     case 'goals_strategy':
-      return <GoalsStrategy data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
+      return (
+        <GoalsStrategy
+          data={data}
+          onChange={onChange}
+          isLocked={isLocked}
+          fieldErrors={fieldErrors}
+        />
+      );
+
     case 'pricing_commercial':
-      return <PricingCommercial data={data} onChange={onChange} isLocked={isLocked} allData={allData} fieldErrors={fieldErrors} />;
+      return (
+        <PricingCommercial
+          data={data}
+          onChange={onChange}
+          isLocked={isLocked}
+          allData={allData}
+          fieldErrors={fieldErrors}
+        />
+      );
+
     case 'platform_setup':
-      return <PlatformSetup data={data} onChange={onChange} isLocked={isLocked} allData={allData} fieldErrors={fieldErrors} />;
+      return (
+        <PlatformSetup
+          data={data}
+          onChange={onChange}
+          isLocked={isLocked}
+          allData={allData}
+          fieldErrors={fieldErrors}
+        />
+      );
+
     case 'document_upload_library':
-      return <DocumentUploadLibrary data={data} onChange={onChange} isLocked={isLocked} submissionId={submissionId} allData={allData} fieldErrors={fieldErrors} />;
+      return (
+        <DocumentUploadLibrary
+          data={data}
+          onChange={onChange}
+          isLocked={isLocked}
+          submissionId={submissionId}
+          allData={allData}
+          fieldErrors={fieldErrors}
+        />
+      );
+
     case 'authority_matrix':
-      return <AuthorityMatrix data={data} allData={allData} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
+      return (
+        <AuthorityMatrix
+          data={data}
+          allData={allData}
+          onChange={onChange}
+          isLocked={isLocked}
+          fieldErrors={fieldErrors}
+        />
+      );
+
     case 'opportunity_triage':
-      return <OpportunityTriage data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
+      return (
+        <OpportunityTriage
+          data={data}
+          onChange={onChange}
+          isLocked={isLocked}
+          fieldErrors={fieldErrors}
+        />
+      );
+
     case 'compliance_insurance':
-      return <ComplianceInsurance data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
+      return (
+        <ComplianceInsurance
+          data={data}
+          onChange={onChange}
+          isLocked={isLocked}
+          fieldErrors={fieldErrors}
+        />
+      );
+
     case 'service_modules':
-      return <ServiceModules data={data} onChange={onChange} isLocked={isLocked} allData={allData} fieldErrors={fieldErrors} />;
+      return (
+        <ServiceModules
+          data={data}
+          onChange={onChange}
+          isLocked={isLocked}
+          allData={allData}
+          fieldErrors={fieldErrors}
+        />
+      );
+
     case 'tender_readiness':
       return <TenderReadiness data={data} onChange={onChange} isLocked={isLocked} />;
+
     case 'grants':
       return <Grants data={data} onChange={onChange} isLocked={isLocked} />;
+
     case 'marketplace_strategy':
-      return <MarketplaceStrategy data={data} onChange={onChange} isLocked={isLocked} />;
+      return (
+        <MarketplaceStrategy
+          data={data}
+          onChange={onChange}
+          isLocked={isLocked}
+        />
+      );
+
     case 'outreach_strategy':
-      return <OutreachStrategy data={data} onChange={onChange} isLocked={isLocked} />;
+      return (
+        <OutreachStrategy
+          data={data}
+          onChange={onChange}
+          isLocked={isLocked}
+        />
+      );
+
     case 'quote_support':
       return <QuoteSupport data={data} onChange={onChange} isLocked={isLocked} />;
+
     case 'workflow_rules':
-      return <WorkflowRules data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
+      return (
+        <WorkflowRules
+          data={data}
+          onChange={onChange}
+          isLocked={isLocked}
+          fieldErrors={fieldErrors}
+        />
+      );
+
     case 'final_submission':
-      return <FinalSubmission data={data} allData={allData} onChange={onChange} isLocked={isLocked} onEdit={onEdit} onSubmit={onSubmit} fieldErrors={fieldErrors} />;
+      return (
+        <FinalSubmission
+          data={data}
+          allData={allData}
+          onChange={onChange}
+          isLocked={isLocked}
+          onEdit={onEdit}
+          onSubmit={onSubmit}
+          fieldErrors={fieldErrors}
+        />
+      );
+
     default:
       return (
         <div className="py-20 text-center space-y-6">
           <h3 className="text-2xl font-bold text-slate-900">Coming Soon</h3>
-          <p className="text-slate-400 max-w-md mx-auto">The content for this section (<strong>{stepId}</strong>) is currently being populated.</p>
+          <p className="text-slate-400 max-w-md mx-auto">
+            The content for this section (<strong>{stepId}</strong>) is currently
+            being populated.
+          </p>
         </div>
       );
   }

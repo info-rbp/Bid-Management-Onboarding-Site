@@ -1,120 +1,47 @@
-"use client";
+'use client';
 
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, Loader2 } from 'lucide-react';
-import { useUser, useFirestore } from '@/firebase';
+import { useUser } from '@/firebase';
 import { useRouter } from 'next/navigation';
-import {
-  collection,
-  query,
-  where,
-  orderBy,
-  limit,
-  getDocs,
-  doc,
-  getDoc,
-  setDoc,
-  serverTimestamp,
-} from 'firebase/firestore';
-import { getVisibleOnboardingSteps } from '@/lib/onboarding-steps';
-import { buildInitialSubmission } from '@/lib/onboarding-submission';
 
 export function StartOnboardingButton() {
   const { user, isUserLoading } = useUser();
-  const db = useFirestore();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   const handleClick = async () => {
-    if (isUserLoading) return;
+    if (isUserLoading || loading) return;
 
-    // 1. If not signed in: route to /auth
     if (!user) {
-      router.push('/auth');
+      router.push('/auth?returnUrl=/onboarding/welcome_expectations');
       return;
     }
 
     setLoading(true);
 
     try {
-      // 2. Check for existing submission
-      const q = query(
-        collection(db, 'onboardingSubmissions'),
-        where('userId', '==', user.uid),
-        orderBy('updatedAt', 'desc'),
-        limit(1)
-      );
+      const idToken = await user.getIdToken();
 
-      const querySnapshot = await getDocs(q);
+      const response = await fetch('/api/onboarding-submissions/start', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
-      if (!querySnapshot.empty) {
-        // Submission exists, either in_progress or submitted
-        router.push('/dashboard');
-        return;
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(result?.error || 'Unable to start onboarding.');
       }
 
-      // 3. Create new onboarding submission
-      // Fetch user data for business name
-      const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
-      const userData = userSnap.exists() ? userSnap.data() : {};
-
-      const newSubmissionId = doc(collection(db, 'onboardingSubmissions')).id;
-      const initialVisibleSteps = getVisibleOnboardingSteps();
-
-      const newSubmission = {
-        id: newSubmissionId,
-        ...buildInitialSubmission({
-          userId: user.uid,
-          businessName: userData.businessName || 'My Business',
-          currentStep: 'welcome_expectations',
-        }),
-        visibleStepKeys: initialVisibleSteps.map((step) => step.key),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        lastSavedAt: serverTimestamp(),
-      };
-
-      await setDoc(
-        doc(db, 'onboardingSubmissions', newSubmissionId),
-        newSubmission
-      );
-
-      // 4. Sync the new onboarding submission to Google Sheets.
-      // This is intentionally non-blocking for the user journey:
-      // if the Sheet sync fails, the onboarding document still exists.
-      try {
-        const idToken = await user.getIdToken();
-
-        const syncResponse = await fetch(
-          '/api/onboarding-submissions/sync-sheet',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${idToken}`,
-            },
-            body: JSON.stringify({
-              submissionId: newSubmissionId,
-            }),
-          }
-        );
-
-        if (!syncResponse.ok) {
-          const syncError = await syncResponse.json().catch(() => null);
-          console.warn('Google Sheets sync did not complete:', syncError);
-        }
-      } catch (syncError) {
-        console.warn(
-          'Google Sheets sync failed, but onboarding was created:',
-          syncError
-        );
-      }
-
-      router.push('/onboarding/welcome_expectations');
+      router.push(result?.route || '/onboarding/welcome_expectations');
     } catch (error) {
       console.error('Error initiating onboarding:', error);
+      router.push('/dashboard');
     } finally {
       setLoading(false);
     }
@@ -127,7 +54,7 @@ export function StartOnboardingButton() {
       className="bg-primary text-white h-14 px-10 rounded-xl text-lg group shadow-lg shadow-primary/20"
       disabled={loading || isUserLoading}
     >
-      {loading ? (
+      {loading || isUserLoading ? (
         <Loader2 className="animate-spin w-5 h-5" />
       ) : (
         <>
