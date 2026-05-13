@@ -48,7 +48,6 @@ for (const key of validationKeys) {
     new RegExp(`validationProps\\(\\s*["']${escaped}["']\\s*\\)`),
     new RegExp(`renderFieldError\\(\\s*["']${escaped}["']\\s*\\)`),
     new RegExp(`data-validation-anchor=["']${escaped}["']`),
-    new RegExp(escaped),
   ];
   if (patterns.some((p) => p.test(corpus))) anchorMatched.add(key);
 }
