@@ -9,6 +9,8 @@ import {
   collection,
   query,
   where,
+  orderBy,
+  limit,
   getDocs,
   doc,
   getDoc,
@@ -16,6 +18,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { getVisibleOnboardingSteps } from '@/lib/onboarding-steps';
+import { buildInitialSubmission } from '@/lib/onboarding-submission';
 
 export function StartOnboardingButton() {
   const { user, isUserLoading } = useUser();
@@ -38,7 +41,9 @@ export function StartOnboardingButton() {
       // 2. Check for existing submission
       const q = query(
         collection(db, 'onboardingSubmissions'),
-        where('userId', '==', user.uid)
+        where('userId', '==', user.uid),
+        orderBy('updatedAt', 'desc'),
+        limit(1)
       );
 
       const querySnapshot = await getDocs(q);
@@ -60,21 +65,12 @@ export function StartOnboardingButton() {
 
       const newSubmission = {
         id: newSubmissionId,
-        userId: user.uid,
-        businessName: userData.businessName || 'My Business',
-        status: 'in_progress',
-        currentStep: 'welcome_expectations',
-        completedSteps: [],
-        sections: {},
-        enabledModules: {
-          tenderReadiness: false,
-          grants: false,
-          marketplaceStrategy: false,
-          directOutreachStrategy: false,
-          quoteSupport: false,
-        },
+        ...buildInitialSubmission({
+          userId: user.uid,
+          businessName: userData.businessName || 'My Business',
+          currentStep: 'welcome_expectations',
+        }),
         visibleStepKeys: initialVisibleSteps.map((step) => step.key),
-        completionPercentage: 0,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         lastSavedAt: serverTimestamp(),

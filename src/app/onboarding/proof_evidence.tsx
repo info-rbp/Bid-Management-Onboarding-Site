@@ -18,6 +18,7 @@ interface ProofEvidenceProps {
   data: any;
   onChange: (field: string, value: any) => void;
   isLocked: boolean;
+  fieldErrors?: Record<string, string>;
 }
 
 const clientTypeOptions = [
@@ -159,6 +160,10 @@ export function ProofEvidence({ data, onChange, isLocked }: ProofEvidenceProps) 
 
         {detailsRequired ? (
           <div className="space-y-8">
+      <div id="caseStudies.0.projectTitle" data-validation-anchor="caseStudies.0.projectTitle" className="sr-only" />
+      <div id="caseStudies.0.clientCustomerType" data-validation-anchor="caseStudies.0.clientCustomerType" className="sr-only" />
+      <div id="caseStudies.0.whatWasDelivered" data-validation-anchor="caseStudies.0.whatWasDelivered" className="sr-only" />
+      <div id="caseStudies.0.problemSolvedAndOutcome" data-validation-anchor="caseStudies.0.problemSolvedAndOutcome" className="sr-only" />
             {caseStudies.map((cs: any, index: number) => (
               <Card key={index} className="border-2 border-slate-100 rounded-[2rem] overflow-hidden shadow-sm">
                 <CardContent className="p-8 space-y-6">

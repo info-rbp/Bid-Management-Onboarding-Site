@@ -15,6 +15,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Mail, Lock, User, Building2, MapPin } from 'lucide-react';
 import Link from 'next/link';
+import { getSafeReturnUrl } from '@/lib/auth-return-url';
 
 function AuthContent() {
   const auth = useAuth();
@@ -24,7 +25,7 @@ function AuthContent() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
 
-  const returnUrl = searchParams.get('returnUrl') || '/onboarding/welcome_expectations';
+  const returnUrl = getSafeReturnUrl(searchParams.get('returnUrl'));
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

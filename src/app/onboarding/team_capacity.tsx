@@ -17,6 +17,7 @@ interface TeamCapacityProps {
   data: any;
   onChange: (field: string, value: any) => void;
   isLocked: boolean;
+  fieldErrors?: Record<string, string>;
 }
 
 export function TeamCapacity({ data, onChange, isLocked }: TeamCapacityProps) {
@@ -129,6 +130,9 @@ export function TeamCapacity({ data, onChange, isLocked }: TeamCapacityProps) {
         </div>
 
         <div className="space-y-8">
+      <div id="keyPeople.0.fullName" data-validation-anchor="keyPeople.0.fullName" className="sr-only" />
+      <div id="keyPeople.0.roleTitle" data-validation-anchor="keyPeople.0.roleTitle" className="sr-only" />
+      <div id="keyPeople.0.responsibilities" data-validation-anchor="keyPeople.0.responsibilities" className="sr-only" />
           {keyPeople.map((person: any, index: number) => (
             <Card key={index} className="border-2 border-slate-100 rounded-[2rem] overflow-hidden shadow-sm">
               <CardContent className="p-8 space-y-6">

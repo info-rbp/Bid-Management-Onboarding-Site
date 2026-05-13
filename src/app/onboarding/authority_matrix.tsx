@@ -28,6 +28,7 @@ interface AuthorityMatrixProps {
   allData: any;
   onChange: (field: string, value: any) => void;
   isLocked: boolean;
+  fieldErrors?: Record<string, string>;
 }
 
 const authorityPreferenceRows = [

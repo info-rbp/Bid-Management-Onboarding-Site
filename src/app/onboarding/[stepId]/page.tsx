@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
-import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, addDoc, getDoc, writeBatch } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, collection, query, where, orderBy, limit, getDocs, setDoc, getDoc, writeBatch } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -32,6 +32,7 @@ import { AuthGuard } from '@/components/auth/AuthGuard';
 import { validateOnboardingSection, ValidationResult, ValidationError } from '@/lib/onboardingValidation';
 import { ValidationSummary } from '@/components/ValidationSummary';
 import { detectAuthorityConflicts } from '@/lib/conflict_detector';
+import { buildInitialSubmission } from '@/lib/onboarding-submission';
 import { WelcomeExpectations } from '../welcome_expectations';
 import { BusinessSnapshot } from '../business_snapshot';
 import { ServiceSelection } from '../service_selection';
@@ -224,27 +225,19 @@ export default function OnboardingStepPage() {
   useEffect(() => {
     async function initSubmission() {
       if (!user || !db || submissionId) return;
-      const q = query(collection(db, 'onboardingSubmissions'), where('userId', '==', user.uid));
+      const q = query(collection(db, 'onboardingSubmissions'), where('userId', '==', user.uid), orderBy('updatedAt', 'desc'), limit(1));
       const querySnapshot = await getDocs(q);
       if (!querySnapshot.empty) {
         setSubmissionId(querySnapshot.docs[0].id);
       } else {
-        const newDoc = await addDoc(collection(db, 'onboardingSubmissions'), {
-          userId: user.uid,
-          businessName: user.displayName || 'My Business',
-          status: 'in_progress',
-          currentStep: stepId,
-          visibleStepKeys: allSteps.map(s => s.key),
-          completionPercentage: 0,
-          selectedServices: [],
-          enabledModules: {
-            tenderReadiness: false,
-            grants: false,
-            marketplaceStrategy: false,
-            outreachStrategy: false,
-            quoteSupport: false,
-          },
-          sections: {},
+        const newId = doc(collection(db, 'onboardingSubmissions')).id;
+        await setDoc(doc(db, 'onboardingSubmissions', newId), {
+          id: newId,
+          ...buildInitialSubmission({
+            userId: user.uid,
+            businessName: user.displayName || 'My Business',
+            currentStep: typeof stepId === 'string' ? stepId : 'welcome_expectations',
+          }),
           sectionStatuses: allSteps.reduce((acc, step) => {
             acc[step.key] = buildSectionStatus(null, 'not_started');
             return acc;
@@ -252,12 +245,8 @@ export default function OnboardingStepPage() {
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           lastSavedAt: serverTimestamp(),
-          submittedAt: null,
-          adminReopened: false,
-          googleDriveFolderId: null,
-          googleDriveFolderUrl: null,
         });
-        setSubmissionId(newDoc.id);
+        setSubmissionId(newId);
       }
     }
     initSubmission();
@@ -288,12 +277,23 @@ export default function OnboardingStepPage() {
   };
 
   const scrollToError = (error: ValidationError) => {
-    if (!error.anchorId) return;
-    const el = document.getElementById(error.anchorId);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      (el as HTMLElement).focus?.();
+    const candidates = [
+      error.anchorId,
+      error.fieldKey,
+      error.fieldKey?.replace(/\./g, '-'),
+    ].filter(Boolean) as string[];
+
+    for (const candidate of candidates) {
+      const el = document.getElementById(candidate);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        (el as HTMLElement).focus?.();
+        return;
+      }
     }
+
+    const summary = document.querySelector('[data-validation-summary="true"]');
+    summary?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const scrollToNextError = () => {
@@ -753,35 +753,35 @@ function StepContent({ stepId, data, allData, onChange, isLocked, submissionId, 
 
   switch (stepId) {
     case 'welcome_expectations':
-      return <WelcomeExpectations data={data} onChange={onChange} isLocked={isLocked} />;
+      return <WelcomeExpectations data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'business_snapshot':
       return <BusinessSnapshot data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'service_selection':
-      return <ServiceSelection data={data} onChange={onChange} isLocked={isLocked} />;
+      return <ServiceSelection data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'business_profile':
-      return <BusinessProfile data={data} onChange={onChange} isLocked={isLocked} allData={allData} />;
+      return <BusinessProfile data={data} onChange={onChange} isLocked={isLocked} allData={allData} fieldErrors={fieldErrors} />;
     case 'offer_menu':
       return <OfferMenu data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'team_capacity':
-      return <TeamCapacity data={data} onChange={onChange} isLocked={isLocked} />;
+      return <TeamCapacity data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'proof_evidence':
-      return <ProofEvidence data={data} onChange={onChange} isLocked={isLocked} />;
+      return <ProofEvidence data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'goals_strategy':
-      return <GoalsStrategy data={data} onChange={onChange} isLocked={isLocked} />;
+      return <GoalsStrategy data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'pricing_commercial':
-      return <PricingCommercial data={data} onChange={onChange} isLocked={isLocked} allData={allData} />;
+      return <PricingCommercial data={data} onChange={onChange} isLocked={isLocked} allData={allData} fieldErrors={fieldErrors} />;
     case 'platform_setup':
-      return <PlatformSetup data={data} onChange={onChange} isLocked={isLocked} allData={allData} />;
+      return <PlatformSetup data={data} onChange={onChange} isLocked={isLocked} allData={allData} fieldErrors={fieldErrors} />;
     case 'document_upload_library':
-      return <DocumentUploadLibrary data={data} onChange={onChange} isLocked={isLocked} submissionId={submissionId} allData={allData} />;
+      return <DocumentUploadLibrary data={data} onChange={onChange} isLocked={isLocked} submissionId={submissionId} allData={allData} fieldErrors={fieldErrors} />;
     case 'authority_matrix':
-      return <AuthorityMatrix data={data} allData={allData} onChange={onChange} isLocked={isLocked} />;
+      return <AuthorityMatrix data={data} allData={allData} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'opportunity_triage':
-      return <OpportunityTriage data={data} onChange={onChange} isLocked={isLocked} />;
+      return <OpportunityTriage data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'compliance_insurance':
-      return <ComplianceInsurance data={data} onChange={onChange} isLocked={isLocked} />;
+      return <ComplianceInsurance data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'service_modules':
-      return <ServiceModules data={data} onChange={onChange} isLocked={isLocked} allData={allData} />;
+      return <ServiceModules data={data} onChange={onChange} isLocked={isLocked} allData={allData} fieldErrors={fieldErrors} />;
     case 'tender_readiness':
       return <TenderReadiness data={data} onChange={onChange} isLocked={isLocked} />;
     case 'grants':
@@ -793,9 +793,9 @@ function StepContent({ stepId, data, allData, onChange, isLocked, submissionId, 
     case 'quote_support':
       return <QuoteSupport data={data} onChange={onChange} isLocked={isLocked} />;
     case 'workflow_rules':
-      return <WorkflowRules data={data} onChange={onChange} isLocked={isLocked} />;
+      return <WorkflowRules data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'final_submission':
-      return <FinalSubmission data={data} allData={allData} onChange={onChange} isLocked={isLocked} onEdit={onEdit} onSubmit={onSubmit} />;
+      return <FinalSubmission data={data} allData={allData} onChange={onChange} isLocked={isLocked} onEdit={onEdit} onSubmit={onSubmit} fieldErrors={fieldErrors} />;
     default:
       return (
         <div className="py-20 text-center space-y-6">
