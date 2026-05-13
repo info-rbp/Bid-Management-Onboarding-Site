@@ -12,6 +12,7 @@ interface WelcomeExpectationsProps {
   data: any;
   onChange: (field: string, value: any) => void;
   isLocked: boolean;
+  fieldErrors?: Record<string, string>;
 }
 
 export function WelcomeExpectations({ data, onChange, isLocked }: WelcomeExpectationsProps) {

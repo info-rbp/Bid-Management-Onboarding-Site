@@ -56,6 +56,7 @@ export function MarketplaceStrategy({ data, onChange, isLocked }: MarketplaceStr
 
   return (
     <div className="space-y-8">
+      <div id="marketplaceExamples" data-validation-anchor="marketplaceExamples" className="sr-only" />
       <div className="space-y-4">
         <h2 className="text-4xl font-headline font-bold text-slate-900">Marketplace Strategy</h2>
         <p className="text-slate-500 text-lg">Define your strategy for marketplace platforms, including lead rules, budget, and response authority.</p>

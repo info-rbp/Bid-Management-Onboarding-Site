@@ -36,6 +36,7 @@ interface DocumentUploadProps {
   data: any;
   onChange: (field: string, value: any) => void;
   isLocked: boolean;
+  fieldErrors?: Record<string, string>;
   submissionId: string;
   allData?: any;
 }
@@ -55,7 +56,8 @@ const defaultDocumentReadiness = {
   quoteDocumentReady: false,
 };
 
-export function DocumentUploadLibrary({ data, onChange, isLocked, submissionId, allData }: DocumentUploadProps) {
+export function DocumentUploadLibrary({ data, onChange, isLocked, submissionId, allData, fieldErrors }: DocumentUploadProps) {
+  void fieldErrors;
   const { user } = useUser();
   const db = useFirestore();
   const { toast } = useToast();

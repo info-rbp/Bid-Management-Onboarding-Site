@@ -68,6 +68,7 @@ export function Grants({ data, onChange, isLocked }: GrantsProps) {
 
   return (
     <div className="space-y-8">
+      <div id="grantWritingExperienceDetails" data-validation-anchor="grantWritingExperienceDetails" className="sr-only" />
       <div className="space-y-4">
         <h2 className="text-4xl font-headline font-bold text-slate-900">Grants</h2>
         <p className="text-slate-500 text-lg">Capture your grant project ideas, funding needs, budget, outcomes, and evidence.</p>

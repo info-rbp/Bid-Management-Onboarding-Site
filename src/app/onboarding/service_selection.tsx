@@ -22,6 +22,7 @@ interface ServiceSelectionProps {
   };
   onChange: (field: string, value: any) => void;
   isLocked: boolean;
+  fieldErrors?: Record<string, string>;
 }
 
 const serviceOptions = [

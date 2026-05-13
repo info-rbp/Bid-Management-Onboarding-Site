@@ -29,15 +29,17 @@ import {
 } from 'lucide-react';
 import { deriveActiveServiceModules } from '@/lib/onboarding-steps';
 import { ClientDocumentUploader } from './client_document_uploader';
+import { FieldError, getFieldError, getFieldErrorId, isFieldInvalid } from '@/components/FieldError';
 
 interface ServiceModulesProps {
   data: any;
   onChange: (field: string, value: any) => void;
   isLocked: boolean;
+  fieldErrors?: Record<string, string>;
   allData: any;
 }
 
-export default function ServiceModules({ data, onChange, isLocked, allData }: ServiceModulesProps) {
+export default function ServiceModules({ data, onChange, isLocked, allData, fieldErrors }: ServiceModulesProps) {
   const selectedServices = allData?.sections?.service_selection?.selectedServices || [];
   const activeModules = deriveActiveServiceModules(selectedServices);
   const contacts = allData?.sections?.business_snapshot?.contacts || [];
@@ -57,8 +59,22 @@ export default function ServiceModules({ data, onChange, isLocked, allData }: Se
     onChange(moduleKey, { ...moduleData, [field]: value });
   };
 
-  const renderContactSelector = (label: string, value: any, onSelect: (val: any) => void) => (
-    <div className="space-y-3">
+  const validationProps = (fieldKey: string) => {
+    const error = getFieldError(fieldErrors, fieldKey);
+    return {
+      id: fieldKey,
+      'aria-invalid': isFieldInvalid(fieldErrors, fieldKey),
+      'aria-describedby': error ? getFieldErrorId(fieldKey) : undefined,
+      'data-validation-anchor': fieldKey,
+    } as const;
+  };
+
+  const renderFieldError = (fieldKey: string) => (
+    <FieldError id={getFieldErrorId(fieldKey)} message={getFieldError(fieldErrors, fieldKey)} />
+  );
+
+  const renderContactSelector = (label: string, value: any, onSelect: (val: any) => void, fieldKey?: string) => (
+    <div className="space-y-3" id={fieldKey} data-validation-anchor={fieldKey}>
       <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</Label>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <select 
@@ -66,6 +82,8 @@ export default function ServiceModules({ data, onChange, isLocked, allData }: Se
           onChange={(e) => onSelect({ ...value, contactType: e.target.value })}
           disabled={isLocked}
           className="w-full h-10 bg-white border border-slate-200 rounded-xl px-3 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+          aria-invalid={fieldKey ? isFieldInvalid(fieldErrors, fieldKey) : false}
+          aria-describedby={fieldKey && getFieldError(fieldErrors, fieldKey) ? getFieldErrorId(fieldKey) : undefined}
         >
           <option value="">Select approver...</option>
           <option value="primary_contact">Primary Contact</option>
@@ -75,6 +93,7 @@ export default function ServiceModules({ data, onChange, isLocked, allData }: Se
           <option value="custom">Custom Approver</option>
         </select>
       </div>
+      {fieldKey && renderFieldError(fieldKey)}
       {value?.contactType === 'custom' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-1">
           <Input placeholder="Full Name" value={value?.fullName || ''} onChange={(e) => onSelect({ ...value, fullName: e.target.value })} disabled={isLocked} className="rounded-xl h-10" />
@@ -94,6 +113,37 @@ export default function ServiceModules({ data, onChange, isLocked, allData }: Se
       </div>
 
       <div className="space-y-6">
+        <div id="grants.interestedInGrantSupport" data-validation-anchor="grants.interestedInGrantSupport" className="sr-only" />
+<div id="grants.fundingUse" data-validation-anchor="grants.fundingUse" className="sr-only" />
+<div id="grants.projectNeed" data-validation-anchor="grants.projectNeed" className="sr-only" />
+<div id="grants.projectBeneficiaries" data-validation-anchor="grants.projectBeneficiaries" className="sr-only" />
+<div id="grants.projectLocation" data-validation-anchor="grants.projectLocation" className="sr-only" />
+<div id="grants.projectTiming" data-validation-anchor="grants.projectTiming" className="sr-only" />
+<div id="grants.estimatedTotalProjectCost" data-validation-anchor="grants.estimatedTotalProjectCost" className="sr-only" />
+<div id="grants.fundingAmountNeeded" data-validation-anchor="grants.fundingAmountNeeded" className="sr-only" />
+<div id="grants.clientContribution" data-validation-anchor="grants.clientContribution" className="sr-only" />
+<div id="grants.projectOutcomes" data-validation-anchor="grants.projectOutcomes" className="sr-only" />
+<div id="grants.afterFundingPlan" data-validation-anchor="grants.afterFundingPlan" className="sr-only" />
+<div id="marketplaceLeads.openMarketplacePlatforms" data-validation-anchor="marketplaceLeads.openMarketplacePlatforms" className="sr-only" />
+<div id="marketplaceLeads.suitableServices" data-validation-anchor="marketplaceLeads.suitableServices" className="sr-only" />
+<div id="marketplaceLeads.worthwhileLeadTypes" data-validation-anchor="marketplaceLeads.worthwhileLeadTypes" className="sr-only" />
+<div id="marketplaceLeads.minimumJobValue" data-validation-anchor="marketplaceLeads.minimumJobValue" className="sr-only" />
+<div id="marketplaceLeads.urgentWorkCapacity" data-validation-anchor="marketplaceLeads.urgentWorkCapacity" className="sr-only" />
+<div id="marketplaceLeads.jobsToIgnore" data-validation-anchor="marketplaceLeads.jobsToIgnore" className="sr-only" />
+<div id="marketplaceLeads.responseApprovalRequirement" data-validation-anchor="marketplaceLeads.responseApprovalRequirement" className="sr-only" />
+<div id="marketplaceLeads.canSubmitUnderThreshold" data-validation-anchor="marketplaceLeads.canSubmitUnderThreshold" className="sr-only" />
+<div id="directProposalOutreach.interestedInDirectBusinessDevelopment" data-validation-anchor="directProposalOutreach.interestedInDirectBusinessDevelopment" className="sr-only" />
+<div id="directProposalOutreach.directGrowthChannels" data-validation-anchor="directProposalOutreach.directGrowthChannels" className="sr-only" />
+<div id="directProposalOutreach.targetOrganisationsSectors" data-validation-anchor="directProposalOutreach.targetOrganisationsSectors" className="sr-only" />
+<div id="directProposalOutreach.interestedCampaigns" data-validation-anchor="directProposalOutreach.interestedCampaigns" className="sr-only" />
+<div id="quoteRequests.quoteRequestTypes" data-validation-anchor="quoteRequests.quoteRequestTypes" className="sr-only" />
+<div id="quoteRequests.informationNeededToQuote" data-validation-anchor="quoteRequests.informationNeededToQuote" className="sr-only" />
+<div id="quoteRequests.quotePrerequisites" data-validation-anchor="quoteRequests.quotePrerequisites" className="sr-only" />
+<div id="quoteRequests.standardQuoteAssumptions" data-validation-anchor="quoteRequests.standardQuoteAssumptions" className="sr-only" />
+<div id="quoteRequests.standardQuoteExclusions" data-validation-anchor="quoteRequests.standardQuoteExclusions" className="sr-only" />
+<div id="quoteRequests.quoteValidityPeriod" data-validation-anchor="quoteRequests.quoteValidityPeriod" className="sr-only" />
+<div id="quoteRequests.canPrepareDraftQuotes" data-validation-anchor="quoteRequests.canPrepareDraftQuotes" className="sr-only" />
+<div id="quoteRequests.canSendQuotesUnderThreshold" data-validation-anchor="quoteRequests.canSendQuotesUnderThreshold" className="sr-only" />
         {!hasActiveModules && (
           <Card className="border-2 border-dashed border-slate-200 bg-slate-50">
             <CardContent className="p-6 space-y-2">
@@ -116,7 +166,7 @@ export default function ServiceModules({ data, onChange, isLocked, allData }: Se
             onToggle={() => expandModule('tenderSupplierReadiness')}
           >
             <div className="space-y-8">
-              <div className="space-y-4">
+              <div className="space-y-4" {...validationProps('tenderSupplierReadiness.previousTenderSupplierExperience')}>
                 <Label className="text-base font-bold">12A.1 Previous experience with tenders or panels?</Label>
                 <RadioGroup 
                   value={data.tenderSupplierReadiness?.previousTenderSupplierExperience} 
@@ -130,39 +180,45 @@ export default function ServiceModules({ data, onChange, isLocked, allData }: Se
                     </div>
                   ))}
                 </RadioGroup>
+                {renderFieldError('tenderSupplierReadiness.previousTenderSupplierExperience')}
               </div>
 
               {(data.tenderSupplierReadiness?.previousTenderSupplierExperience === 'yes' || data.tenderSupplierReadiness?.previousTenderSupplierExperience === 'some') && (
-                <div className="space-y-2 animate-in fade-in slide-in-from-top-1">
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-1" {...validationProps('tenderSupplierReadiness.previousPortalsUsed')}>
                   <Label className="text-sm font-bold">12A.2 Which tender or supplier portals have you used before?</Label>
-                  <Textarea value={data.tenderSupplierReadiness?.previousPortalsUsed || ''} onChange={(e) => handleModuleChange('tenderSupplierReadiness', 'previousPortalsUsed', e.target.value)} disabled={isLocked} className="rounded-xl min-h-[80px]" />
+                  <Textarea value={data.tenderSupplierReadiness?.previousPortalsUsed || ''} onChange={(e) => handleModuleChange('tenderSupplierReadiness', 'previousPortalsUsed', e.target.value)} disabled={isLocked} className="rounded-xl min-h-[80px]" {...validationProps('tenderSupplierReadiness.previousPortalsUsed')} />
+                  {renderFieldError('tenderSupplierReadiness.previousPortalsUsed')}
                 </div>
               )}
 
-              <div className="space-y-2">
+              <div className="space-y-2" {...validationProps('tenderSupplierReadiness.targetBuyers')}>
                 <Label className="text-sm font-bold">12A.3 What types of buyers or organisations do you want to target?</Label>
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">e.g., Local councils, schools, mining companies, health providers.</p>
-                <Textarea value={data.tenderSupplierReadiness?.targetBuyers || ''} onChange={(e) => handleModuleChange('tenderSupplierReadiness', 'targetBuyers', e.target.value)} disabled={isLocked} className="rounded-xl min-h-[80px]" />
+                <Textarea value={data.tenderSupplierReadiness?.targetBuyers || ''} onChange={(e) => handleModuleChange('tenderSupplierReadiness', 'targetBuyers', e.target.value)} disabled={isLocked} className="rounded-xl min-h-[80px]" {...validationProps('tenderSupplierReadiness.targetBuyers')} />
+                {renderFieldError('tenderSupplierReadiness.targetBuyers')}
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2" {...validationProps('tenderSupplierReadiness.realisticContractSizes')}>
                 <Label className="text-sm font-bold">12A.4 What contract sizes are realistic for your business?</Label>
                 <p className="text-xs text-muted-foreground italic">Consider staffing, equipment, insurance and cashflow.</p>
-                <Textarea value={data.tenderSupplierReadiness?.realisticContractSizes || ''} onChange={(e) => handleModuleChange('tenderSupplierReadiness', 'realisticContractSizes', e.target.value)} disabled={isLocked} className="rounded-xl min-h-[80px]" />
+                <Textarea value={data.tenderSupplierReadiness?.realisticContractSizes || ''} onChange={(e) => handleModuleChange('tenderSupplierReadiness', 'realisticContractSizes', e.target.value)} disabled={isLocked} className="rounded-xl min-h-[80px]" {...validationProps('tenderSupplierReadiness.realisticContractSizes')} />
+                {renderFieldError('tenderSupplierReadiness.realisticContractSizes')}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-4">
+                <div className="space-y-4" {...validationProps('tenderSupplierReadiness.preparedForComplianceRequirements')}>
                   <Label className="text-sm font-bold">12A.5 Prepared for compliance requirements?</Label>
                   <RadioGroup value={data.tenderSupplierReadiness?.preparedForComplianceRequirements} onValueChange={(v) => handleModuleChange('tenderSupplierReadiness', 'preparedForComplianceRequirements', v)} className="flex flex-wrap gap-3" disabled={isLocked}>
                     {['yes', 'no', 'partly', 'unsure'].map(v => <div key={v} className="flex items-center gap-2"><RadioGroupItem value={v} id={`t5-${v}`} /><Label htmlFor={`t5-${v}`} className="capitalize text-xs font-medium">{v}</Label></div>)}
                   </RadioGroup>
+                  {renderFieldError('tenderSupplierReadiness.preparedForComplianceRequirements')}
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-4" {...validationProps('tenderSupplierReadiness.previousMaterialsAvailable')}>
                   <Label className="text-sm font-bold">12A.6 Previous materials available for review?</Label>
                   <RadioGroup value={data.tenderSupplierReadiness?.previousMaterialsAvailable} onValueChange={(v) => handleModuleChange('tenderSupplierReadiness', 'previousMaterialsAvailable', v)} className="flex flex-wrap gap-3" disabled={isLocked}>
                     {['yes', 'no', 'some', 'unsure'].map(v => <div key={v} className="flex items-center gap-2"><RadioGroupItem value={v} id={`t6-${v}`} /><Label htmlFor={`t6-${v}`} className="capitalize text-xs font-medium">{v}</Label></div>)}
                   </RadioGroup>
+                  {renderFieldError('tenderSupplierReadiness.previousMaterialsAvailable')}
                 </div>
               </div>
 
@@ -172,8 +228,8 @@ export default function ServiceModules({ data, onChange, isLocked, allData }: Se
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-slate-100 pt-8">
-                {renderContactSelector('12A.8 Submission Approver', data.tenderSupplierReadiness?.submissionApprover, (v) => handleModuleChange('tenderSupplierReadiness', 'submissionApprover', v))}
-                {renderContactSelector('12A.9 Contract Terms Approver', data.tenderSupplierReadiness?.contractTermsApprover, (v) => handleModuleChange('tenderSupplierReadiness', 'contractTermsApprover', v))}
+                {renderContactSelector('12A.8 Submission Approver', data.tenderSupplierReadiness?.submissionApprover, (v) => handleModuleChange('tenderSupplierReadiness', 'submissionApprover', v), 'tenderSupplierReadiness.submissionApprover')}
+                {renderContactSelector('12A.9 Contract Terms Approver', data.tenderSupplierReadiness?.contractTermsApprover, (v) => handleModuleChange('tenderSupplierReadiness', 'contractTermsApprover', v), 'tenderSupplierReadiness.contractTermsApprover')}
               </div>
             </div>
           </ModuleCard>
@@ -378,7 +434,7 @@ export default function ServiceModules({ data, onChange, isLocked, allData }: Se
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-slate-100 pt-8">
                 <div className="space-y-2"><Label className="text-sm font-bold">12E.6 Quote validity period?</Label><Input value={data.quoteRequests?.quoteValidityPeriod || ''} onChange={(e) => handleModuleChange('quoteRequests', 'quoteValidityPeriod', e.target.value)} disabled={isLocked} className="rounded-xl" placeholder="e.g., 30 days" /></div>
-                {renderContactSelector('12E.7 Who approves quotes?', data.quoteRequests?.quoteApprover, (v) => handleModuleChange('quoteRequests', 'quoteApprover', v))}
+                {renderContactSelector('12E.7 Who approves quotes?', data.quoteRequests?.quoteApprover, (v) => handleModuleChange('quoteRequests', 'quoteApprover', v), 'quoteRequests.quoteApprover')}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

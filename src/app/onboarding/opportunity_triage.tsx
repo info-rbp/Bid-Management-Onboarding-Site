@@ -15,6 +15,7 @@ interface OpportunityTriageProps {
   data: any;
   onChange: (field: string, value: any) => void;
   isLocked: boolean;
+  fieldErrors?: Record<string, string>;
 }
 
 const redFlagKeywords = ['insolvent', 'bankrupt', 'dispute', 'urgent (unrealistic)', 'lowest price', 'must be cheap', 'no budget', 'exposure', 'quick question'];
@@ -31,6 +32,8 @@ export function OpportunityTriage({ data, onChange, isLocked }: OpportunityTriag
 
   return (
     <div className="space-y-8">
+      <div id="revenueThreshold" data-validation-anchor="revenueThreshold" className="sr-only" />
+      <div id="geographicalFocus" data-validation-anchor="geographicalFocus" className="sr-only" />
       <div className="space-y-4">
         <h2 className="text-4xl font-headline font-bold text-slate-900">Opportunity Triage</h2>
         <p className="text-slate-500 text-lg">Define the rules for how Bid Manager should identify and evaluate new opportunities for you.</p>

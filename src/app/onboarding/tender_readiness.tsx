@@ -32,6 +32,9 @@ export function TenderReadiness({ data, onChange, isLocked }: TenderReadinessPro
 
   return (
     <div className="space-y-8">
+      <div id="previousExperienceDetails" data-validation-anchor="previousExperienceDetails" className="sr-only" />
+      <div id="reportingObligationsDetails" data-validation-anchor="reportingObligationsDetails" className="sr-only" />
+      <div id="subcontractorManagementProcess" data-validation-anchor="subcontractorManagementProcess" className="sr-only" />
       <div className="space-y-4">
         <h2 className="text-4xl font-headline font-bold text-slate-900">Tender Readiness</h2>
         <p className="text-slate-500 text-lg">Assess your readiness for tenders, panels, supplier registrations, and procurement opportunities.</p>

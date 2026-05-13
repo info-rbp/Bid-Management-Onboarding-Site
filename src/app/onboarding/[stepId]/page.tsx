@@ -277,12 +277,23 @@ export default function OnboardingStepPage() {
   };
 
   const scrollToError = (error: ValidationError) => {
-    if (!error.anchorId) return;
-    const el = document.getElementById(error.anchorId);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      (el as HTMLElement).focus?.();
+    const candidates = [
+      error.anchorId,
+      error.fieldKey,
+      error.fieldKey?.replace(/\./g, '-'),
+    ].filter(Boolean) as string[];
+
+    for (const candidate of candidates) {
+      const el = document.getElementById(candidate);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        (el as HTMLElement).focus?.();
+        return;
+      }
     }
+
+    const summary = document.querySelector('[data-validation-summary="true"]');
+    summary?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const scrollToNextError = () => {
@@ -742,35 +753,35 @@ function StepContent({ stepId, data, allData, onChange, isLocked, submissionId, 
 
   switch (stepId) {
     case 'welcome_expectations':
-      return <WelcomeExpectations data={data} onChange={onChange} isLocked={isLocked} />;
+      return <WelcomeExpectations data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'business_snapshot':
       return <BusinessSnapshot data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'service_selection':
-      return <ServiceSelection data={data} onChange={onChange} isLocked={isLocked} />;
+      return <ServiceSelection data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'business_profile':
-      return <BusinessProfile data={data} onChange={onChange} isLocked={isLocked} allData={allData} />;
+      return <BusinessProfile data={data} onChange={onChange} isLocked={isLocked} allData={allData} fieldErrors={fieldErrors} />;
     case 'offer_menu':
       return <OfferMenu data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'team_capacity':
-      return <TeamCapacity data={data} onChange={onChange} isLocked={isLocked} />;
+      return <TeamCapacity data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'proof_evidence':
-      return <ProofEvidence data={data} onChange={onChange} isLocked={isLocked} />;
+      return <ProofEvidence data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'goals_strategy':
-      return <GoalsStrategy data={data} onChange={onChange} isLocked={isLocked} />;
+      return <GoalsStrategy data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'pricing_commercial':
-      return <PricingCommercial data={data} onChange={onChange} isLocked={isLocked} allData={allData} />;
+      return <PricingCommercial data={data} onChange={onChange} isLocked={isLocked} allData={allData} fieldErrors={fieldErrors} />;
     case 'platform_setup':
-      return <PlatformSetup data={data} onChange={onChange} isLocked={isLocked} allData={allData} />;
+      return <PlatformSetup data={data} onChange={onChange} isLocked={isLocked} allData={allData} fieldErrors={fieldErrors} />;
     case 'document_upload_library':
-      return <DocumentUploadLibrary data={data} onChange={onChange} isLocked={isLocked} submissionId={submissionId} allData={allData} />;
+      return <DocumentUploadLibrary data={data} onChange={onChange} isLocked={isLocked} submissionId={submissionId} allData={allData} fieldErrors={fieldErrors} />;
     case 'authority_matrix':
-      return <AuthorityMatrix data={data} allData={allData} onChange={onChange} isLocked={isLocked} />;
+      return <AuthorityMatrix data={data} allData={allData} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'opportunity_triage':
-      return <OpportunityTriage data={data} onChange={onChange} isLocked={isLocked} />;
+      return <OpportunityTriage data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'compliance_insurance':
-      return <ComplianceInsurance data={data} onChange={onChange} isLocked={isLocked} />;
+      return <ComplianceInsurance data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'service_modules':
-      return <ServiceModules data={data} onChange={onChange} isLocked={isLocked} allData={allData} />;
+      return <ServiceModules data={data} onChange={onChange} isLocked={isLocked} allData={allData} fieldErrors={fieldErrors} />;
     case 'tender_readiness':
       return <TenderReadiness data={data} onChange={onChange} isLocked={isLocked} />;
     case 'grants':
@@ -782,9 +793,9 @@ function StepContent({ stepId, data, allData, onChange, isLocked, submissionId, 
     case 'quote_support':
       return <QuoteSupport data={data} onChange={onChange} isLocked={isLocked} />;
     case 'workflow_rules':
-      return <WorkflowRules data={data} onChange={onChange} isLocked={isLocked} />;
+      return <WorkflowRules data={data} onChange={onChange} isLocked={isLocked} fieldErrors={fieldErrors} />;
     case 'final_submission':
-      return <FinalSubmission data={data} allData={allData} onChange={onChange} isLocked={isLocked} onEdit={onEdit} onSubmit={onSubmit} />;
+      return <FinalSubmission data={data} allData={allData} onChange={onChange} isLocked={isLocked} onEdit={onEdit} onSubmit={onSubmit} fieldErrors={fieldErrors} />;
     default:
       return (
         <div className="py-20 text-center space-y-6">

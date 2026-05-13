@@ -17,6 +17,7 @@ interface WorkflowRulesProps {
   data: any;
   onChange: (field: string, value: any) => void;
   isLocked: boolean;
+  fieldErrors?: Record<string, string>;
   allData?: any;
 }
 

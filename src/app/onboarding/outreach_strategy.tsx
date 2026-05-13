@@ -66,6 +66,7 @@ export function OutreachStrategy({ data, onChange, isLocked }: OutreachStrategyP
 
   return (
     <div className="space-y-8">
+      <div id="otherOutreachChannel" data-validation-anchor="otherOutreachChannel" className="sr-only" />
       <div className="space-y-4">
         <h2 className="text-4xl font-headline font-bold text-slate-900">Outreach Strategy</h2>
         <p className="text-slate-500 text-lg">Define your strategy for direct proposals, outreach, referrals, and target accounts.</p>
