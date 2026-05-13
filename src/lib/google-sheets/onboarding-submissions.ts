@@ -221,7 +221,7 @@ function toReadableLabel(value: string): string {
     .replace(/^./, (char) => char.toUpperCase());
 }
 
-function columnLetter(columnNumber: number): string {
+export function columnLetter(columnNumber: number): string {
   let dividend = columnNumber;
   let columnName = '';
 
@@ -234,7 +234,7 @@ function columnLetter(columnNumber: number): string {
   return columnName;
 }
 
-function quoteSheetName(sheetName: string): string {
+export function quoteSheetName(sheetName: string): string {
   return `'${sheetName.replace(/'/g, "''")}'`;
 }
 
@@ -317,7 +317,7 @@ async function ensureHeaders(params: {
   });
 }
 
-function buildSummaryRow(params: {
+export function buildSummaryRow(params: {
   submissionId: string;
   data: OnboardingSubmissionData;
 }): string[] {
@@ -435,7 +435,7 @@ function flattenAnswerValue(params: {
   ]);
 }
 
-function buildAnswerRows(params: {
+export function buildAnswerRows(params: {
   submissionId: string;
   data: OnboardingSubmissionData;
 }): string[][] {
@@ -505,6 +505,133 @@ function buildAnswerRows(params: {
   return rows;
 }
 
+export function sortRowIndexesDescending(rowIndexes: number[]) {
+  return [...rowIndexes].sort((a, b) => b - a);
+}
+
+async function getSheetId(params: {
+  sheets: sheets_v4.Sheets;
+  spreadsheetId: string;
+  sheetName: string;
+}) {
+  const { sheets, spreadsheetId, sheetName } = params;
+
+  const spreadsheet = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: 'sheets.properties',
+  });
+
+  const sheet = spreadsheet.data.sheets?.find(
+    (sheetData) => sheetData.properties?.title === sheetName
+  );
+
+  if (!sheet?.properties?.sheetId) {
+    throw new Error(`Sheet tab not found: ${sheetName}`);
+  }
+
+  return sheet.properties.sheetId;
+}
+
+export async function findRowsByColumnValue(params: {
+  sheets: sheets_v4.Sheets;
+  spreadsheetId: string;
+  sheetName: string;
+  columnIndex: number;
+  value: string;
+  startRow?: number;
+}) {
+  const {
+    sheets,
+    spreadsheetId,
+    sheetName,
+    columnIndex,
+    value,
+    startRow = 2,
+  } = params;
+
+  await ensureSheetExists({
+    sheets,
+    spreadsheetId,
+    sheetName,
+  });
+
+  const columnLetterValue = columnLetter(columnIndex);
+  const range = `${quoteSheetName(sheetName)}!${columnLetterValue}${startRow}:${columnLetterValue}`;
+
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range,
+  });
+
+  const values = response.data.values || [];
+
+  return values
+    .map((row, index) => ({
+      rowIndex: startRow + index,
+      cellValue: String(row[0] ?? '').trim(),
+    }))
+    .filter((item) => item.cellValue === value)
+    .map((item) => item.rowIndex);
+}
+
+export async function updateRow(params: {
+  sheets: sheets_v4.Sheets;
+  spreadsheetId: string;
+  sheetName: string;
+  headers: string[];
+  rowIndex: number;
+  rowValues: string[];
+}) {
+  const { sheets, spreadsheetId, sheetName, headers, rowIndex, rowValues } = params;
+  const lastColumn = columnLetter(headers.length);
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${quoteSheetName(sheetName)}!A${rowIndex}:${lastColumn}${rowIndex}`,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: {
+      values: [rowValues],
+    },
+  });
+}
+
+export async function deleteRowsByIndexes(params: {
+  sheets: sheets_v4.Sheets;
+  spreadsheetId: string;
+  sheetName: string;
+  rowIndexes: number[];
+}) {
+  const { sheets, spreadsheetId, sheetName, rowIndexes } = params;
+
+  if (rowIndexes.length === 0) {
+    return;
+  }
+
+  const sheetId = await getSheetId({
+    sheets,
+    spreadsheetId,
+    sheetName,
+  });
+
+  const requests = sortRowIndexesDescending(rowIndexes).map((rowIndex) => ({
+    deleteDimension: {
+      range: {
+        sheetId,
+        dimension: 'ROWS',
+        startIndex: rowIndex - 1,
+        endIndex: rowIndex,
+      },
+    },
+  }));
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests,
+    },
+  });
+}
+
 async function appendRows(params: {
   sheets: sheets_v4.Sheets;
   spreadsheetId: string;
@@ -538,10 +665,10 @@ async function appendRows(params: {
   });
 }
 
-export async function appendOnboardingSubmissionToSheet(params: {
+export async function syncOnboardingSubmissionToSheet(params: {
   submissionId: string;
   data: OnboardingSubmissionData;
-}): Promise<SheetAppendResult> {
+}) {
   const spreadsheetId = process.env.ONBOARDING_SUBMISSIONS_SPREADSHEET_ID;
 
   if (!spreadsheetId) {
@@ -563,12 +690,64 @@ export async function appendOnboardingSubmissionToSheet(params: {
   const summaryRow = buildSummaryRow(params);
   const answerRows = buildAnswerRows(params);
 
-  await appendRows({
+  await ensureHeaders({
     sheets,
     spreadsheetId,
     sheetName: SUMMARY_SHEET_NAME,
     headers: SUMMARY_HEADERS,
-    rows: [summaryRow],
+  });
+
+  await ensureHeaders({
+    sheets,
+    spreadsheetId,
+    sheetName: ANSWERS_SHEET_NAME,
+    headers: ANSWER_HEADERS,
+  });
+
+  const existingSummaryRows = await findRowsByColumnValue({
+    sheets,
+    spreadsheetId,
+    sheetName: SUMMARY_SHEET_NAME,
+    columnIndex: 3,
+    value: params.submissionId,
+    startRow: 2,
+  });
+
+  const summaryAction = existingSummaryRows.length > 0 ? 'updated' : 'created';
+
+  if (existingSummaryRows.length > 0) {
+    await updateRow({
+      sheets,
+      spreadsheetId,
+      sheetName: SUMMARY_SHEET_NAME,
+      headers: SUMMARY_HEADERS,
+      rowIndex: existingSummaryRows[0],
+      rowValues: summaryRow,
+    });
+  } else {
+    await appendRows({
+      sheets,
+      spreadsheetId,
+      sheetName: SUMMARY_SHEET_NAME,
+      headers: SUMMARY_HEADERS,
+      rows: [summaryRow],
+    });
+  }
+
+  const existingAnswerRows = await findRowsByColumnValue({
+    sheets,
+    spreadsheetId,
+    sheetName: ANSWERS_SHEET_NAME,
+    columnIndex: 3,
+    value: params.submissionId,
+    startRow: 2,
+  });
+
+  await deleteRowsByIndexes({
+    sheets,
+    spreadsheetId,
+    sheetName: ANSWERS_SHEET_NAME,
+    rowIndexes: existingAnswerRows,
   });
 
   await appendRows({
@@ -581,7 +760,25 @@ export async function appendOnboardingSubmissionToSheet(params: {
 
   return {
     skipped: false,
-    summaryRowsAppended: 1,
+    summaryAction,
+    answerRowsDeleted: existingAnswerRows.length,
     answerRowsAppended: answerRows.length,
+  };
+}
+
+export async function appendOnboardingSubmissionToSheet(params: {
+  submissionId: string;
+  data: OnboardingSubmissionData;
+}): Promise<SheetAppendResult> {
+  const result = await syncOnboardingSubmissionToSheet(params);
+
+  if (result.skipped) {
+    return result;
+  }
+
+  return {
+    skipped: false,
+    summaryRowsAppended: result.summaryAction === 'created' ? 1 : 0,
+    answerRowsAppended: result.answerRowsAppended,
   };
 }

@@ -379,6 +379,96 @@ async function getExistingSubmissionIdsFromSheet(sheets, sheetName) {
   );
 }
 
+export function sortRowIndexesDescending(rowIndexes) {
+  return [...rowIndexes].sort((a, b) => b - a);
+}
+
+async function updateRow(sheets, sheetName, headers, rowIndex, rowValues) {
+  const lastColumn = columnLetter(headers.length);
+
+  if (DRY_RUN) {
+    console.log(
+      `[DRY RUN] Would update row ${rowIndex} in ${sheetName} with:`,
+      rowValues
+    );
+    return;
+  }
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${quoteSheetName(sheetName)}!A${rowIndex}:${lastColumn}${rowIndex}`,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: {
+      values: [rowValues],
+    },
+  });
+}
+
+async function deleteRowsByIndexes(sheets, sheetName, rowIndexes) {
+  if (rowIndexes.length === 0) {
+    return;
+  }
+
+  const sheetId = await getSheetId(sheets, sheetName);
+  const requests = sortRowIndexesDescending(rowIndexes).map((rowIndex) => ({
+    deleteDimension: {
+      range: {
+        sheetId,
+        dimension: 'ROWS',
+        startIndex: rowIndex - 1,
+        endIndex: rowIndex,
+      },
+    },
+  }));
+
+  if (DRY_RUN) {
+    console.log(`[DRY RUN] Would delete ${rowIndexes.length} row(s) from ${sheetName}.`);
+    return;
+  }
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    requestBody: {
+      requests,
+    },
+  });
+}
+
+async function findRowsByColumnValue(sheets, sheetName, columnIndex, value, startRow = 2) {
+  const columnLetterValue = columnLetter(columnIndex);
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${quoteSheetName(sheetName)}!${columnLetterValue}${startRow}:${columnLetterValue}`,
+  });
+
+  const values = response.data.values || [];
+
+  return values
+    .map((row, index) => ({
+      rowIndex: startRow + index,
+      cellValue: String(row[0] ?? '').trim(),
+    }))
+    .filter((item) => item.cellValue === value)
+    .map((item) => item.rowIndex);
+}
+
+async function getSheetId(sheets, sheetName) {
+  const spreadsheet = await sheets.spreadsheets.get({
+    spreadsheetId: SPREADSHEET_ID,
+    fields: 'sheets.properties',
+  });
+
+  const sheet = spreadsheet.data.sheets?.find(
+    (sheetData) => sheetData.properties?.title === sheetName
+  );
+
+  if (!sheet?.properties?.sheetId) {
+    throw new Error(`Sheet tab not found: ${sheetName}`);
+  }
+
+  return sheet.properties.sheetId;
+}
+
 function buildSummaryRow(submissionId, data) {
   return [
     toSheetDate(data.createdAt),
@@ -608,114 +698,91 @@ async function main() {
   await ensureHeaders(sheets, SUMMARY_SHEET_NAME, SUMMARY_HEADERS);
   await ensureHeaders(sheets, ANSWERS_SHEET_NAME, ANSWER_HEADERS);
 
-  const existingSummarySubmissionIds = await getExistingSubmissionIdsFromSheet(
-    sheets,
-    SUMMARY_SHEET_NAME
-  );
-
-  const existingAnswerSubmissionIds = await getExistingSubmissionIdsFromSheet(
-    sheets,
-    ANSWERS_SHEET_NAME
-  );
-
-  console.log(
-    `Found ${existingSummarySubmissionIds.size} submission ID(s) already in ${SUMMARY_SHEET_NAME}.`
-  );
-
-  console.log(
-    `Found ${existingAnswerSubmissionIds.size} submission ID(s) already in ${ANSWERS_SHEET_NAME}.`
-  );
-
   const snapshot = await db.collection('onboardingSubmissions').get();
 
   console.log(`Found ${snapshot.size} onboarding submission(s) in Firestore.`);
 
-  let summaryRowsPrepared = 0;
-  let answerRowsPrepared = 0;
+  let summaryCreated = 0;
+  let summaryUpdated = 0;
+  let totalAnswerRowsDeleted = 0;
+  let totalAnswerRowsAppended = 0;
   let submissionsMarkedAsSynced = 0;
-  let skippedSummaryAlreadyInSheet = 0;
-  let skippedAnswersAlreadyInSheet = 0;
-  let skippedNoSections = 0;
 
   for (const docSnapshot of snapshot.docs) {
     const submissionId = docSnapshot.id;
     const data = docSnapshot.data();
 
-    const summaryRows = [];
-    const answerRows = [];
+    const summaryRow = buildSummaryRow(submissionId, data);
+    const answerRows = buildAnswerRows(submissionId, data);
 
-    if (existingSummarySubmissionIds.has(submissionId)) {
-      skippedSummaryAlreadyInSheet += 1;
-      console.log(
-        `Skipping summary for ${submissionId}: already exists in ${SUMMARY_SHEET_NAME}.`
-      );
-    } else {
-      summaryRows.push(buildSummaryRow(submissionId, data));
-    }
+    const existingSummaryRowIndexes = await findRowsByColumnValue(
+      sheets,
+      SUMMARY_SHEET_NAME,
+      3,
+      submissionId,
+      2
+    );
 
-    if (existingAnswerSubmissionIds.has(submissionId)) {
-      skippedAnswersAlreadyInSheet += 1;
-      console.log(
-        `Skipping answers for ${submissionId}: already exists in ${ANSWERS_SHEET_NAME}.`
-      );
-    } else {
-      const builtAnswerRows = buildAnswerRows(submissionId, data);
+    const existingAnswerRowIndexes = await findRowsByColumnValue(
+      sheets,
+      ANSWERS_SHEET_NAME,
+      3,
+      submissionId,
+      2
+    );
 
-      if (builtAnswerRows.length === 0) {
-        skippedNoSections += 1;
-        console.log(
-          `No section answers found for ${submissionId}; nothing to append to ${ANSWERS_SHEET_NAME}.`
-        );
+    const summaryAction = existingSummaryRowIndexes.length > 0 ? 'updated' : 'created';
+
+    if (DRY_RUN) {
+      if (summaryAction === 'created') {
+        console.log(`[DRY RUN] Would append summary for ${submissionId}.`);
       } else {
-        answerRows.push(...builtAnswerRows);
-      }
-    }
-
-    if (DRY_RUN) {
-      if (summaryRows.length > 0) {
-        console.log(`[DRY RUN] Would append summary for ${submissionId}:`, summaryRows[0]);
+        console.log(`[DRY RUN] Would update summary row ${existingSummaryRowIndexes[0]} for ${submissionId}.`);
       }
 
-      if (answerRows.length > 0) {
+      if (existingAnswerRowIndexes.length > 0) {
         console.log(
-          `[DRY RUN] Would append ${answerRows.length} answer row(s) for ${submissionId}.`
+          `[DRY RUN] Would delete ${existingAnswerRowIndexes.length} existing answer row(s) for ${submissionId}.`
         );
       }
-    } else {
-      await appendRowsToSheet(sheets, SUMMARY_SHEET_NAME, SUMMARY_HEADERS, summaryRows);
-      await appendRowsToSheet(sheets, ANSWERS_SHEET_NAME, ANSWER_HEADERS, answerRows);
-
-      if (summaryRows.length > 0) {
-        existingSummarySubmissionIds.add(submissionId);
-        summaryRowsPrepared += summaryRows.length;
-      }
 
       if (answerRows.length > 0) {
-        existingAnswerSubmissionIds.add(submissionId);
-        answerRowsPrepared += answerRows.length;
+        console.log(`[DRY RUN] Would append ${answerRows.length} answer row(s) for ${submissionId}.`);
       }
 
-      if (summaryRows.length > 0 || answerRows.length > 0) {
-        await markSubmissionAsSynced(docSnapshot.ref);
-        submissionsMarkedAsSynced += 1;
-      }
+      continue;
     }
 
-    if (DRY_RUN) {
-      summaryRowsPrepared += summaryRows.length;
-      answerRowsPrepared += answerRows.length;
+    if (summaryAction === 'updated') {
+      await updateRow(sheets, SUMMARY_SHEET_NAME, SUMMARY_HEADERS, existingSummaryRowIndexes[0], summaryRow);
+      summaryUpdated += 1;
+    } else {
+      await appendRowsToSheet(sheets, SUMMARY_SHEET_NAME, SUMMARY_HEADERS, [summaryRow]);
+      summaryCreated += 1;
     }
+
+    if (existingAnswerRowIndexes.length > 0) {
+      await deleteRowsByIndexes(sheets, ANSWERS_SHEET_NAME, existingAnswerRowIndexes);
+      totalAnswerRowsDeleted += existingAnswerRowIndexes.length;
+    }
+
+    if (answerRows.length > 0) {
+      await appendRowsToSheet(sheets, ANSWERS_SHEET_NAME, ANSWER_HEADERS, answerRows);
+      totalAnswerRowsAppended += answerRows.length;
+    }
+
+    await markSubmissionAsSynced(docSnapshot.ref);
+    submissionsMarkedAsSynced += 1;
   }
 
   console.log('Backfill complete.');
   console.log({
     firestoreSubmissionsFound: snapshot.size,
-    summaryRowsPrepared,
-    answerRowsPrepared,
+    summaryCreated,
+    summaryUpdated,
+    totalAnswerRowsDeleted,
+    totalAnswerRowsAppended,
     submissionsMarkedAsSynced: DRY_RUN ? 0 : submissionsMarkedAsSynced,
-    skippedSummaryAlreadyInSheet,
-    skippedAnswersAlreadyInSheet,
-    skippedNoSections,
     dryRun: DRY_RUN,
   });
 }
