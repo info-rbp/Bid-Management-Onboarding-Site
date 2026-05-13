@@ -79,17 +79,15 @@ function AuthContent() {
 
       await setDoc(doc(db, 'users', user.uid), userData);
 
-      // Trigger Email Notification API
+      const idToken = await user.getIdToken();
+
       fetch('/api/notifications/signup', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            fullName,
-            businessName,
-            email,
-            billingAddress
-        })
-      }).catch(err => console.error("Email notification failed", err));
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+      }).catch((err) => console.error('Email notification failed', err));
 
       router.push('/onboarding/welcome_expectations');
     } catch (error: any) {
