@@ -9,16 +9,28 @@ interface FirebaseClientProviderProps {
 }
 
 export function FirebaseClientProvider({ children }: FirebaseClientProviderProps) {
-  const firebaseServices = useMemo(() => {
-    // Initialize Firebase on the client side, once per component mount.
-    return initializeFirebase();
-  }, []); // Empty dependency array ensures this runs only once on mount
+  const firebaseState = useMemo(() => {
+    try {
+      const services = initializeFirebase();
+      return { ...services, initializationError: null as Error | null };
+    } catch (error) {
+      const initializationError = error instanceof Error ? error : new Error('Unknown Firebase initialization error.');
+      console.error('FirebaseClientProvider: Firebase initialization failed. Continuing without Firebase services.', initializationError);
+      return {
+        firebaseApp: null,
+        auth: null,
+        firestore: null,
+        initializationError,
+      };
+    }
+  }, []);
 
   return (
     <FirebaseProvider
-      firebaseApp={firebaseServices.firebaseApp}
-      auth={firebaseServices.auth}
-      firestore={firebaseServices.firestore}
+      firebaseApp={firebaseState.firebaseApp}
+      auth={firebaseState.auth}
+      firestore={firebaseState.firestore}
+      initializationError={firebaseState.initializationError}
     >
       {children}
     </FirebaseProvider>

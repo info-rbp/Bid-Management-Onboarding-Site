@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useAuth, useFirestore } from '@/firebase';
+import { useOptionalAuth, useOptionalFirestore, useUser } from '@/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -18,12 +18,22 @@ import Link from 'next/link';
 import { getSafeReturnUrl } from '@/lib/auth-return-url';
 
 function AuthContent() {
-  const auth = useAuth();
-  const db = useFirestore();
+  const auth = useOptionalAuth();
+  const db = useOptionalFirestore();
+  const { areServicesAvailable, initializationError } = useUser();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+
+
+  if (!areServicesAvailable || !auth || !db) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 text-center"> 
+        {initializationError?.message || 'Authentication temporarily unavailable.'}
+      </div>
+    );
+  }
 
   const returnUrl = getSafeReturnUrl(searchParams.get('returnUrl'));
 

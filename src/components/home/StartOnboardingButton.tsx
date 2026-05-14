@@ -7,11 +7,19 @@ import { useUser } from '@/firebase';
 import { useRouter } from 'next/navigation';
 
 export function StartOnboardingButton() {
-  const { user, isUserLoading } = useUser();
+  const { user, isUserLoading, areServicesAvailable, initializationError } = useUser();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   const handleClick = async () => {
+    if (!areServicesAvailable) {
+      if (initializationError) {
+        console.warn('StartOnboardingButton: Firebase unavailable, falling back to /auth.', initializationError);
+      }
+      router.push('/auth');
+      return;
+    }
+
     if (isUserLoading || loading) return;
 
     if (!user) {
@@ -23,7 +31,6 @@ export function StartOnboardingButton() {
 
     try {
       const idToken = await user.getIdToken();
-
       const response = await fetch('/api/onboarding-submissions/start', {
         method: 'POST',
         headers: {
@@ -31,13 +38,8 @@ export function StartOnboardingButton() {
           'Content-Type': 'application/json',
         },
       });
-
       const result = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        throw new Error(result?.error || 'Unable to start onboarding.');
-      }
-
+      if (!response.ok) throw new Error(result?.error || 'Unable to start onboarding.');
       router.push(result?.route || '/onboarding/welcome_expectations');
     } catch (error) {
       console.error('Error initiating onboarding:', error);
@@ -52,9 +54,9 @@ export function StartOnboardingButton() {
       size="lg"
       onClick={handleClick}
       className="bg-primary text-white h-14 px-10 rounded-xl text-lg group shadow-lg shadow-primary/20"
-      disabled={loading || isUserLoading}
+      disabled={loading || (areServicesAvailable && isUserLoading)}
     >
-      {loading || isUserLoading ? (
+      {loading || (areServicesAvailable && isUserLoading) ? (
         <Loader2 className="animate-spin w-5 h-5" />
       ) : (
         <>

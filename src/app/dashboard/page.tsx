@@ -20,9 +20,9 @@ import {
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
-  useAuth,
+  useOptionalAuth,
   useUser,
-  useFirestore,
+  useOptionalFirestore,
   useDoc,
   useMemoFirebase,
   useCollection,
@@ -48,11 +48,18 @@ const ACTIVE_ONBOARDING_STATUSES = [
 ];
 
 export default function DashboardPage() {
-  const auth = useAuth();
-  const { user } = useUser();
-  const db = useFirestore();
+  const auth = useOptionalAuth();
+  const { user, areServicesAvailable, initializationError } = useUser();
+  const db = useOptionalFirestore();
   const router = useRouter();
   const [isStarting, setIsStarting] = useState(false);
+
+
+  if (!areServicesAvailable || !db) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 text-center">{initializationError?.message || 'Authentication temporarily unavailable.'}</div>
+    );
+  }
 
   const userDocRef = useMemoFirebase(() => {
     if (!user || !db) return null;
@@ -86,7 +93,7 @@ export default function DashboardPage() {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      if (auth) await signOut(auth);
       router.push('/');
     } catch (error) {
       console.error('Logout failed', error);

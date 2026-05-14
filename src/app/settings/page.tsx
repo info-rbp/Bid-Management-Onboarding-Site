@@ -16,7 +16,7 @@ import {
   Save,
   Loader2
 } from 'lucide-react';
-import { useAuth, useFirestore, useUser } from '@/firebase';
+import { useOptionalAuth, useOptionalFirestore, useUser } from '@/firebase';
 import { signOut } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
@@ -24,9 +24,9 @@ import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
 export default function SettingsPage() {
-  const auth = useAuth();
-  const db = useFirestore();
-  const { user, isUserLoading } = useUser();
+  const auth = useOptionalAuth();
+  const db = useOptionalFirestore();
+  const { user, isUserLoading, areServicesAvailable, initializationError } = useUser();
   const router = useRouter();
   const { toast } = useToast();
   
@@ -39,7 +39,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     async function fetchProfile() {
-      if (user) {
+      if (user && db) {
         const docRef = doc(db, 'users', user.uid);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
@@ -57,7 +57,7 @@ export default function SettingsPage() {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      if (auth) await signOut(auth);
       router.push('/');
     } catch (error) {
       console.error("Logout failed", error);
@@ -65,7 +65,7 @@ export default function SettingsPage() {
   };
 
   const handleSave = async () => {
-    if (!user) return;
+    if (!user || !db) return;
     setLoading(true);
     try {
       const docRef = doc(db, 'users', user.uid);
@@ -88,6 +88,11 @@ export default function SettingsPage() {
       setLoading(false);
     }
   };
+
+
+  if (!areServicesAvailable) {
+    return <div className="flex h-screen items-center justify-center p-6 text-center">{initializationError?.message || 'Authentication temporarily unavailable.'}</div>;
+  }
 
   if (isUserLoading) return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-primary" /></div>;
 
