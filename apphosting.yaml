@@ -1,3 +1,7 @@
+# Note: Firebase client web config is usually auto-injected when App Hosting is linked
+# to the correct Firebase Web App. If auto-injection is unavailable, configure
+# NEXT_PUBLIC_FIREBASE_* variables in the hosting environment and redeploy.
+
 # Settings for Backend (on Cloud Run).
 runConfig:
   minInstances: 0

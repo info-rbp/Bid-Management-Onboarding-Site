@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { useAuth, useUser, useFirestore } from '@/firebase';
+import { useUser, useOptionalAuth, useOptionalFirestore } from '@/firebase';
 import { useRouter, usePathname } from 'next/navigation';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
@@ -23,9 +23,9 @@ type RepairError = {
  * Subscription gating has been disabled as per user request.
  */
 export function AuthGuard({ children }: AuthGuardProps) {
-  const auth = useAuth();
-  const { user, isUserLoading } = useUser();
-  const db = useFirestore();
+  const auth = useOptionalAuth();
+  const { user, isUserLoading, areServicesAvailable, initializationError } = useUser();
+  const db = useOptionalFirestore();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -130,10 +130,46 @@ export function AuthGuard({ children }: AuthGuardProps) {
   };
 
   const handleSignOut = async () => {
-    await signOut(auth);
+    if (auth) {
+      await signOut(auth);
+    }
     router.push('/auth');
   };
 
+
+  if (!areServicesAvailable) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-[#F8FAFC] p-6">
+        <Card className="w-full max-w-lg border-none shadow-xl rounded-3xl">
+          <CardHeader className="space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <CardTitle>Authentication temporarily unavailable</CardTitle>
+            <CardDescription>
+              The application could not load the Firebase client configuration.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {initializationError?.message && (
+              <div className="rounded-2xl bg-slate-50 border p-4 text-sm text-slate-600 break-words">
+                {initializationError.message}
+              </div>
+            )}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button onClick={() => window.location.reload()} className="gap-2 rounded-xl">
+                <RefreshCw className="w-4 h-4" />
+                Retry
+              </Button>
+              <Button type="button" variant="outline" onClick={() => router.push('/')} className="rounded-xl">
+                Return home
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
   if (isUserLoading || isVerifying) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center gap-4 bg-[#F8FAFC]">
