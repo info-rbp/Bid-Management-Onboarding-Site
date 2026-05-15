@@ -94,6 +94,7 @@ export default function OnboardingStepPage() {
   const [formData, setFormData] = useState<any>({});
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
 
@@ -340,7 +341,7 @@ export default function OnboardingStepPage() {
     setFormData((prev: any) => ({ ...prev, [field]: value }));
   };
 
-  const handleNavigate = (targetStepKey: string) => {
+  const handleNavigate = async (targetStepKey: string) => {
     if (targetStepKey === stepId) return;
 
     const targetStep = visibleSteps.find((s) => s.key === targetStepKey);
@@ -355,18 +356,24 @@ export default function OnboardingStepPage() {
 
       updateData[`sections.${stepId}`] = formData;
 
-      updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData).catch(
-        () => {
-          errorEmitter.emit(
-            'permission-error',
-            new FirestorePermissionError({
-              path: `onboardingSubmissions/${submissionId}`,
-              operation: 'update',
-              requestResourceData: updateData,
-            })
-          );
-        }
-      );
+      try {
+        setIsSaving(true);
+        await updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
+      } catch {
+        setSaveStatus('error');
+        toast({ variant: 'destructive', title: 'Save failed', description: 'Please retry before leaving this section.' });
+        errorEmitter.emit(
+          'permission-error',
+          new FirestorePermissionError({
+            path: `onboardingSubmissions/${submissionId}`,
+            operation: 'update',
+            requestResourceData: updateData,
+          })
+        );
+        return;
+      } finally {
+        setIsSaving(false);
+      }
     }
 
     initialSyncDone.current[targetStepKey] = false;
@@ -407,7 +414,7 @@ export default function OnboardingStepPage() {
     }
   };
 
-  const handleSave = (direction: 'next' | 'prev' | 'stay' = 'stay') => {
+  const handleSave = async (direction: 'next' | 'prev' | 'stay' = 'stay') => {
     if (!submissionId || !db || !currentStep || isLocked) {
       if (direction === 'next' && currentVisibleIndex < visibleSteps.length - 1) {
         router.push(visibleSteps[currentVisibleIndex + 1].route);
@@ -434,7 +441,7 @@ export default function OnboardingStepPage() {
           )
         );
 
-        updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
+        await updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
 
         setTimeout(() => scrollToNextError(), 0);
         return;
@@ -610,25 +617,28 @@ export default function OnboardingStepPage() {
     }
 
     setSaveStatus('saving');
+    setIsSaving(true);
 
-    updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData)
-      .then(() => {
-        setSaveStatus('saved');
-        setLastSavedTime(new Date());
-        lastSavedDataRef.current = JSON.stringify(formData);
-      })
-      .catch(() => {
-        setSaveStatus('error');
-
-        errorEmitter.emit(
-          'permission-error',
-          new FirestorePermissionError({
-            path: `onboardingSubmissions/${submissionId}`,
-            operation: 'update',
-            requestResourceData: updateData,
-          })
-        );
-      });
+    try {
+      await updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
+      setSaveStatus('saved');
+      setLastSavedTime(new Date());
+      lastSavedDataRef.current = JSON.stringify(formData);
+    } catch {
+      setSaveStatus('error');
+      errorEmitter.emit(
+        'permission-error',
+        new FirestorePermissionError({
+          path: `onboardingSubmissions/${submissionId}`,
+          operation: 'update',
+          requestResourceData: updateData,
+        })
+      );
+      toast({ variant: 'destructive', title: 'Save failed', description: 'Please fix the issue and try again.' });
+      return;
+    } finally {
+      setIsSaving(false);
+    }
 
     if (direction !== 'stay' && postSaveNavigation) {
       const nextStep = visibleSteps.find((s) => s.key === targetStepKey);
@@ -712,7 +722,6 @@ export default function OnboardingStepPage() {
           submission.sectionStatuses?.final_submission,
           'complete'
         ),
-        completionPercentage: 100,
       };
 
       await updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
@@ -735,9 +744,10 @@ export default function OnboardingStepPage() {
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to finalize submission');
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok && !result?.alreadySubmitted) {
+        throw new Error(result?.error || 'Failed to finalize submission');
       }
 
       toast({
@@ -745,7 +755,8 @@ export default function OnboardingStepPage() {
         description: 'Your onboarding pack has been submitted successfully.',
       });
 
-      router.push(`/onboarding/submitted?id=${submissionId}`);
+      router.replace(`/onboarding/submitted?id=${submissionId}`);
+      router.refresh();
     } catch (error: any) {
       toast({
         variant: "destructive",
