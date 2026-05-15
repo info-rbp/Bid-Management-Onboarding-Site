@@ -252,7 +252,7 @@ async function ensureSheetExists(params: {
 
   const existingSheetTitles =
     spreadsheet.data.sheets
-      ?.map((sheet) => sheet.properties?.title)
+      ?.map((sheet: sheets_v4.Schema$Sheet) => sheet.properties?.title)
       .filter(Boolean) || [];
 
   if (existingSheetTitles.includes(sheetName)) {
@@ -522,7 +522,7 @@ async function getSheetId(params: {
   });
 
   const sheet = spreadsheet.data.sheets?.find(
-    (sheetData) => sheetData.properties?.title === sheetName
+    (sheetData: sheets_v4.Schema$Sheet) => sheetData.properties?.title === sheetName
   );
 
   if (!sheet?.properties?.sheetId) {
@@ -563,15 +563,15 @@ export async function findRowsByColumnValue(params: {
     range,
   });
 
-  const values = response.data.values || [];
+  const values: unknown[][] = response.data.values || [];
 
   return values
-    .map((row, index) => ({
+    .map((row: unknown[], index: number) => ({
       rowIndex: startRow + index,
       cellValue: String(row[0] ?? '').trim(),
     }))
-    .filter((item) => item.cellValue === value)
-    .map((item) => item.rowIndex);
+    .filter((item: { rowIndex: number; cellValue: string }) => item.cellValue === value)
+    .map((item: { rowIndex: number; cellValue: string }) => item.rowIndex);
 }
 
 export async function updateRow(params: {
@@ -696,10 +696,8 @@ export async function syncOnboardingSubmissionToSheet(params: {
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
 
-  const sheets = google.sheets({
-    version: 'v4',
-    auth,
-  });
+  google.options({ auth });
+  const sheets = google.sheets('v4');
 
   const summaryRow = buildSummaryRow(params);
   const answerRows = buildAnswerRows(params);

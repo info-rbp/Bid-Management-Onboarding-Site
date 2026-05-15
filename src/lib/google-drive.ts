@@ -1,8 +1,10 @@
-import { google } from 'googleapis';
+import { google, drive_v3 } from 'googleapis';
 
 const SCOPES = ['https://www.googleapis.com/auth/drive.file'];
 const FOLDER_NAME_MAX_LENGTH = 120;
 const DEFAULT_BUSINESS_NAME = 'Unknown Business';
+
+type DriveFileResponse = { data: drive_v3.Schema$File };
 
 export const getDriveService = () => {
   const auth = new google.auth.GoogleAuth({
@@ -13,7 +15,9 @@ export const getDriveService = () => {
     scopes: SCOPES,
   });
 
-  return google.drive({ version: 'v3', auth });
+  google.options({ auth });
+
+  return google.drive('v3');
 };
 
 export function sanitizeDriveFolderName(value: string): string {
@@ -86,10 +90,10 @@ export const createFolder = async (folderName: string, parentId?: string) => {
     parents: parentId ? [parentId] : [],
   };
 
-  const file = await drive.files.create({
+  const file = await (drive.files.create({
     requestBody: fileMetadata,
     fields: 'id, webViewLink',
-  });
+  } as any) as unknown as Promise<DriveFileResponse>);
 
   return file.data;
 };
@@ -110,11 +114,11 @@ export const uploadFileToDrive = async (
     body,
   };
 
-  const file = await drive.files.create({
+  const file = await (drive.files.create({
     requestBody: fileMetadata,
     media: media,
     fields: 'id',
-  });
+  } as any) as unknown as Promise<DriveFileResponse>);
 
   return file.data;
 };

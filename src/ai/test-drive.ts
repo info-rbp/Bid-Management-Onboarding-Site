@@ -27,7 +27,8 @@ async function testDrive() {
       scopes: ['https://www.googleapis.com/auth/drive.file'],
     });
 
-    const drive = google.drive({ version: 'v3', auth });
+    google.options({ auth });
+    const drive = google.drive('v3');
     
     console.log('Attempting to list files (testing authentication)...');
     const response = await drive.files.list({

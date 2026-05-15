@@ -1,4 +1,3 @@
-
 export type ValidationError = {
   fieldKey: string;
   fieldLabel: string;
@@ -75,6 +74,11 @@ export const snapshotFieldLabels: Record<string, string> = {
   'quoteRequests.canPrepareDraftQuotes': '12E.8 Prepare Drafts',
   'quoteRequests.canSendQuotesUnderThreshold': '12E.9 Send Under Threshold',
 };
+
+const marketplaceFallbackSuitableServiceValues = [
+  '__need_help_defining__',
+  '__offer_menu_pending__',
+];
 
 const toError = (fieldKey: string, message: string, section = 'general', anchorId?: string): ValidationError => ({
   fieldKey,
@@ -373,8 +377,36 @@ export function validateOnboardingSection(stepId: string, data: any, allData?: a
 
         if (selectedServices.includes('marketplace_leads')) {
             const m = data.marketplaceLeads || {};
+            const offerItems = allData?.sections?.offer_menu?.offerItems || [];
+            const validOfferIds = Array.isArray(offerItems)
+              ? offerItems
+                  .map((offer: any) => offer?.id)
+                  .filter((id: unknown): id is string => typeof id === 'string' && id.trim().length > 0)
+              : [];
+            const selectedSuitableServices = Array.isArray(m.suitableServices)
+              ? m.suitableServices.filter((value: unknown): value is string => typeof value === 'string')
+              : [];
+
             if (!m.openMarketplacePlatforms || m.openMarketplacePlatforms.length === 0) result.missingFields.push(toError('marketplaceLeads.openMarketplacePlatforms', '12C.1 Platforms is required', section));
-            if (!m.suitableServices || m.suitableServices.length === 0) result.missingFields.push(toError('marketplaceLeads.suitableServices', '12C.2 Suitable Services is required', section));
+
+            if (validOfferIds.length === 0) {
+              const hasAllowedFallback = selectedSuitableServices.some((value: string) =>
+                marketplaceFallbackSuitableServiceValues.includes(value)
+              );
+
+              if (!hasAllowedFallback) {
+                result.missingFields.push(toError('marketplaceLeads.suitableServices', '12C.2 Suitable Services is required', section));
+              }
+            } else {
+              const hasRealOfferSelection = selectedSuitableServices.some((value: string) =>
+                validOfferIds.includes(value)
+              );
+
+              if (!hasRealOfferSelection) {
+                result.missingFields.push(toError('marketplaceLeads.suitableServices', '12C.2 Select at least one suitable service from your Offer Menu.', section));
+              }
+            }
+
             if (!m.worthwhileLeadTypes) result.missingFields.push(toError('marketplaceLeads.worthwhileLeadTypes', '12C.3 Lead Types is required', section));
             if (!m.minimumJobValue) result.missingFields.push(toError('marketplaceLeads.minimumJobValue', '12C.4 Min Value is required', section));
             if (!m.urgentWorkCapacity || m.urgentWorkCapacity.length === 0) result.missingFields.push(toError('marketplaceLeads.urgentWorkCapacity', '12C.5 Urgent Capacity is required', section));
