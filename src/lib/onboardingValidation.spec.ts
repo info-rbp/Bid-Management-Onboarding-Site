@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { validateOnboardingSection } from './onboardingValidation';
 
+<<<<<<< HEAD
 const validMarketplaceLeads = {
   openMarketplacePlatforms: ['airtasker'],
   suitableServices: ['offer-1'],
@@ -40,6 +41,8 @@ const marketplaceSuitableServiceErrors = (suitableServices: string[], offerItems
   );
 };
 
+=======
+>>>>>>> 63e88a9 (Add validation tests for final submission and Step 12 fallback)
 describe('validateOnboardingSection', () => {
   it('requires all final submission acknowledgements', () => {
     const result = validateOnboardingSection('final_submission', {
@@ -60,7 +63,15 @@ describe('validateOnboardingSection', () => {
   it('only validates the active service modules', () => {
     const result = validateOnboardingSection(
       'service_modules',
+<<<<<<< HEAD
       {},
+=======
+      {
+        grants: {
+          interestedInGrantSupport: 'no',
+        },
+      },
+>>>>>>> 63e88a9 (Add validation tests for final submission and Step 12 fallback)
       {
         sections: {
           service_selection: {
@@ -81,6 +92,7 @@ describe('validateOnboardingSection', () => {
     );
   });
 
+<<<<<<< HEAD
   it('allows the marketplace fallback selection when no offer items exist', () => {
     expect(marketplaceSuitableServiceErrors(['__need_help_defining__'])).toHaveLength(0);
     expect(marketplaceSuitableServiceErrors(['__offer_menu_pending__'])).toHaveLength(0);
@@ -118,5 +130,62 @@ describe('validateOnboardingSection', () => {
         [{ id: 'offer-1', name: 'Test Offer' }]
       )
     ).toHaveLength(0);
+=======
+  it('uses a fallback instead of dead-ending marketplace validation when no offer items exist', () => {
+    const baseContext = {
+      sections: {
+        service_selection: {
+          selectedServices: ['marketplace_leads'],
+        },
+        offer_menu: {
+          offerItems: [],
+        },
+      },
+    };
+
+    const missingFallback = validateOnboardingSection(
+      'service_modules',
+      {
+        marketplaceLeads: {
+          openMarketplacePlatforms: ['airtasker'],
+          worthwhileLeadTypes: 'Small local jobs',
+          minimumJobValue: '$500',
+          urgentWorkCapacity: ['same-day'],
+          jobsToIgnore: 'Weekend work',
+          responseApprovalRequirement: 'yes',
+          canSubmitUnderThreshold: 'no',
+        },
+      },
+      baseContext
+    );
+
+    expect(missingFallback.missingFields.map((field) => field.fieldKey)).toContain(
+      'marketplaceLeads.suitableServicesFallback'
+    );
+    expect(missingFallback.missingFields.map((field) => field.fieldKey)).not.toContain(
+      'marketplaceLeads.suitableServices'
+    );
+
+    const validFallback = validateOnboardingSection(
+      'service_modules',
+      {
+        marketplaceLeads: {
+          openMarketplacePlatforms: ['airtasker'],
+          suitableServicesFallback: 'need_help_defining',
+          worthwhileLeadTypes: 'Small local jobs',
+          minimumJobValue: '$500',
+          urgentWorkCapacity: ['same-day'],
+          jobsToIgnore: 'Weekend work',
+          responseApprovalRequirement: 'yes',
+          canSubmitUnderThreshold: 'no',
+        },
+      },
+      baseContext
+    );
+
+    expect(validFallback.missingFields.map((field) => field.fieldKey)).not.toContain(
+      'marketplaceLeads.suitableServicesFallback'
+    );
+>>>>>>> 63e88a9 (Add validation tests for final submission and Step 12 fallback)
   });
 });
