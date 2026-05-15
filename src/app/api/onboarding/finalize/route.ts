@@ -6,6 +6,7 @@ import {
   getOrCreateFolder,
 } from '@/lib/google-drive';
 import { sendOnboardingSubmittedNotification } from '@/lib/notifications';
+import { syncOnboardingSubmissionToSheet } from '@/lib/google-sheets/onboarding-submissions';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -75,7 +76,15 @@ export async function POST(req: Request) {
     }
 
     if (submissionData.status === 'submitted' && !submissionData.adminReopened) {
-      return NextResponse.json({ error: 'Submission is locked' }, { status: 409 });
+      return NextResponse.json({
+        success: true,
+        alreadySubmitted: true,
+        driveFolderId: submissionData.googleDriveFolderId || null,
+        driveFolderUrl: submissionData.googleDriveFolderUrl || null,
+        driveWorkspaceStatus: submissionData.driveWorkspaceStatus || 'pending',
+        submittedAt: submissionData.submittedAt || null,
+        sheetSyncStatus: submissionData.sheetSyncStatus || 'unknown',
+      });
     }
 
     const existingFolderId = submissionData.googleDriveFolderId;
@@ -83,16 +92,29 @@ export async function POST(req: Request) {
     let googleDriveFolderId = existingFolderId;
     let googleDriveFolderUrl = existingFolderUrl;
 
-    if (!existingFolderId || !existingFolderUrl) {
-      const folderName = buildOnboardingDriveFolderName(
-        submissionData.businessName,
-        cleanSubmissionId
-      );
-      const parentId = process.env.GOOGLE_DRIVE_ONBOARDING_PARENT_FOLDER_ID;
-      const folder = await getOrCreateFolder(folderName, parentId);
+    let driveWorkspaceStatus: 'created' | 'pending' | 'failed' =
+      existingFolderId && existingFolderUrl ? 'created' : 'pending';
+    let driveWorkspaceError: string | null = null;
 
-      googleDriveFolderId = folder.id;
-      googleDriveFolderUrl = folder.webViewLink;
+    if (!existingFolderId || !existingFolderUrl) {
+      try {
+        const folderName = buildOnboardingDriveFolderName(
+          submissionData.businessName,
+          cleanSubmissionId
+        );
+        const parentId = process.env.GOOGLE_DRIVE_ONBOARDING_PARENT_FOLDER_ID;
+        const folder = await getOrCreateFolder(folderName, parentId);
+
+        googleDriveFolderId = folder.id;
+        googleDriveFolderUrl = folder.webViewLink;
+        driveWorkspaceStatus = 'created';
+      } catch (driveError) {
+        driveWorkspaceStatus = 'failed';
+        driveWorkspaceError =
+          driveError instanceof Error ? driveError.message : String(driveError);
+        if (!existingFolderId) googleDriveFolderId = null;
+        if (!existingFolderUrl) googleDriveFolderUrl = null;
+      }
     }
 
     const submittedAt = new Date().toISOString();
@@ -108,8 +130,13 @@ export async function POST(req: Request) {
       completedAt: submittedAt,
       updatedAt: submittedAt,
       adminReopened: false,
+      completionPercentage: 100,
+      currentStep: 'final_submission',
       googleDriveFolderId,
       googleDriveFolderUrl,
+      driveWorkspaceStatus,
+      driveWorkspaceError,
+      driveWorkspaceUpdatedAt: submittedAt,
       'sections.final_submission.acknowledgements':
         finalSubmission?.acknowledgements || {},
       'sections.final_submission.finalComments':
@@ -126,8 +153,53 @@ export async function POST(req: Request) {
 
     await db.collection('users').doc(decodedToken.uid).update({
       onboardingStatus: 'submitted',
+      activeOnboardingSubmissionId: null,
       updatedAt: submittedAt,
     });
+
+    let sheetSyncStatus: 'synced' | 'skipped' | 'error' | 'not_run' = 'not_run';
+    let sheetSyncResult: any = null;
+
+    try {
+      const updatedSubmissionSnap = await submissionDoc.ref.get();
+      const updatedSubmissionData = updatedSubmissionSnap.data();
+
+      if (updatedSubmissionData) {
+        sheetSyncResult = await syncOnboardingSubmissionToSheet({
+          submissionId: cleanSubmissionId,
+          data: updatedSubmissionData,
+        });
+
+        if (sheetSyncResult.skipped) {
+          sheetSyncStatus = 'skipped';
+          await submissionDoc.ref.update({
+            sheetSyncStatus: 'error',
+            sheetSyncError: sheetSyncResult.reason || 'Google Sheets sync skipped.',
+            sheetSyncUpdatedAt: new Date().toISOString(),
+          });
+        } else {
+          sheetSyncStatus = 'synced';
+          await submissionDoc.ref.update({
+            sheetSyncStatus: 'synced',
+            sheetSyncedAt: new Date().toISOString(),
+            sheetSyncUpdatedAt: new Date().toISOString(),
+            sheetSummaryAction: sheetSyncResult.summaryAction,
+            sheetAnswerRowsDeleted: sheetSyncResult.answerRowsDeleted,
+            sheetAnswerRowsAppended: sheetSyncResult.answerRowsAppended,
+            sheetSyncVersion: FieldValue.increment(1),
+          });
+        }
+      }
+    } catch (sheetSyncError) {
+      sheetSyncStatus = 'error';
+      console.error('Google Sheets sync failed:', sheetSyncError);
+      await submissionDoc.ref.update({
+        sheetSyncStatus: 'error',
+        sheetSyncError:
+          sheetSyncError instanceof Error ? sheetSyncError.message : String(sheetSyncError),
+        sheetSyncUpdatedAt: new Date().toISOString(),
+      });
+    }
 
     try {
       await sendOnboardingSubmittedNotification({ submissionId: cleanSubmissionId });
@@ -139,7 +211,18 @@ export async function POST(req: Request) {
       success: true,
       driveFolderId: googleDriveFolderId,
       driveFolderUrl: googleDriveFolderUrl,
+      driveWorkspaceStatus,
       submittedAt,
+      sheetSyncStatus,
+      sheetSyncResult: sheetSyncResult
+        ? {
+            skipped: sheetSyncResult.skipped,
+            summaryAction: sheetSyncResult.summaryAction,
+            answerRowsDeleted: sheetSyncResult.answerRowsDeleted,
+            answerRowsAppended: sheetSyncResult.answerRowsAppended,
+            reason: sheetSyncResult.reason,
+          }
+        : null,
     });
   } catch (error: any) {
     console.error('Finalize onboarding error:', error);
