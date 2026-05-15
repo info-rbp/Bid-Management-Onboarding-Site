@@ -21,11 +21,7 @@ describe('validateOnboardingSection', () => {
   it('only validates the active service modules', () => {
     const result = validateOnboardingSection(
       'service_modules',
-      {
-        grants: {
-          interestedInGrantSupport: 'no',
-        },
-      },
+      {},
       {
         sections: {
           service_selection: {
@@ -46,7 +42,7 @@ describe('validateOnboardingSection', () => {
     );
   });
 
-  it('uses a fallback instead of dead-ending marketplace validation when no offer items exist', () => {
+  it('allows the marketplace fallback selection when no offer items exist', () => {
     const baseContext = {
       sections: {
         service_selection: {
@@ -58,7 +54,7 @@ describe('validateOnboardingSection', () => {
       },
     };
 
-    const missingFallback = validateOnboardingSection(
+    const missingSelection = validateOnboardingSection(
       'service_modules',
       {
         marketplaceLeads: {
@@ -74,10 +70,7 @@ describe('validateOnboardingSection', () => {
       baseContext
     );
 
-    expect(missingFallback.missingFields.map((field) => field.fieldKey)).toContain(
-      'marketplaceLeads.suitableServicesFallback'
-    );
-    expect(missingFallback.missingFields.map((field) => field.fieldKey)).not.toContain(
+    expect(missingSelection.missingFields.map((field) => field.fieldKey)).toContain(
       'marketplaceLeads.suitableServices'
     );
 
@@ -86,7 +79,7 @@ describe('validateOnboardingSection', () => {
       {
         marketplaceLeads: {
           openMarketplacePlatforms: ['airtasker'],
-          suitableServicesFallback: 'need_help_defining',
+          suitableServices: ['__need_help_defining__'],
           worthwhileLeadTypes: 'Small local jobs',
           minimumJobValue: '$500',
           urgentWorkCapacity: ['same-day'],
@@ -99,7 +92,7 @@ describe('validateOnboardingSection', () => {
     );
 
     expect(validFallback.missingFields.map((field) => field.fieldKey)).not.toContain(
-      'marketplaceLeads.suitableServicesFallback'
+      'marketplaceLeads.suitableServices'
     );
   });
 });
