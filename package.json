@@ -10,7 +10,9 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "backfill:sheets": "node scripts/backfill-onboarding-submissions-to-sheets.mjs",
+    "backfill:sheets:dry-run": "node scripts/backfill-onboarding-submissions-to-sheets.mjs --dry-run"
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.34.0",
