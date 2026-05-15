@@ -83,6 +83,72 @@ const buildSectionStatus = (
   lastUpdatedAt: serverTimestamp(),
 });
 
+type LongFormSubsection = {
+  id: string;
+  title: string;
+};
+
+const LONG_FORM_STEP_KEYS = new Set([
+  'compliance_insurance',
+  'workflow_rules',
+  'authority_matrix',
+  'service_modules',
+]);
+
+const SERVICE_MODULE_SUBSECTION_PATTERN = /^12[A-E]\./i;
+
+const sanitizeAnchorId = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 80);
+
+const collectLongFormSubsections = (
+  stepKey: string,
+  container: HTMLElement
+): LongFormSubsection[] => {
+  if (stepKey === 'service_modules') {
+    return Array.from(container.querySelectorAll<HTMLElement>('h3'))
+      .map((heading, index) => {
+        const title = heading.textContent?.trim() || '';
+
+        if (!SERVICE_MODULE_SUBSECTION_PATTERN.test(title)) {
+          return null;
+        }
+
+        if (!heading.id) {
+          heading.id = `section-${stepKey}-${sanitizeAnchorId(title) || index + 1}`;
+        }
+
+        return {
+          id: heading.id,
+          title,
+        };
+      })
+      .filter((entry): entry is LongFormSubsection => Boolean(entry));
+  }
+
+  return Array.from(container.querySelectorAll<HTMLElement>('section'))
+    .map((section, index) => {
+      const title = section.querySelector('h3')?.textContent?.trim() || '';
+
+      if (!title) {
+        return null;
+      }
+
+      if (!section.id) {
+        section.id = `section-${stepKey}-${sanitizeAnchorId(title) || index + 1}`;
+      }
+
+      return {
+        id: section.id,
+        title,
+      };
+    })
+    .filter((entry): entry is LongFormSubsection => Boolean(entry));
+};
+
 export default function OnboardingStepPage() {
   const { stepId } = useParams();
   const router = useRouter();
@@ -97,9 +163,15 @@ export default function OnboardingStepPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
+  const [subsections, setSubsections] = useState<LongFormSubsection[]>([]);
 
   const initialSyncDone = useRef<Record<string, boolean>>({});
   const lastSavedDataRef = useRef<string>("{}");
+  const contentContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const currentStepKey = stepId as string;
+  const isLongFormStep = LONG_FORM_STEP_KEYS.has(currentStepKey);
+  const isBusy = isSaving || isSubmitting;
 
   const submissionRef = useMemoFirebase(() => {
     if (!submissionId || !db) return null;
@@ -190,7 +262,9 @@ export default function OnboardingStepPage() {
       !submissionId ||
       !db ||
       !initialSyncDone.current[sid] ||
-      sid === 'final_submission'
+      sid === 'final_submission' ||
+      isSaving ||
+      isSubmitting
     ) {
       return;
     }
@@ -263,7 +337,7 @@ export default function OnboardingStepPage() {
     }, 1500);
 
     return () => clearTimeout(timeout);
-  }, [formData, stepId, submissionId, db, isLocked, submission]);
+  }, [formData, stepId, submissionId, db, isLocked, submission, isSaving, isSubmitting]);
 
   useEffect(() => {
     if (!loadingSubmissions && submission && !currentStep && stepId) {
@@ -337,12 +411,29 @@ export default function OnboardingStepPage() {
     initSubmission();
   }, [user, db, submissionId, toast]);
 
+  useEffect(() => {
+    if (!isLongFormStep || !contentContainerRef.current || isSubmitting) {
+      setSubsections([]);
+      return;
+    }
+
+    const animationFrame = window.requestAnimationFrame(() => {
+      if (!contentContainerRef.current) {
+        return;
+      }
+
+      setSubsections(collectLongFormSubsections(currentStepKey, contentContainerRef.current));
+    });
+
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [currentStepKey, formData, validationResult, isLongFormStep, isSubmitting]);
+
   const handleFieldChange = (field: string, value: any) => {
     setFormData((prev: any) => ({ ...prev, [field]: value }));
   };
 
   const handleNavigate = async (targetStepKey: string) => {
-    if (targetStepKey === stepId) return;
+    if (targetStepKey === stepId || isBusy) return;
 
     const targetStep = visibleSteps.find((s) => s.key === targetStepKey);
     if (!targetStep) return;
@@ -358,7 +449,11 @@ export default function OnboardingStepPage() {
 
       try {
         setIsSaving(true);
+        setSaveStatus('saving');
         await updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
+        setSaveStatus('saved');
+        setLastSavedTime(new Date());
+        lastSavedDataRef.current = JSON.stringify(formData);
       } catch {
         setSaveStatus('error');
         toast({ variant: 'destructive', title: 'Save failed', description: 'Please retry before leaving this section.' });
@@ -414,7 +509,16 @@ export default function OnboardingStepPage() {
     }
   };
 
+  const scrollToSubsection = (anchorId: string) => {
+    const anchor = document.getElementById(anchorId);
+    anchor?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   const handleSave = async (direction: 'next' | 'prev' | 'stay' = 'stay') => {
+    if (isBusy) {
+      return;
+    }
+
     if (!submissionId || !db || !currentStep || isLocked) {
       if (direction === 'next' && currentVisibleIndex < visibleSteps.length - 1) {
         router.push(visibleSteps[currentVisibleIndex + 1].route);
@@ -441,7 +545,24 @@ export default function OnboardingStepPage() {
           )
         );
 
-        await updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
+        try {
+          setIsSaving(true);
+          setSaveStatus('saving');
+          await updateDoc(doc(db, 'onboardingSubmissions', submissionId), updateData);
+          setSaveStatus('saved');
+          setLastSavedTime(new Date());
+          lastSavedDataRef.current = JSON.stringify(formData);
+        } catch {
+          setSaveStatus('error');
+          toast({
+            variant: 'destructive',
+            title: 'Save failed',
+            description: 'Please retry before moving to another section.',
+          });
+          return;
+        } finally {
+          setIsSaving(false);
+        }
 
         setTimeout(() => scrollToNextError(), 0);
         return;
@@ -656,7 +777,7 @@ export default function OnboardingStepPage() {
   };
 
   const handleSubmitPack = async () => {
-    if (!submissionId || !db || !user || !submission) return;
+    if (!submissionId || !db || !user || !submission || isBusy) return;
 
     const finalValidation = validateOnboardingSection(
       'final_submission',
@@ -781,6 +902,10 @@ export default function OnboardingStepPage() {
 
   if (!currentStep) return null;
 
+  const incompleteFieldCount = validationResult
+    ? validationResult.missingFields.length + validationResult.invalidFields.length
+    : 0;
+
   const renderSaveStatus = () => {
     if (isLocked) return null;
 
@@ -831,6 +956,94 @@ export default function OnboardingStepPage() {
           </div>
         ) : null;
     }
+  };
+
+  const renderNavigationButtons = (placement: 'header' | 'footer') => {
+    const buttonSize = placement === 'header' ? 'sm' : 'default';
+    const prevClassName =
+      placement === 'header'
+        ? 'gap-2 rounded-lg text-muted-foreground'
+        : 'gap-2 rounded-2xl px-5';
+    const saveClassName =
+      placement === 'header'
+        ? 'gap-2 rounded-lg border-2'
+        : 'gap-2 rounded-2xl border-2 px-5 h-11';
+    const nextClassName =
+      placement === 'header'
+        ? 'gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20'
+        : 'gap-2 rounded-2xl h-11 px-6 font-bold bg-primary hover:bg-primary/90 shadow-md shadow-primary/20';
+    const errorClassName =
+      placement === 'header'
+        ? 'gap-2 rounded-lg font-bold px-4 border-amber-400 text-amber-600 bg-amber-50 hover:bg-amber-100'
+        : 'gap-2 rounded-2xl h-11 px-5 font-bold border-amber-400 text-amber-600 bg-amber-50 hover:bg-amber-100';
+
+    return (
+      <div
+        className={
+          placement === 'header'
+            ? 'flex items-center gap-3'
+            : 'flex flex-wrap items-center justify-end gap-3'
+        }
+      >
+        {currentVisibleIndex > 0 && (
+          <Button
+            variant="ghost"
+            size={buttonSize}
+            onClick={() => handleSave('prev')}
+            className={prevClassName}
+            disabled={isBusy}
+          >
+            <ChevronLeft className="w-4 h-4" /> Previous
+          </Button>
+        )}
+
+        {!isLocked && stepId !== 'final_submission' && (
+          <>
+            <Button
+              variant="outline"
+              size={buttonSize}
+              onClick={() => handleSave('stay')}
+              className={saveClassName}
+              disabled={isBusy}
+            >
+              Save Draft
+            </Button>
+
+            {validationResult && !validationResult.isValid && (
+              <Button
+                size={buttonSize}
+                variant="outline"
+                onClick={scrollToNextError}
+                className={errorClassName}
+                disabled={isBusy}
+              >
+                Next incomplete field <ChevronsDown className="w-4 h-4" />
+              </Button>
+            )}
+
+            <Button
+              size={buttonSize}
+              onClick={() => handleSave('next')}
+              className={nextClassName}
+              disabled={isBusy || currentVisibleIndex === visibleSteps.length - 1}
+            >
+              Next Step <ChevronRight className="w-4 h-4" />
+            </Button>
+          </>
+        )}
+
+        {isLocked && currentVisibleIndex < visibleSteps.length - 1 && (
+          <Button
+            size={buttonSize}
+            onClick={() => handleSave('next')}
+            className={nextClassName}
+            disabled={isBusy}
+          >
+            Next Step <ChevronRight className="w-4 h-4" />
+          </Button>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -900,8 +1113,15 @@ export default function OnboardingStepPage() {
               return (
                 <div
                   key={step.key}
-                  onClick={() => handleNavigate(step.key)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer group ${getColors()}`}
+                  onClick={() => {
+                    if (!isBusy) {
+                      handleNavigate(step.key);
+                    }
+                  }}
+                  aria-disabled={isBusy}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer group ${getColors()} ${
+                    isBusy ? 'pointer-events-none opacity-60' : ''
+                  }`}
                 >
                   <div
                     className={`shrink-0 flex items-center justify-center w-6 h-6 rounded-full ${getDotColor()}`}
@@ -921,6 +1141,7 @@ export default function OnboardingStepPage() {
               variant="ghost"
               className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground rounded-xl transition-colors"
               onClick={() => router.push('/dashboard')}
+              disabled={isBusy}
             >
               <LayoutDashboard className="w-4 h-4" />
               <span className="text-sm font-medium">Return to Dashboard</span>
@@ -936,6 +1157,7 @@ export default function OnboardingStepPage() {
                 size="sm"
                 onClick={() => router.push('/dashboard')}
                 className="gap-2 rounded-lg text-muted-foreground"
+                disabled={isBusy}
               >
                 <LayoutDashboard className="w-4 h-4" /> Dashboard
               </Button>
@@ -952,66 +1174,54 @@ export default function OnboardingStepPage() {
 
             <div className="flex items-center gap-6">
               {renderSaveStatus()}
-              <div className="flex items-center gap-3">
-                {currentVisibleIndex > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleSave('prev')}
-                    className="gap-2 rounded-lg text-muted-foreground"
-                  >
-                    <ChevronLeft className="w-4 h-4" /> Previous
-                  </Button>
-                )}
-
-                {!isLocked && stepId !== 'final_submission' && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleSave('stay')}
-                      className="gap-2 rounded-lg border-2"
-                    >
-                      Save Draft
-                    </Button>
-
-                    {validationResult && !validationResult.isValid && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={scrollToNextError}
-                        className="gap-2 rounded-lg font-bold px-4 border-amber-400 text-amber-600 bg-amber-50 hover:bg-amber-100"
-                      >
-                        Next incomplete field <ChevronsDown className="w-4 h-4" />
-                      </Button>
-                    )}
-
-                    <Button
-                      size="sm"
-                      onClick={() => handleSave('next')}
-                      className="gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20"
-                      disabled={currentVisibleIndex === visibleSteps.length - 1}
-                    >
-                      Next Step <ChevronRight className="w-4 h-4" />
-                    </Button>
-                  </>
-                )}
-
-                {isLocked && currentVisibleIndex < visibleSteps.length - 1 && (
-                  <Button
-                    size="sm"
-                    onClick={() => handleSave('next')}
-                    className="gap-2 rounded-lg font-bold px-6 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20"
-                  >
-                    Next Step <ChevronRight className="w-4 h-4" />
-                  </Button>
-                )}
-              </div>
+              {renderNavigationButtons('header')}
             </div>
           </header>
 
           <div className="flex-1 overflow-y-auto bg-slate-50/30">
-            <div className="max-w-4xl mx-auto p-8 lg:p-12">
+            <div ref={contentContainerRef} className="max-w-4xl mx-auto p-8 lg:p-12 pb-28">
+              {isLongFormStep && subsections.length > 1 && (
+                <div className="sticky top-0 z-20 mb-6 rounded-[2rem] border border-slate-200 bg-white/95 p-4 shadow-lg backdrop-blur">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                        Section Navigation
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Jump through this longer section without losing your place.
+                      </p>
+                    </div>
+                    {incompleteFieldCount > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={scrollToNextError}
+                        className="gap-2 rounded-2xl border-amber-400 text-amber-600 bg-amber-50 hover:bg-amber-100"
+                        disabled={isBusy}
+                      >
+                        {incompleteFieldCount} field{incompleteFieldCount === 1 ? '' : 's'} need attention
+                        <ChevronsDown className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                  <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+                    {subsections.map((subsection) => (
+                      <Button
+                        key={subsection.id}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="rounded-full whitespace-nowrap border-slate-200 bg-white"
+                        onClick={() => scrollToSubsection(subsection.id)}
+                        disabled={isBusy}
+                      >
+                        {subsection.title}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {stepId === 'business_snapshot' &&
                 process.env.NODE_ENV !== 'production' &&
                 validationResult && (
@@ -1073,6 +1283,29 @@ export default function OnboardingStepPage() {
                   )}
                 </CardContent>
               </Card>
+
+              {isLongFormStep && !isSubmitting && (
+                <div className="sticky bottom-4 z-20 mt-8 rounded-[2rem] border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                        Quick Actions
+                      </p>
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                        {renderSaveStatus()}
+                        {incompleteFieldCount > 0 ? (
+                          <span className="font-semibold text-amber-600">
+                            {incompleteFieldCount} field{incompleteFieldCount === 1 ? '' : 's'} still need attention.
+                          </span>
+                        ) : (
+                          <span>Save or move forward without scrolling back to the header.</span>
+                        )}
+                      </div>
+                    </div>
+                    {renderNavigationButtons('footer')}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </main>
