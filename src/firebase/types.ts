@@ -1,36 +1,52 @@
 export interface UserProfile {
   id: string;
-  email: string;
+  email: string | null;
   fullName: string;
   businessName: string;
   role: 'client' | 'admin';
-  subscriptionStatus: 'active' | 'inactive' | 'cancelled' | 'past_due' | 'not_started';
-  stripeCustomerId?: string | null;
-  stripeSubscriptionId?: string | null;
-  onboardingStatus: 'not_started' | 'in_progress' | 'ready_for_review' | 'submitted';
+  onboardingStatus:
+    | 'not_started'
+    | 'in_progress'
+    | 'needs_attention'
+    | 'validation_blocked'
+    | 'submitted'
+    | 'completed'
+    | 'cancelled'
+    | 'archived';
   createdAt: string;
   updatedAt: string;
-  onboardingSubmissionId?: string | null;
+  activeOnboardingSubmissionId?: string | null;
 }
 
 export interface OnboardingSubmission {
   id: string;
   userId: string;
   businessName: string;
-  status: 'not_started' | 'in_progress' | 'ready_for_review' | 'submitted';
+  status:
+    | 'in_progress'
+    | 'needs_attention'
+    | 'validation_blocked'
+    | 'submitted'
+    | 'completed'
+    | 'cancelled'
+    | 'archived';
   currentStep: string;
-  completedSteps: string[];
+  visibleStepKeys: string[];
   completionPercentage: number;
   selectedServices: string[];
   enabledModules: Record<string, boolean>;
   sections: Record<string, any>;
+  sectionStatuses: Record<string, any>;
   createdAt: string;
   updatedAt: string;
   lastSavedAt: string;
   submittedAt?: string | null;
+  completedAt?: string | null;
   adminReopened?: boolean;
   googleDriveFolderId?: string | null;
   googleDriveFolderUrl?: string | null;
+  driveWorkspaceStatus?: 'created' | 'pending' | 'failed' | null;
+  sheetSyncStatus?: 'synced' | 'skipped' | 'error' | 'not_run' | 'unknown' | null;
 }
 
 export interface UploadedDocument {
