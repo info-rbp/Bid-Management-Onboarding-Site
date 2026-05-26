@@ -18,10 +18,6 @@ type RepairError = {
   detail?: string;
 };
 
-/**
- * AuthGuard ensures the user is authenticated and has a profile record.
- * Subscription gating has been disabled as per user request.
- */
 export function AuthGuard({ children }: AuthGuardProps) {
   const auth = useOptionalAuth();
   const { user, isUserLoading, areServicesAvailable, initializationError } = useUser();
@@ -30,7 +26,6 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const pathname = usePathname();
 
   const [isVerifying, setIsVerifying] = useState(true);
-  const [profile, setProfile] = useState<any>(null);
   const [repairError, setRepairError] = useState<RepairError | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
 
@@ -49,7 +44,6 @@ export function AuthGuard({ children }: AuthGuardProps) {
         }
 
         if (isMounted) {
-          setProfile(null);
           setIsVerifying(false);
         }
 
@@ -62,7 +56,6 @@ export function AuthGuard({ children }: AuthGuardProps) {
             message: 'Unable to verify your profile.',
             detail: 'The database connection is not available.',
           });
-          setProfile(null);
           setIsVerifying(false);
         }
 
@@ -73,35 +66,30 @@ export function AuthGuard({ children }: AuthGuardProps) {
         const userRef = doc(db, 'users', user.uid);
         const userSnap = await getDoc(userRef);
 
-        let currentProfile;
-
         if (!userSnap.exists()) {
-          currentProfile = {
-            id: user.uid,
-            email: user.email,
-            fullName: user.displayName || 'Client User',
-            businessName: 'Business Name Pending',
-            role: 'client',
-            subscriptionStatus: 'active',
-            onboardingStatus: 'not_started',
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          };
-
-          await setDoc(userRef, currentProfile, { merge: true });
-        } else {
-          currentProfile = userSnap.data();
+          await setDoc(
+            userRef,
+            {
+              id: user.uid,
+              email: user.email,
+              fullName: user.displayName || 'Client User',
+              businessName: 'Business Name Pending',
+              role: 'client',
+              onboardingStatus: 'not_started',
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          );
         }
 
         if (isMounted) {
-          setProfile(currentProfile);
           setRepairError(null);
         }
       } catch (error: any) {
         console.error('AuthGuard profile verification/repair error:', error);
 
         if (isMounted) {
-          setProfile(null);
           setRepairError({
             message: 'Unable to prepare your secure profile.',
             detail:
@@ -135,7 +123,6 @@ export function AuthGuard({ children }: AuthGuardProps) {
     }
     router.push('/auth');
   };
-
 
   if (!areServicesAvailable) {
     return (
