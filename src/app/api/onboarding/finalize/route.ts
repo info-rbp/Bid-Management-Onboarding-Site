@@ -6,6 +6,8 @@ import {
   getOrCreateFolder,
 } from '@/lib/google-drive';
 import { syncOnboardingSubmissionToSheet } from '@/lib/google-sheets/onboarding-submissions';
+import { getVisibleOnboardingSteps } from '@/lib/onboarding-steps';
+import { validateOnboardingSection } from '@/lib/onboardingValidation';
 import { sendOnboardingSubmittedNotification } from '@/lib/notifications';
 import {
   applyRateLimit,
@@ -18,6 +20,33 @@ import { finalizeOnboardingBodySchema } from '@/lib/server/schemas';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+function collectSubmissionBlockers(submissionData: Record<string, any>) {
+  const visibleSteps = getVisibleOnboardingSteps(submissionData.enabledModules);
+  const requiredSteps = visibleSteps.filter((step) => step.required);
+  const blockers: Array<{ stepKey: string; message: string }> = [];
+
+  for (const step of requiredSteps) {
+    if (step.key === 'final_submission') {
+      continue;
+    }
+
+    const validation = validateOnboardingSection(
+      step.key,
+      submissionData.sections?.[step.key] || {},
+      submissionData
+    );
+
+    if (!validation.isValid) {
+      blockers.push({
+        stepKey: step.key,
+        message: `Section ${step.title} is incomplete.`,
+      });
+    }
+  }
+
+  return blockers;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -52,6 +81,32 @@ export async function POST(req: NextRequest) {
 
     if (submissionData.userId !== decodedToken.uid) {
       return jsonError('Unauthorized.', 403);
+    }
+
+    const blockerList = collectSubmissionBlockers(submissionData);
+    const finalValidation = validateOnboardingSection(
+      'final_submission',
+      {
+        acknowledgements: body.finalSubmission.acknowledgements || {},
+      },
+      submissionData
+    );
+
+    if (!finalValidation.isValid) {
+      blockerList.push({
+        stepKey: 'final_submission',
+        message: 'Final submission acknowledgements are incomplete.',
+      });
+    }
+
+    if (blockerList.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'Submission is incomplete.',
+          blockers: blockerList,
+        },
+        { status: 400 }
+      );
     }
 
     if (submissionData.status === 'submitted' && !submissionData.adminReopened) {
