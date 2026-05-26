@@ -1,11 +1,12 @@
-import type {Metadata} from 'next';
+import type { Metadata } from 'next';
 import './globals.css';
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { Toaster } from '@/components/ui/toaster';
 
 export const metadata: Metadata = {
   title: 'Bid Manager | Strategic Bid Management Onboarding',
-  description: 'Secure payment and automated onboarding for bid management services.',
+  description:
+    'Secure client onboarding for bid management services, including guided intake, document collection and operational handoff.',
 };
 
 export default function RootLayout({
