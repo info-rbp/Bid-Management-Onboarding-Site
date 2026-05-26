@@ -1,57 +1,39 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
-import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
+import { getAdminDb } from '@/lib/firebase-admin';
 import {
   buildOnboardingDriveFolderName,
   getOrCreateFolder,
 } from '@/lib/google-drive';
-import { sendOnboardingSubmittedNotification } from '@/lib/notifications';
 import { syncOnboardingSubmissionToSheet } from '@/lib/google-sheets/onboarding-submissions';
+import { sendOnboardingSubmittedNotification } from '@/lib/notifications';
+import {
+  applyRateLimit,
+  HttpError,
+  jsonError,
+  parseJsonBody,
+  requireFirebaseUser,
+} from '@/lib/server/request';
+import { finalizeOnboardingBodySchema } from '@/lib/server/schemas';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const authorization = req.headers.get('authorization') || '';
+    const decodedToken = await requireFirebaseUser(req);
 
-    if (!authorization.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { error: 'Missing Firebase ID token.' },
-        { status: 401 }
-      );
-    }
+    applyRateLimit({
+      request: req,
+      scope: 'onboarding-finalize',
+      subject: decodedToken.uid,
+      limit: 10,
+      windowMs: 60_000,
+    });
 
-    const idToken = authorization.replace('Bearer ', '').trim();
+    const body = await parseJsonBody(req, finalizeOnboardingBodySchema);
+    const cleanSubmissionId = body.submissionId.trim();
 
-    if (!idToken) {
-      return NextResponse.json(
-        { error: 'Empty Firebase ID token.' },
-        { status: 401 }
-      );
-    }
-
-    const decodedToken = await getAdminAuth().verifyIdToken(idToken);
-
-    const body = await req.json().catch(() => null);
-    const submissionId = body?.submissionId;
-    const finalSubmission = body?.finalSubmission;
-
-    if (typeof submissionId !== 'string' || submissionId.trim().length === 0) {
-      return NextResponse.json(
-        { error: 'Missing submissionId.' },
-        { status: 400 }
-      );
-    }
-
-    if (typeof finalSubmission !== 'object' || finalSubmission === null) {
-      return NextResponse.json(
-        { error: 'Missing finalSubmission.' },
-        { status: 400 }
-      );
-    }
-
-    const cleanSubmissionId = submissionId.trim();
     const db = getAdminDb();
     const submissionDoc = await db
       .collection('onboardingSubmissions')
@@ -59,20 +41,17 @@ export async function POST(req: Request) {
       .get();
 
     if (!submissionDoc.exists) {
-      return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
+      return jsonError('Submission not found.', 404);
     }
 
     const submissionData = submissionDoc.data();
 
     if (!submissionData) {
-      return NextResponse.json(
-        { error: 'Submission data is missing' },
-        { status: 404 }
-      );
+      return jsonError('Submission data is missing.', 404);
     }
 
     if (submissionData.userId !== decodedToken.uid) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      return jsonError('Unauthorized.', 403);
     }
 
     if (submissionData.status === 'submitted' && !submissionData.adminReopened) {
@@ -119,7 +98,7 @@ export async function POST(req: Request) {
 
     const submittedAt = new Date().toISOString();
     const immutableSnapshot = {
-      ...(finalSubmission?.submissionSnapshot || {}),
+      ...(body.finalSubmission.submissionSnapshot || {}),
       generatedAt: submittedAt,
       sourceStatus: submissionData.status || 'in_progress',
     };
@@ -138,9 +117,9 @@ export async function POST(req: Request) {
       driveWorkspaceError,
       driveWorkspaceUpdatedAt: submittedAt,
       'sections.final_submission.acknowledgements':
-        finalSubmission?.acknowledgements || {},
+        body.finalSubmission.acknowledgements || {},
       'sections.final_submission.finalComments':
-        finalSubmission?.finalComments || '',
+        body.finalSubmission.finalComments || '',
       'sections.final_submission.submittedAt': submittedAt,
       'sections.final_submission.completedAt': submittedAt,
       'sections.final_submission.submissionSnapshot': immutableSnapshot,
@@ -174,7 +153,8 @@ export async function POST(req: Request) {
           sheetSyncStatus = 'skipped';
           await submissionDoc.ref.update({
             sheetSyncStatus: 'error',
-            sheetSyncError: sheetSyncResult.reason || 'Google Sheets sync skipped.',
+            sheetSyncError:
+              sheetSyncResult.reason || 'Google Sheets sync skipped.',
             sheetSyncUpdatedAt: new Date().toISOString(),
           });
         } else {
@@ -196,7 +176,9 @@ export async function POST(req: Request) {
       await submissionDoc.ref.update({
         sheetSyncStatus: 'error',
         sheetSyncError:
-          sheetSyncError instanceof Error ? sheetSyncError.message : String(sheetSyncError),
+          sheetSyncError instanceof Error
+            ? sheetSyncError.message
+            : String(sheetSyncError),
         sheetSyncUpdatedAt: new Date().toISOString(),
       });
     }
@@ -224,8 +206,12 @@ export async function POST(req: Request) {
           }
         : null,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    if (error instanceof HttpError) {
+      return jsonError(error.message, error.status);
+    }
+
     console.error('Finalize onboarding error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonError('Unable to finalize onboarding.', 500);
   }
 }
