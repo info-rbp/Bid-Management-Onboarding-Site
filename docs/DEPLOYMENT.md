@@ -34,6 +34,7 @@ Run:
 
 ```bash
 npm install
+npm run lint
 npm run typecheck
 npm test
 node scripts/audit-validation-anchors.mjs
