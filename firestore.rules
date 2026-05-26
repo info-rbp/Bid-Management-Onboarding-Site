@@ -9,52 +9,95 @@ service cloud.firestore {
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
-    
+
     function isAdmin() {
       return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    // Users collection
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    function onboardingClientMutableKeys() {
+      return [
+        'currentStep',
+        'updatedAt',
+        'lastSavedAt',
+        'completionPercentage',
+        'selectedServices',
+        'enabledModules',
+        'visibleStepKeys',
+        'sections',
+        'sectionStatuses'
+      ];
+    }
+
+    function preservesServerManagedSubmissionFields() {
+      return (
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.id == resource.data.id &&
+        request.resource.data.businessName == resource.data.businessName &&
+        request.resource.data.status == resource.data.status &&
+        request.resource.data.adminReopened == resource.data.adminReopened &&
+        request.resource.data.submittedAt == resource.data.submittedAt &&
+        request.resource.data.completedAt == resource.data.completedAt &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.googleDriveFolderId == resource.data.googleDriveFolderId &&
+        request.resource.data.googleDriveFolderUrl == resource.data.googleDriveFolderUrl &&
+        request.resource.data.driveWorkspaceStatus == resource.data.driveWorkspaceStatus &&
+        request.resource.data.driveWorkspaceError == resource.data.driveWorkspaceError &&
+        request.resource.data.driveWorkspaceUpdatedAt == resource.data.driveWorkspaceUpdatedAt &&
+        request.resource.data.submissionSnapshot == resource.data.submissionSnapshot &&
+        request.resource.data.submissionSnapshotLockedAt == resource.data.submissionSnapshotLockedAt &&
+        request.resource.data.submissionSnapshotVersion == resource.data.submissionSnapshotVersion &&
+        request.resource.data.sheetSyncStatus == resource.data.sheetSyncStatus &&
+        request.resource.data.sheetSyncedAt == resource.data.sheetSyncedAt &&
+        request.resource.data.sheetSyncUpdatedAt == resource.data.sheetSyncUpdatedAt &&
+        request.resource.data.sheetSyncError == resource.data.sheetSyncError &&
+        request.resource.data.sheetSummaryAction == resource.data.sheetSummaryAction &&
+        request.resource.data.sheetAnswerRowsDeleted == resource.data.sheetAnswerRowsDeleted &&
+        request.resource.data.sheetAnswerRowsAppended == resource.data.sheetAnswerRowsAppended &&
+        request.resource.data.sheetSyncVersion == resource.data.sheetSyncVersion
+      );
+    }
+
+    function isSafeOnboardingClientUpdate() {
+      return (
+        resource.data.userId == request.auth.uid &&
+        (resource.data.status != 'submitted' || resource.data.adminReopened == true) &&
+        changedKeys().hasOnly(onboardingClientMutableKeys()) &&
+        preservesServerManagedSubmissionFields() &&
+        request.resource.data.completionPercentage is number &&
+        request.resource.data.completionPercentage >= 0 &&
+        request.resource.data.completionPercentage <= 100
+      );
+    }
+
     match /users/{userId} {
       allow read, write: if isOwner(userId) || isAdmin();
     }
 
-    // Onboarding submissions
     match /onboardingSubmissions/{id} {
-      // For list, the query must filter by userId
-      // For get, the document must have the correct userId
       allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && (request.resource.data.userId == request.auth.uid || isAdmin());
-      allow update: if isSignedIn() && (
-        isAdmin() ||
-        (
-          resource.data.userId == request.auth.uid &&
-          (resource.data.status != 'submitted' || resource.data.adminReopened == true)
-        )
-      );
-      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAdmin();
+      allow update: if isSignedIn() && (isAdmin() || isSafeOnboardingClientUpdate());
+      allow delete: if isAdmin();
     }
 
-    // Clients collection and all its subcollections
-    // This allows the user to access their own client document and everything under it
     match /clients/{userId} {
       allow read, write: if isOwner(userId) || isAdmin();
-      
+
       match /{allPaths=**} {
         allow read, write: if isOwner(userId) || isAdmin();
       }
     }
 
-    // Uploaded documents
     match /clients/{userId}/documents/{documentId} {
       allow read, write: if isOwner(userId) || isAdmin();
     }
 
-    // Admins collection
     match /admins/{id} {
       allow read: if isSignedIn();
-      // Only admins can write to the admins collection? 
-      // Usually you'd want a bootstrap admin or a manual process.
       allow write: if isAdmin();
     }
   }
