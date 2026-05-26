@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { getAdminAuth } from '@/lib/firebase-admin';
 import { rateLimit } from '@/lib/server/rate-limit';
@@ -45,7 +46,18 @@ export function requireInternalSecret(params: {
   secret: string | undefined;
   errorMessage?: string;
 }) {
-  if (!params.secret || params.headerValue !== params.secret) {
+  if (!params.secret || !params.headerValue) {
+    throw new HttpError(401, params.errorMessage || 'Unauthorized');
+  }
+
+  const expectedBuffer = Buffer.from(params.secret);
+  const providedBuffer = Buffer.from(params.headerValue);
+
+  const isMatch =
+    expectedBuffer.length === providedBuffer.length &&
+    timingSafeEqual(expectedBuffer, providedBuffer);
+
+  if (!isMatch) {
     throw new HttpError(401, params.errorMessage || 'Unauthorized');
   }
 }
