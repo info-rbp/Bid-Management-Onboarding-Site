@@ -23,7 +23,7 @@ export default function TermsPage() {
         <div className="space-y-8">
           <div className="space-y-2">
             <h1 className="text-4xl font-headline font-bold text-foreground">Terms and Conditions</h1>
-            <p className="text-muted-foreground">Last Updated: October 20, 2023</p>
+            <p className="text-muted-foreground">Last Updated: May 26, 2026</p>
           </div>
 
           <Card className="border-none shadow-sm rounded-2xl overflow-hidden">
@@ -31,42 +31,55 @@ export default function TermsPage() {
               <section className="space-y-4 mb-8">
                 <h2 className="text-2xl font-bold">1. Introduction</h2>
                 <p className="text-muted-foreground leading-relaxed">
-                  Welcome to Bid Manager. These Terms and Conditions govern your use of our website and services provided by Remote Business Partner. By accessing our services, you agree to be bound by these terms.
+                  Welcome to Bid Manager. These terms govern your use of this onboarding
+                  application and the related bid-management services provided by
+                  Remote Business Partner.
                 </p>
               </section>
 
               <section className="space-y-4 mb-8">
-                <h2 className="text-2xl font-bold">2. Services</h2>
+                <h2 className="text-2xl font-bold">2. Service scope</h2>
                 <p className="text-muted-foreground leading-relaxed">
-                  Bid Manager provides strategic bid management support, including document preparation, deadline tracking, and workspace automation. Services are delivered based on the selected subscription tier.
+                  This application is used to collect onboarding details, supporting
+                  documents, workflow preferences and authority rules so the service
+                  team can review your setup and prepare related bid-management
+                  materials.
                 </p>
               </section>
 
               <section className="space-y-4 mb-8">
-                <h2 className="text-2xl font-bold">3. Subscription and Payments</h2>
+                <h2 className="text-2xl font-bold">3. Accuracy and authority</h2>
                 <p className="text-muted-foreground leading-relaxed">
-                  Subscribers agree to pay the monthly fees associated with their chosen plan. Payments are processed securely via Stripe. Failure to maintain a valid payment method may result in service interruption.
+                  You are responsible for ensuring the information submitted through
+                  the onboarding application is accurate and that you are authorized
+                  to provide it on behalf of the business.
                 </p>
               </section>
 
               <section className="space-y-4 mb-8">
-                <h2 className="text-2xl font-bold">4. Data and Privacy</h2>
+                <h2 className="text-2xl font-bold">4. Documents and platform use</h2>
                 <p className="text-muted-foreground leading-relaxed">
-                  Your business data is handled with strict confidentiality. We use Google Workspace for collaboration, and access is managed via your authorized Google account.
+                  Uploaded documents and stated authority settings are used to support
+                  onboarding review and related operational setup. Submitted content
+                  may be stored in secure internal systems used to coordinate service
+                  delivery.
                 </p>
               </section>
 
               <section className="space-y-4 mb-8">
-                <h2 className="text-2xl font-bold">5. Termination</h2>
+                <h2 className="text-2xl font-bold">5. Submission review</h2>
                 <p className="text-muted-foreground leading-relaxed">
-                  You may cancel your subscription at any time. Upon termination, access to the Bid Manager dashboard and dedicated support will be phased out according to your billing cycle.
+                  Submitted onboarding packs may be reviewed, clarified or reopened if
+                  required to correct errors, resolve missing information or confirm
+                  approval settings.
                 </p>
               </section>
 
               <section className="space-y-4">
                 <h2 className="text-2xl font-bold">6. Contact</h2>
                 <p className="text-muted-foreground leading-relaxed">
-                  For questions regarding these terms, please contact us at support@bidmanager.com.
+                  For questions regarding these terms, please contact
+                  {' '}<a href="mailto:info@remotebusinesspartner.com.au">info@remotebusinesspartner.com.au</a>.
                 </p>
               </section>
             </CardContent>
