@@ -1,91 +1,51 @@
 # Security Notes
 
-## Batch 5 dependency/security remediation
+## Current posture
 
-This document records vulnerabilities that remain after safe dependency remediation.
+This document tracks security work that still needs runtime verification after the repository hardening pass completed on 2026-05-26.
 
-### Review date
+## Confirmed changes now in the repository
 
-2026-05-13
+- Firestore rules restrict client updates on `onboardingSubmissions` to an explicit allowlist of in-progress fields
+- Submission creation, submission finalization, Sheets sync metadata, Drive metadata, and immutable submission snapshot fields are server-managed
+- Critical operational routes now use shared request validation, Firebase token enforcement, internal secret enforcement, and request rate limiting
+- Final submission is validated server-side before a submission can be marked `submitted`
+- Placeholder secret files were removed from the repository
+- Unused Genkit/Google AI tooling was removed from the application manifest to reduce unnecessary dependency and attack surface
 
-### Remediation approach
+## Follow-up validation still required
 
-The following actions were completed:
+Run these commands in a real installable checkout before release:
 
-- Ran baseline `npm audit --audit-level=low`
-- Ran baseline `npm outdated`
-- Ran non-forced `npm audit fix`
-- Updated Next.js from `15.5.15` to `15.5.18`
-- Updated PostCSS from `8.5.13` to `8.5.14`
-- Updated Firebase from `11.9.1` to `11.10.0`
-- Updated Firebase Admin from `13.8.0` to `13.9.0`
-- Updated Genkit packages to `1.34.0`
-- Updated Nodemailer to `8.0.7`
-- Updated `@types/nodemailer` to `8.0.0`
-- Updated Vitest to `4.1.6`
-- Updated Vite and esbuild through the Vitest/Vite toolchain update
+```bash
+npm install
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm audit
+```
 
-No `npm audit fix --force` was used.
+## Known remaining risk areas
 
-### Audit result summary
+### Transitive dependency advisories
 
-Baseline audit:
+- Firebase Admin / Google Cloud transitive dependencies may still produce `npm audit` findings
+- Next.js bundled dependency advisories may remain until upstream framework releases absorb fixes
 
-- 29 vulnerabilities
-- 11 low
-- 6 moderate
-- 12 high
+Because the dependency graph changed after the post-audit cleanup, any previous vulnerability totals should be treated as stale until `npm audit` is run again.
 
-Final audit after remediation:
+### Environment-dependent runtime validation
 
-- 21 vulnerabilities
-- 11 low
-- 2 moderate
-- 8 high
+The repository still requires live environment verification for:
 
-The remaining vulnerabilities are either reported by npm as having no fix available, or would require unsafe or breaking remediation that is not appropriate for this batch.
+- Firebase App Hosting configuration
+- Firebase Admin credentials
+- Firestore rules deployment
+- Storage rules deployment
+- Google Drive and Google Sheets credentials
+- SMTP credentials and notification delivery
 
-## Remaining vulnerabilities
+## Release recommendation
 
-### OpenTelemetry / Genkit chain
-
-- Packages: `@opentelemetry/sdk-node`, `@opentelemetry/auto-instrumentations-node`
-- Severity: high
-- Advisory: Prometheus exporter process crash via malformed HTTP request
-- Dependency path: `genkit` / `@genkit-ai/*` / `@genkit-ai/google-cloud`
-- Runtime exposure: server-side dependency chain
-- Status: npm reports no safe fix available for part of this chain
-- Reason not fully fixed in this batch: latest compatible Genkit package updates were applied, but the transitive OpenTelemetry advisory remains
-- Recommended follow-up: revisit when Genkit/OpenTelemetry publish patched compatible releases
-
-### Google Cloud / Firebase Admin transitive chain
-
-- Package: `@tootallnate/once`
-- Severity: high
-- Advisory: incorrect control flow scoping
-- Dependency path: Google Cloud / Firebase Admin transitive dependencies through `teeny-request`, `google-gax`, `@google-cloud/firestore`, and related packages
-- Runtime exposure: server-side Firebase Admin / Google Cloud dependency chain
-- Status: npm reports no fix available
-- Reason not fixed in this batch: dependency is transitive and no safe patched parent chain is currently available through compatible package updates
-- Recommended follow-up: revisit after Firebase Admin / Google Cloud dependency chain updates are released
-
-### Next.js bundled PostCSS advisory
-
-- Package: `postcss` under `next/node_modules/postcss`
-- Severity: moderate
-- Advisory: XSS via unescaped `</style>` in CSS stringify output
-- Dependency path: bundled through `next`
-- Runtime exposure: framework build/runtime dependency
-- Status: npm suggests `npm audit fix --force`, but that would install an unsafe or breaking Next.js version according to the audit output
-- Reason not fixed in this batch: Next.js was updated to `15.5.18`; npm still reports the advisory through the bundled dependency and suggests an invalid remediation path
-- Recommended follow-up: monitor Next.js patch releases and update again when the advisory is resolved safely
-
-## Verification performed
-
-After remediation, the following checks passed:
-
-- `npm run typecheck`
-- `npm test`
-- `node scripts/audit-validation-anchors.mjs`
-
-`npm run build` compiled successfully and reached lint/type validation, but failed during page data collection because Firebase public environment variables are missing in Codespace. This is an environment configuration issue, not a dependency remediation failure.
+Do not treat this file as proof that the runtime environment is secure by itself. Use it as a checklist for the final install, audit, build, and staging verification pass.
