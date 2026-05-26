@@ -1,10 +1,19 @@
-import { NextResponse } from 'next/server';
-import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
+import { NextRequest, NextResponse } from 'next/server';
+import { getAdminDb } from '@/lib/firebase-admin';
 import { sendSignupNotification } from '@/lib/notifications';
+import {
+  applyRateLimit,
+  HttpError,
+  jsonError,
+  parseJsonBody,
+  requireFirebaseUser,
+  requireInternalSecret,
+} from '@/lib/server/request';
+import { internalSignupNotificationSchema } from '@/lib/server/schemas';
 
 export const runtime = 'nodejs';
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const authorization = req.headers.get('authorization') || '';
     const internalSecret = process.env.SIGNUP_NOTIFICATION_INTERNAL_SECRET;
@@ -13,34 +22,43 @@ export async function POST(req: Request) {
     let userId: string | null = null;
 
     if (authorization.startsWith('Bearer ')) {
-      const idToken = authorization.replace('Bearer ', '').trim();
-
-      if (!idToken) {
-        return NextResponse.json({ error: 'Empty Firebase ID token.' }, { status: 401 });
-      }
-
-      const decodedToken = await getAdminAuth().verifyIdToken(idToken);
+      const decodedToken = await requireFirebaseUser(req);
       userId = decodedToken.uid;
-    } else if (internalSecret && providedSecret === internalSecret) {
-      const body = await req.json().catch(() => null);
-      if (!body?.userId) {
-        return NextResponse.json({ error: 'Missing userId for internal notification.' }, { status: 400 });
-      }
 
-      userId = String(body.userId).trim();
+      applyRateLimit({
+        request: req,
+        scope: 'signup-notification',
+        subject: userId,
+        limit: 5,
+        windowMs: 60_000,
+      });
     } else {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      requireInternalSecret({
+        headerValue: providedSecret,
+        secret: internalSecret,
+      });
+
+      applyRateLimit({
+        request: req,
+        scope: 'signup-notification-internal',
+        subject: 'internal',
+        limit: 20,
+        windowMs: 60_000,
+      });
+
+      const body = await parseJsonBody(req, internalSignupNotificationSchema);
+      userId = body.userId.trim();
     }
 
     if (!userId) {
-      return NextResponse.json({ error: 'Unable to determine user for notification.' }, { status: 400 });
+      return jsonError('Unable to determine user for notification.', 400);
     }
 
     const db = getAdminDb();
     const userSnapshot = await db.collection('users').doc(userId).get();
 
     if (!userSnapshot.exists) {
-      return NextResponse.json({ error: 'User not found.' }, { status: 404 });
+      return jsonError('User not found.', 404);
     }
 
     const userData = userSnapshot.data() || {};
@@ -50,9 +68,9 @@ export async function POST(req: Request) {
     const billingAddress = String(userData.billingAddress || 'Not provided');
 
     if (!fullName || !businessName || !email) {
-      return NextResponse.json(
-        { error: 'User profile is missing required notification fields.' },
-        { status: 400 }
+      return jsonError(
+        'User profile is missing required notification fields.',
+        400
       );
     }
 
@@ -64,12 +82,13 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: unknown) {
+    if (error instanceof HttpError) {
+      return jsonError(error.message, error.status);
+    }
+
     console.error('Signup notification email failed:', error);
 
-    return NextResponse.json(
-      { error: 'Failed to send signup notification' },
-      { status: 500 }
-    );
+    return jsonError('Failed to send signup notification.', 500);
   }
 }
