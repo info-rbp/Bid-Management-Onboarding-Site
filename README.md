@@ -53,6 +53,7 @@ See:
 ## Verification commands
 
 ```bash
+npm run lint
 npm run typecheck
 npm test
 npm run build
@@ -65,6 +66,7 @@ node scripts/audit-validation-anchors.mjs
 - Final submission is server-owned through `POST /api/onboarding/finalize`
 - Google Sheets retry sync is available through `POST /api/onboarding-submissions/sync-sheet`
 - Firestore rules intentionally block clients from changing server-managed submission state such as final status, Drive metadata and Sheets sync metadata
+- This repository does not currently implement billing or subscription gating; onboarding access is controlled by authentication and submission state
 
 ## Deployment
 
