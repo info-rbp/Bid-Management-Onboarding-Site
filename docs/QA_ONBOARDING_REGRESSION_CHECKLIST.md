@@ -76,7 +76,7 @@ Confirm these are configured in the environment being tested.
 ### Optional internal secrets
 
 - `ONBOARDING_SYNC_INTERNAL_SECRET`
-- `ONBOARDING_NOTIFICATION_INTERNAL_SECRET`
+- `SIGNUP_NOTIFICATION_INTERNAL_SECRET`
 
 ## Pre-QA verification commands
 
