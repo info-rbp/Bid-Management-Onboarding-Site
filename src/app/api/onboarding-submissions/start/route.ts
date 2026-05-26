@@ -1,11 +1,17 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
-import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
+import { getAdminDb } from '@/lib/firebase-admin';
 import {
   buildInitialSubmission,
   getSubmissionResumeStep,
   isActiveOnboardingStatus,
 } from '@/lib/onboarding-submission';
+import {
+  applyRateLimit,
+  HttpError,
+  jsonError,
+  requireFirebaseUser,
+} from '@/lib/server/request';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -80,28 +86,19 @@ async function findLatestActiveSubmission(
   return null;
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const authorization = req.headers.get('authorization') || '';
-
-    if (!authorization.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { error: 'Missing Firebase ID token.' },
-        { status: 401 }
-      );
-    }
-
-    const idToken = authorization.replace('Bearer ', '').trim();
-
-    if (!idToken) {
-      return NextResponse.json(
-        { error: 'Empty Firebase ID token.' },
-        { status: 401 }
-      );
-    }
-
-    const decodedToken = await getAdminAuth().verifyIdToken(idToken);
+    const decodedToken = await requireFirebaseUser(req);
     const uid = decodedToken.uid;
+
+    applyRateLimit({
+      request: req,
+      scope: 'onboarding-start',
+      subject: uid,
+      limit: 20,
+      windowMs: 60_000,
+    });
+
     const db = getAdminDb();
 
     const userRef = db.collection('users').doc(uid);
@@ -116,7 +113,6 @@ export async function POST(req: Request) {
         fullName: decodedToken.name || 'Client User',
         businessName: 'Business Name Pending',
         role: 'client',
-        subscriptionStatus: 'active',
         onboardingStatus: 'not_started',
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
@@ -202,14 +198,13 @@ export async function POST(req: Request) {
       route: getRouteForStep(currentStep),
       created: true,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    if (error instanceof HttpError) {
+      return jsonError(error.message, error.status);
+    }
+
     console.error('Start onboarding submission error:', error);
 
-    return NextResponse.json(
-      {
-        error: error?.message || 'Unable to start onboarding submission.',
-      },
-      { status: 500 }
-    );
+    return jsonError('Unable to start onboarding submission.', 500);
   }
 }
