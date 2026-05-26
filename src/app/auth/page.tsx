@@ -14,7 +14,6 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Mail, Lock, User, Building2, MapPin } from 'lucide-react';
-import Link from 'next/link';
 import { getSafeReturnUrl } from '@/lib/auth-return-url';
 
 function AuthContent() {
@@ -26,10 +25,9 @@ function AuthContent() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
 
-
   if (!areServicesAvailable || !auth || !db) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6 text-center"> 
+      <div className="min-h-screen flex items-center justify-center p-6 text-center">
         {initializationError?.message || 'Authentication temporarily unavailable.'}
       </div>
     );
@@ -81,7 +79,6 @@ function AuthContent() {
         businessName,
         billingAddress,
         role: 'client',
-        subscriptionStatus: 'active', // Set to active by default to allow onboarding access
         onboardingStatus: 'not_started',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -198,12 +195,12 @@ function AuthContent() {
                 <div className="space-y-2">
                   <Label htmlFor="billingAddress">Billing Address</Label>
                   <div className="relative">
-                    <Textarea 
-                        id="billingAddress" 
-                        name="billingAddress" 
-                        placeholder="123 Business St, Sydney NSW 2000" 
-                        className="pl-10 min-h-[80px]" 
-                        required 
+                    <Textarea
+                        id="billingAddress"
+                        name="billingAddress"
+                        placeholder="123 Business St, Sydney NSW 2000"
+                        className="pl-10 min-h-[80px]"
+                        required
                     />
                     <MapPin className="absolute left-3 top-3 w-5 h-5 text-muted-foreground" />
                   </div>
